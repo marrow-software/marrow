@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .dependencies import verify_auth
-from .routers import auth, nodes, organizations, spaces, workspaces
+from .routers import auth, billing, nodes, organizations, spaces, workspaces
 
 
 def _truthy(value: str | None) -> bool:
@@ -53,6 +53,9 @@ app.include_router(auth.router)
 _auth = [Depends(verify_auth)]
 
 app.include_router(organizations.router, dependencies=_auth)
+# Billing router is registered without global auth — the webhook must be unauthenticated
+# (Stripe calls it directly), and checkout/portal endpoints carry their own require_org_role deps.
+app.include_router(billing.router)
 app.include_router(workspaces.router, dependencies=_auth)
 app.include_router(spaces.router, dependencies=_auth)
 app.include_router(nodes.router, dependencies=_auth)

@@ -46,6 +46,13 @@ class Organization(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    # Billing
+    tier: Mapped[str] = mapped_column(Text, nullable=False, server_default="starter")
+    billing_interval: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stripe_customer_id: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
+    self_hosted_license: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     memberships: Mapped[list["OrgMembership"]] = relationship(
         back_populates="organization", passive_deletes=True
     )
