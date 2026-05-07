@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ from ..schemas import (
     OrgMembershipRead,
     OrgMembershipUpdate,
 )
+from .billing import TIER_SEAT_LIMITS, _saas_mode
 
 router = APIRouter(prefix="/api/orgs", tags=["organizations"])
 
@@ -111,6 +112,24 @@ def invite_member(
     """Invite a user by email. Creates a pending membership if the user has no account yet."""
     if body.role not in (r.value for r in OrgRole):
         raise HTTPException(422, f"Invalid role: {body.role}")
+
+    # Enforce seat limit in SaaS mode
+    if _saas_mode:
+        org = db.get(Organization, org_id)
+        if org:
+            seat_limit = TIER_SEAT_LIMITS.get(org.tier)
+            if seat_limit is not None:
+                current_count = db.execute(
+                    select(func.count())
+                    .select_from(OrgMembership)
+                    .where(OrgMembership.org_id == org_id)
+                ).scalar_one()
+                if current_count >= seat_limit:
+                    raise HTTPException(
+                        402,
+                        f"Seat limit reached for the {org.tier.title()} plan ({seat_limit} seats). "
+                        "Upgrade your plan to add more members.",
+                    )
 
     # Check if user exists
     user = db.execute(select(User).where(User.email == body.email)).scalar_one_or_none()

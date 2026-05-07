@@ -12,7 +12,8 @@ from typing import Generator
 
 from dotenv import load_dotenv
 from fastapi import Depends, Header, HTTPException, Request
-from sqlalchemy import create_engine, select, text as sa_text
+from sqlalchemy import create_engine, select
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
 from .db import _database_url
