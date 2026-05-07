@@ -6,13 +6,12 @@ from uuid import UUID
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..dependencies import AuthContext, get_db, verify_auth
-from ..models import Organization, OrgMembership
+from ..dependencies import AuthContext, get_db
+from ..models import Organization, OrgRole
 from ..rbac import require_org_role
-from ..models import OrgRole
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 _webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")

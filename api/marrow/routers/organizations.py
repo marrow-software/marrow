@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from ..dependencies import AuthContext, get_db, verify_auth
 from ..models import Organization, OrgMembership, OrgRole, User
 from ..rbac import require_org_role
-from .billing import TIER_SEAT_LIMITS, _saas_mode
 from ..schemas import (
     OrganizationCreate,
     OrganizationRead,
@@ -18,6 +17,7 @@ from ..schemas import (
     OrgMembershipRead,
     OrgMembershipUpdate,
 )
+from .billing import TIER_SEAT_LIMITS, _saas_mode
 
 router = APIRouter(prefix="/api/orgs", tags=["organizations"])
 
@@ -120,7 +120,9 @@ def invite_member(
             seat_limit = TIER_SEAT_LIMITS.get(org.tier)
             if seat_limit is not None:
                 current_count = db.execute(
-                    select(func.count()).select_from(OrgMembership).where(OrgMembership.org_id == org_id)
+                    select(func.count())
+                    .select_from(OrgMembership)
+                    .where(OrgMembership.org_id == org_id)
                 ).scalar_one()
                 if current_count >= seat_limit:
                     raise HTTPException(

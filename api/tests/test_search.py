@@ -143,7 +143,10 @@ def test_search_vector_populated_on_revision_insert(db):
     """Inserting a revision should populate the node's search_vector."""
     ws, space = _seed_workspace(db)
     page = _create_page(
-        db, space, "test-page", "Quantum Computing",
+        db,
+        space,
+        "test-page",
+        "Quantum Computing",
         "An introduction to qubits and superposition",
     )
 

@@ -178,9 +178,11 @@ def get_workspace_tree(
     space_ids = [s.id for s in spaces]
     nodes_by_space: dict[UUID, list[Node]] = defaultdict(list)
     if space_ids:
-        all_nodes = db.execute(
-            select(Node).where(Node.space_id.in_(space_ids), Node.deleted_at.is_(None))
-        ).scalars().all()
+        all_nodes = (
+            db.execute(select(Node).where(Node.space_id.in_(space_ids), Node.deleted_at.is_(None)))
+            .scalars()
+            .all()
+        )
         for node in all_nodes:
             nodes_by_space[node.space_id].append(node)
 

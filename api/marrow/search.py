@@ -5,7 +5,7 @@ engine) without touching routers or frontend code.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from uuid import UUID
 
 from sqlalchemy import text

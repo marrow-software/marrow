@@ -155,9 +155,7 @@ class TestGetNode:
             org, ws, space = _make_workspace(db)
             _add_membership(db, org, user, OrgRole.VIEWER)
 
-            node = Node(
-                space_id=space.id, type="page", name="Test", slug="test", position="a0"
-            )
+            node = Node(space_id=space.id, type="page", name="Test", slug="test", position="a0")
             db.add(node)
             db.flush()
             rev = Revision(node_id=node.id, content="hello", content_format="markdown")
@@ -216,9 +214,7 @@ class TestPatchNode:
             org, ws, space = _make_workspace(db)
             _add_membership(db, org, user, OrgRole.EDITOR)
 
-            node = Node(
-                space_id=space.id, type="page", name="Page", slug="page", position="a0"
-            )
+            node = Node(space_id=space.id, type="page", name="Page", slug="page", position="a0")
             db.add(node)
             db.flush()
             rev = Revision(node_id=node.id, content="v1", content_format="markdown")
@@ -249,13 +245,9 @@ class TestPatchNode:
             _add_membership(db, org, user, OrgRole.EDITOR)
             _add_membership(db, org2, user, OrgRole.EDITOR)
 
-            node = Node(
-                space_id=space.id, type="folder", name="A", slug="a", position="a0"
-            )
+            node = Node(space_id=space.id, type="folder", name="A", slug="a", position="a0")
             db.add(node)
-            other = Node(
-                space_id=space2.id, type="folder", name="B", slug="b", position="a0"
-            )
+            other = Node(space_id=space2.id, type="folder", name="B", slug="b", position="a0")
             db.add(other)
             db.commit()
 
@@ -317,9 +309,7 @@ class TestRevisions:
             org, ws, space = _make_workspace(db)
             _add_membership(db, org, user, OrgRole.VIEWER)
 
-            node = Node(
-                space_id=space.id, type="page", name="Revs", slug="revs", position="a0"
-            )
+            node = Node(space_id=space.id, type="page", name="Revs", slug="revs", position="a0")
             db.add(node)
             db.flush()
             r1 = Revision(node_id=node.id, content="v1", content_format="markdown")
@@ -349,9 +339,7 @@ class TestRevisions:
             org, ws, space = _make_workspace(db)
             _add_membership(db, org, user, OrgRole.VIEWER)
 
-            node = Node(
-                space_id=space.id, type="folder", name="Fold", slug="fold", position="a0"
-            )
+            node = Node(space_id=space.id, type="folder", name="Fold", slug="fold", position="a0")
             db.add(node)
             db.commit()
 
@@ -371,9 +359,7 @@ class TestRevisions:
             org, ws, space = _make_workspace(db)
             _add_membership(db, org, user, OrgRole.VIEWER)
 
-            node = Node(
-                space_id=space.id, type="page", name="Single", slug="single", position="a0"
-            )
+            node = Node(space_id=space.id, type="page", name="Single", slug="single", position="a0")
             db.add(node)
             db.flush()
             rev = Revision(node_id=node.id, content="hello", content_format="markdown")
@@ -393,9 +379,9 @@ class TestRevisions:
 
 class TestAttachments:
     def test_upload_and_download_attachment(self, client):
+        from marrow.app import app
         from marrow.dependencies import get_db, get_storage
         from marrow.storage import StorageAdapter
-        from marrow.app import app
 
         store: dict[str, bytes] = {}
 
@@ -414,9 +400,7 @@ class TestAttachments:
             org, ws, space = _make_workspace(db)
             _add_membership(db, org, user, OrgRole.EDITOR)
 
-            node = Node(
-                space_id=space.id, type="page", name="Attach", slug="attach", position="a0"
-            )
+            node = Node(space_id=space.id, type="page", name="Attach", slug="attach", position="a0")
             db.add(node)
             db.flush()
             rev = Revision(node_id=node.id, content="x", content_format="markdown")

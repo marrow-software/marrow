@@ -212,9 +212,7 @@ def list_revisions(
         raise HTTPException(400, "Only page nodes have revisions")
     return (
         db.execute(
-            select(Revision)
-            .where(Revision.node_id == node_id)
-            .order_by(Revision.created_at)
+            select(Revision).where(Revision.node_id == node_id).order_by(Revision.created_at)
         )
         .scalars()
         .all()
@@ -272,9 +270,7 @@ def list_attachments(
     _node_or_404(node_id, db)
     return (
         db.execute(
-            select(Attachment)
-            .where(Attachment.node_id == node_id)
-            .order_by(Attachment.created_at)
+            select(Attachment).where(Attachment.node_id == node_id).order_by(Attachment.created_at)
         )
         .scalars()
         .all()
