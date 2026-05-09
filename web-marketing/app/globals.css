@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-heading: var(--font-fraunces), ui-serif, Georgia, serif;
+  --color-ring: var(--ring);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+}
+
+/* Real CSS variables for inline-style consumption (Tailwind tokens above are
+ * not emitted on :root). The prototype chrome.jsx and icons.jsx rely on
+ * `--color-base`, `--color-surface`, `--font-display`, etc. */
+:root {
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Light mode — design tokens from references/design-tokens.md */
+:root {
+  --background: #dde3ee;
+  --foreground: #1e293b;
+  --card: #eaeff7;
+  --card-foreground: #1e293b;
+  --primary: #9a3412;
+  --primary-foreground: #ffffff;
+  --secondary: #eaeff7;
+  --secondary-foreground: #1e293b;
+  --muted: #eaeff7;
+  --muted-foreground: #64748b;
+  --accent: #f4f6fb;
+  --accent-foreground: #1e293b;
+  --destructive: #dc2626;
+  --border: #c8d0e0;
+  --ring: #9a3412;
+  --radius: 0.625rem;
+
+  /* Prototype tokens (chrome.jsx, landing.jsx, etc.) */
+  --color-base: #dde3ee;
+  --color-surface: #eaeff7;
+  --color-surface-elevated: #f4f6fb;
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  --color-accent: #9a3412;
+  --color-accent-ink: #f5ecd9;
+  --color-cream: #f5ecd9;
+  --color-bone: #ece3d0;
+  --color-warning: #d4900a;
+  --color-success: #34d399;
+}
+
+/* Dark mode (primary design target) */
+.dark {
+  --background: #111318;
+  --foreground: #e2e8f0;
+  --card: #1a1d27;
+  --card-foreground: #e2e8f0;
+  --primary: #e8805c;
+  --primary-foreground: #111318;
+  --secondary: #1a1d27;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1a1d27;
+  --muted-foreground: #94a3b8;
+  --accent: #222636;
+  --accent-foreground: #e2e8f0;
+  --destructive: #dc2626;
+  --border: #2d3348;
+  --ring: #e8805c;
+
+  --color-base: #111318;
+  --color-surface: #1a1d27;
+  --color-surface-elevated: #222636;
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #475569;
+  --color-accent: #e8805c;
+  --color-accent-ink: #1a0f0a;
+  --color-cream: #f5ecd9;
+  --color-bone: #ece3d0;
+  --color-warning: #d4900a;
+  --color-success: #34d399;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--color-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    margin: 0;
+    color: inherit;
+    text-wrap: balance;
+  }
+  h1 { font-size: 2.5rem; line-height: 1.1; }
+  h2 { font-size: 2rem; line-height: 1.15; }
+  h3 { font-size: 1.5rem; line-height: 1.25; }
+  p { margin: 0; text-wrap: pretty; }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+  ::selection { background: var(--color-accent); color: var(--color-accent-ink); }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border, var(--border)); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
