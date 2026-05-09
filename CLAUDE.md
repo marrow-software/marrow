@@ -24,7 +24,7 @@ Current status: **v0.1 MVP** — core hierarchy, append-only revisions, export/r
 - **Auth**: OIDC authentication (any IdP) with API key fallback — see `api/marrow/auth.py`
 - **Search**: PostgreSQL full-text search; Meilisearch/OpenSearch later
 - **Frontend**: Next.js 16 (React 19), located in `web/`
-- **Storage**: Pluggable adapter interface — local filesystem is the only current implementation
+- **Storage**: Pluggable adapter interface — `LocalFilesystemAdapter` (default) and `R2StorageAdapter` (Cloudflare R2, gated by `STORAGE_BACKEND=r2`)
 - **CLI**: Typer (`marrow export` / `marrow restore`)
 
 ---
@@ -60,6 +60,13 @@ SECRET_KEY=changeme
 STORAGE_PATH=./storage       # resolves relative to api/ directory
 API_KEY=                     # optional; if set, enforces X-API-Key header on all routes
 CORS_ORIGINS=http://localhost:3000
+
+# Cloudflare R2 storage (SaaS / Cloud only — set STORAGE_BACKEND=r2 to activate)
+# STORAGE_BACKEND=r2         # default: "local" (LocalFilesystemAdapter)
+# R2_ACCOUNT_ID=             # Cloudflare account ID; endpoint = https://{id}.r2.cloudflarestorage.com
+# R2_ACCESS_KEY_ID=
+# R2_SECRET_ACCESS_KEY=
+# R2_BUCKET=
 
 # OIDC Authentication (optional — omit OIDC_ISSUER to disable)
 # OIDC_ISSUER=https://accounts.google.com

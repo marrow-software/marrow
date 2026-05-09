@@ -38,7 +38,7 @@ class LocalFilesystemAdapter(StorageAdapter):
 class R2StorageAdapter(StorageAdapter):
     """Reads/writes attachments in a Cloudflare R2 bucket (S3-compatible API).
 
-    Set STORAGE_BACKEND=r2 plus R2_ENDPOINT_URL, R2_ACCESS_KEY_ID,
+    Set STORAGE_BACKEND=r2 plus R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY, and R2_BUCKET to use this adapter.
     """
 
@@ -76,8 +76,9 @@ class R2StorageAdapter(StorageAdapter):
 def get_default_adapter() -> StorageAdapter:
     backend = os.getenv("STORAGE_BACKEND", "local").lower()
     if backend == "r2":
+        account_id = os.environ["R2_ACCOUNT_ID"]
         return R2StorageAdapter(
-            endpoint_url=os.environ["R2_ENDPOINT_URL"],
+            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
             access_key_id=os.environ["R2_ACCESS_KEY_ID"],
             secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
             bucket=os.environ["R2_BUCKET"],
