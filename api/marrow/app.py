@@ -64,3 +64,25 @@ app.include_router(nodes.router, dependencies=_auth)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.on_event("startup")
+def _ensure_default_org() -> None:
+    """In API-key-only mode, auto-create a 'Default' org + workspace on first boot."""
+    if not (_api_key_set and not _oidc_enabled):
+        return
+
+    from .db import get_session
+    from .models import Organization, Workspace
+
+    try:
+        with get_session() as db:
+            if db.query(Organization).first() is not None:
+                return
+            org = Organization(name="Default", slug="default")
+            db.add(org)
+            db.flush()
+            db.add(Workspace(org_id=org.id, slug="default", name="Default"))
+            db.commit()
+    except Exception:
+        pass  # best-effort — do not prevent startup on DB errors

@@ -188,6 +188,7 @@ def get_workspace_tree(
 
     return WorkspaceTree(
         id=ws.id,
+        org_id=ws.org_id,
         slug=ws.slug,
         name=ws.name,
         spaces=[

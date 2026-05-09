@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { WorkspaceShell } from "@/components/workspace-shell";
-import { getAuthStatus, getWorkspaceTree, listOrgMembers } from "@/lib/api";
+import { getAuthStatus, getWorkspaceTree, listOrgMembers, listOrgs, listWorkspaces } from "@/lib/api";
 
 interface Props {
   children: React.ReactNode;
@@ -20,12 +20,23 @@ export default async function WorkspaceLayout({ children, params }: Props) {
     throw e;
   }
 
-  const auth = await getAuthStatus().catch(() => null);
-  const members = await listOrgMembers(tree.org_id).catch(() => null);
+  const [auth, members, workspaces, orgs] = await Promise.all([
+    getAuthStatus().catch(() => null),
+    listOrgMembers(tree.org_id).catch(() => null),
+    listWorkspaces().catch(() => [] as Awaited<ReturnType<typeof listWorkspaces>>),
+    listOrgs().catch(() => [] as Awaited<ReturnType<typeof listOrgs>>),
+  ]);
+
   const memberCount = members ? members.length : null;
+  const showOrgSettings = workspaces.length > 1 || orgs.length > 1;
 
   return (
-    <WorkspaceShell tree={tree} user={auth?.user ?? null} memberCount={memberCount}>
+    <WorkspaceShell
+      tree={tree}
+      user={auth?.user ?? null}
+      memberCount={memberCount}
+      showOrgSettings={showOrgSettings}
+    >
       {children}
     </WorkspaceShell>
   );

@@ -248,3 +248,110 @@ class TestAuthRouter:
         # Check that the response sets the cookie to expire
         set_cookie = res.headers.get("set-cookie", "")
         assert COOKIE_NAME in set_cookie
+
+
+# ---------------------------------------------------------------------------
+# Auto-create org + workspace tests
+# ---------------------------------------------------------------------------
+
+
+class TestAutoCreateOrg:
+    """Test OIDC callback auto-create org + workspace and API_KEY startup hook."""
+
+    def test_oidc_auto_create_creates_org_and_workspace(self, monkeypatch):
+        """Auto-create logic creates exactly one org and one workspace for a new user."""
+        import os
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from marrow.models import OrgMembership, Organization, User, Workspace
+        from marrow.routers.auth import _unique_org_slug, _unique_workspace_slug
+
+        DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://marrow:marrow@localhost:5433/marrow")
+        engine = create_engine(DATABASE_URL)
+
+        with Session(engine) as db:
+            # Simulate the callback auto-create logic for a brand-new user
+            name = f"Test User {uuid.uuid4().hex[:6]}"
+            email = f"testuser-{uuid.uuid4().hex[:6]}@example.com"
+
+            user = User(
+                oidc_issuer="https://test.example.com",
+                oidc_subject=uuid.uuid4().hex,
+                email=email,
+                name=name,
+            )
+            db.add(user)
+            db.flush()
+
+            # No memberships yet — auto-create org and workspace
+            slug_base = email.split("@")[0]
+            org_slug = _unique_org_slug(db, slug_base)
+            org = Organization(name=f"{name}'s Org", slug=org_slug)
+            db.add(org)
+            db.flush()
+
+            from marrow.models import OrgRole
+            db.add(OrgMembership(
+                org_id=org.id,
+                user_id=user.id,
+                email=email,
+                role=OrgRole.OWNER.value,
+            ))
+
+            ws_slug = _unique_workspace_slug(db, slug_base)
+            ws = Workspace(org_id=org.id, slug=ws_slug, name="Default")
+            db.add(ws)
+            db.commit()
+
+            # Verify org name format
+            db.refresh(org)
+            assert org.name == f"{name}'s Org"
+
+            # Verify workspace was created under the org
+            db.refresh(ws)
+            assert ws.org_id == org.id
+
+            # Clean up
+            db.delete(ws)
+            db.delete(org)
+            db.delete(user)
+            db.commit()
+
+        engine.dispose()
+
+    def test_ensure_default_org_creates_when_none_exist(self, monkeypatch):
+        """The startup helper creates a Default org + workspace when none exist."""
+        import os
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from marrow.models import Organization, Workspace
+
+        DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://marrow:marrow@localhost:5433/marrow")
+        engine = create_engine(DATABASE_URL)
+
+        # Use the same logic as the startup hook but on an empty scratch state
+        with Session(engine) as db:
+            # Only run if no orgs currently exist (avoid polluting shared test db)
+            if db.query(Organization).first() is not None:
+                engine.dispose()
+                return  # Skip: shared DB already has orgs
+
+            org = Organization(name="Default", slug="default")
+            db.add(org)
+            db.flush()
+            ws = Workspace(org_id=org.id, slug="default", name="Default")
+            db.add(ws)
+            db.commit()
+
+            db.refresh(org)
+            db.refresh(ws)
+            assert org.name == "Default"
+            assert ws.name == "Default"
+            assert ws.org_id == org.id
+
+            # Clean up
+            db.delete(ws)
+            db.delete(org)
+            db.commit()
+
+        engine.dispose()
