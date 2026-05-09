@@ -224,6 +224,7 @@ def search_workspace(
 @router.get("/{workspace_id}/export/estimate")
 def estimate_workspace_export(
     workspace_id: UUID,
+    include_trash: bool = False,
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_workspace_role(OrgRole.VIEWER)),
 ):
@@ -237,13 +238,14 @@ def estimate_workspace_export(
     storage_root = os.getenv("STORAGE_PATH", "/var/lib/marrow/attachments")
     storage = LocalFilesystemAdapter(storage_root)
 
-    return estimate_export_sizes(slug=ws.slug, session=db, storage=storage)
+    return estimate_export_sizes(slug=ws.slug, session=db, storage=storage, include_trash=include_trash)
 
 
 @router.get("/{workspace_id}/export")
 def export_workspace_endpoint(
     workspace_id: UUID,
     slim: bool = False,
+    include_trash: bool = False,
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_workspace_role(OrgRole.VIEWER)),
 ):
@@ -268,6 +270,7 @@ def export_workspace_endpoint(
             storage=storage,
             output_path=Path(tmp),
             slim=slim,
+            include_trash=include_trash,
         )
         data = bundle_path.read_bytes()
 
