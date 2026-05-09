@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+/* -------------------------------------------------------------------------
+ * Marrow marketing design tokens
+ * Reference: references/design-tokens.md
+ * ------------------------------------------------------------------------- */
+
+/* Light mode */
+:root {
+  /* Structural */
+  --color-base: #dde3ee;
+  --color-surface: #eaeff7;
+  --color-surface-elevated: #f4f6fb;
+  --color-border: #c8d0e0;
+
+  /* Text */
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+
+  /* Brand accent (terracotta) */
+  --color-accent: #9a3412;
+  --color-accent-ink: #ffffff;
+
+  /* Marketing-only warm tones */
+  --color-cream: #f5ecd9;
+  --color-bone: #ece3d0;
+
+  /* Status */
+  --color-success: #34d399;
+  --color-destructive: #dc2626;
+
+  /* Font stacks */
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Dark mode (primary design target) */
+.dark {
+  --color-base: #111318;
+  --color-surface: #1a1d27;
+  --color-surface-elevated: #222636;
+  --color-border: #2d3348;
+
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #475569;
+
+  --color-accent: #e8805c;
+  --color-accent-ink: #1a0f0a;
+
+  /* Cream stays warm even in dark mode (used for CTA sections) */
+  --color-cream: #f5ecd9;
+  --color-bone: #ece3d0;
+
+  --color-success: #34d399;
+  --color-destructive: #dc2626;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font-size: 100%;
+    font: inherit;
+    vertical-align: baseline;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  button {
+    background: none;
+    cursor: pointer;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
