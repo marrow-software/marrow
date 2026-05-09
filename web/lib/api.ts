@@ -10,6 +10,7 @@ import type {
   Attachment,
   AuthStatus,
   Collection,
+  NodeTreeItem,
   Organization,
   OrgMembership,
   Page,
@@ -135,6 +136,46 @@ export async function restoreWorkspace(file: File): Promise<Workspace> {
 
 export function searchWorkspace(workspaceId: string, query: string): Promise<SearchResponse> {
   return apiFetch(`/api/workspaces/${workspaceId}/search?q=${encodeURIComponent(query)}`);
+}
+
+// ---------------------------------------------------------------------------
+// Nodes
+// ---------------------------------------------------------------------------
+
+export function createNode(
+  spaceId: string,
+  body: {
+    type: "folder" | "page";
+    name: string;
+    slug?: string;
+    parent_id?: string | null;
+    description?: string;
+    content?: string;
+    content_format?: "markdown" | "json";
+  }
+): Promise<NodeTreeItem> {
+  return apiFetch(`/api/spaces/${spaceId}/nodes`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateNode(
+  nodeId: string,
+  patch: {
+    name?: string;
+    slug?: string;
+    description?: string;
+    content?: string;
+    content_format?: "markdown" | "json";
+    position?: string;
+    parent_id?: string | null;
+  }
+): Promise<NodeTreeItem> {
+  return apiFetch(`/api/nodes/${nodeId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
 }
 
 // ---------------------------------------------------------------------------

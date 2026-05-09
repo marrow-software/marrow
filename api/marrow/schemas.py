@@ -116,6 +116,7 @@ class SpaceTreeItem(_ReadBase):
 
 class WorkspaceTree(_ReadBase):
     id: UUID
+    org_id: UUID
     slug: str
     name: str
     spaces: list[SpaceTreeItem] = []

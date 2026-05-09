@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { WorkspaceTree } from "@/lib/types";
+import type { NodeTreeItem, WorkspaceTree } from "@/lib/types";
 
 const WorkspaceTreeContext = createContext<WorkspaceTree | null>(null);
 
@@ -19,12 +19,20 @@ export function useWorkspaceTree() {
   return useContext(WorkspaceTreeContext);
 }
 
-export function findBreadcrumb(tree: WorkspaceTree, collectionId: string) {
+function findNodePath(nodes: NodeTreeItem[], targetId: string): string[] | null {
+  for (const node of nodes) {
+    if (node.id === targetId) return [node.name];
+    const sub = findNodePath(node.children, targetId);
+    if (sub) return [node.name, ...sub];
+  }
+  return null;
+}
+
+export function findBreadcrumb(tree: WorkspaceTree, nodeId: string) {
   for (const space of tree.spaces) {
-    for (const col of space.collections) {
-      if (col.id === collectionId) {
-        return { spaceName: space.name, collectionName: col.name };
-      }
+    const path = findNodePath(space.nodes, nodeId);
+    if (path) {
+      return { spaceName: space.name, nodePath: path };
     }
   }
   return null;

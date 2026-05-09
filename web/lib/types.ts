@@ -86,6 +86,34 @@ export interface SearchResponse {
 }
 
 // Nested tree for sidebar rendering
+export interface NodeTreeItem {
+  id: string;
+  parent_id: string | null;
+  type: "folder" | "page";
+  name: string;
+  slug: string;
+  position: string;
+  description: string | null;
+  current_revision_id: string | null;
+  children: NodeTreeItem[];
+}
+
+export interface SpaceTreeItem {
+  id: string;
+  slug: string;
+  name: string;
+  nodes: NodeTreeItem[];
+}
+
+export interface WorkspaceTree {
+  id: string;
+  org_id: string;
+  slug: string;
+  name: string;
+  spaces: SpaceTreeItem[];
+}
+
+// Legacy tree types — kept for gradual migration
 export interface PageTreeItem {
   id: string;
   collection_id: string;
@@ -99,21 +127,6 @@ export interface CollectionTreeItem {
   slug: string;
   name: string;
   pages: PageTreeItem[];
-}
-
-export interface SpaceTreeItem {
-  id: string;
-  slug: string;
-  name: string;
-  collections: CollectionTreeItem[];
-}
-
-export interface WorkspaceTree {
-  id: string;
-  org_id: string;
-  slug: string;
-  name: string;
-  spaces: SpaceTreeItem[];
 }
 
 // Auth
