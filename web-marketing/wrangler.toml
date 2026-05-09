@@ -1,0 +1,19 @@
+# Cloudflare Pages config for the Marrow marketing site (marrow.so).
+#
+# Build:
+#   npm run pages:build          # runs next-on-pages
+# Deploy:
+#   npm run pages:deploy         # wrangler pages deploy .vercel/output/static
+#
+# Custom domains (configure in the Cloudflare Pages dashboard):
+#   marrow.so   — apex; requires Cloudflare proxied DNS after #76 delegation
+#   www.marrow.so
+
+name = "marrow-marketing"
+compatibility_date = "2025-10-01"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = ".vercel/output/static"
+# Build command for the Pages dashboard: npm run pages:build
+
+[vars]
+NEXT_PUBLIC_APP_URL = "https://app.marrow.so"
