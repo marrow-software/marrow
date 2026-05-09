@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Marrow is a self-hosted, open-source knowledge base (wiki) built around a non-negotiable **restore guarantee**: a Marrow export bundle must always be restorable to an exact replica of the original workspace. This guarantee is the architectural foundation — every decision flows from it.
 
-Current status: **v0.2** — node-tree hierarchy (folders + pages), append-only revisions, export/restore, file attachments, full-text search, OIDC + RBAC, and a working Next.js frontend are all implemented and tested.
+Current status: **v0.2** — node-tree hierarchy (folders + pages), append-only revisions, export/restore, file attachments, full-text search, OIDC auth + RBAC, billing integration, and a working Next.js frontend are all implemented and tested.
 
 ---
 
@@ -148,8 +148,8 @@ marrow/
 │   │       ├── organizations.py      # Org CRUD, member management (invite, role, remove)
 │   │       ├── workspaces.py
 │   │       └── spaces.py
-│   │       # Node CRUD/tree routes land in #124 (2.0b); old collection/page routers
-│   │       # were removed by the v0.2 schema migration (#123).
+│   │       ├── nodes.py              # Node CRUD, revision, and attachment endpoints
+│   │       # Old collection/page routers were removed by the v0.2 schema migration (#123).
 │   ├── tests/
 │   │   ├── test_models_smoke.py
 │   │   ├── test_migration_cycle.py
@@ -176,7 +176,7 @@ marrow/
 │   │       └── pages/[pageId]/
 │   │           └── page.tsx          # Page editor
 │   ├── components/
-│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → Collections → Pages + search
+│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → node tree (folders + pages) + search
 │   │   ├── search-dialog.tsx         # Cmd+K search dialog
 │   │   ├── export-dialog.tsx         # Export workspace dialog (full / slim, size estimate)
 │   │   ├── restore-dialog.tsx        # Restore workspace from bundle dialog (drag-and-drop upload)
@@ -278,15 +278,15 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET | /api/spaces/{sid}/nodes | List root-level nodes in a space | viewer |
 | GET | /api/nodes/{nid} | Get node with current revision content | viewer |
 | PATCH | /api/nodes/{nid} | Update node (name, content, parent, position) | editor |
-| DELETE | /api/nodes/{nid} | Soft-delete node and all descendants | editor |
+| DELETE | /api/nodes/{nid} | Soft-delete node and all descendants | owner |
 | GET | /api/nodes/{nid}/children | List direct children | viewer |
-| GET | /api/nodes/{nid}/revisions | List all revisions | viewer |
+| GET | /api/nodes/{nid}/revisions | List all revisions (pages only) | viewer |
 | GET | /api/nodes/{nid}/revisions/{rid} | Get a specific revision | viewer |
 | POST | /api/nodes/{nid}/attachments | Upload attachment to node | editor |
 | GET | /api/nodes/{nid}/attachments | List node attachments | viewer |
 | GET | /api/nodes/{nid}/attachments/{aid}/file | Download attachment file | viewer |
 
-> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`.
+> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
 
 ### Storage Adapter Interface
 
@@ -303,12 +303,12 @@ class StorageAdapter(ABC):
 ```text
 marrow-export-{workspace-slug}-{timestamp}.zip          # full
 marrow-export-{workspace-slug}-slim-{timestamp}.zip     # slim
-├── manifest.json        # workspace + org metadata, all entity IDs, schema version (v3)
+├── manifest.json        # workspace + org metadata, all entity IDs, schema version (v4)
 ├── pages/
-│   ├── {page-id}.md     # human-readable Markdown (all pages)
-│   └── {page-id}.json   # canonical BlockNote JSON (JSON-format pages only)
+│   ├── {node-id}.md     # human-readable Markdown (all pages)
+│   └── {node-id}.json   # canonical BlockNote JSON (JSON-format pages only)
 ├── revisions/
-│   └── {page-id}/
+│   └── {node-id}/
 │       ├── {revision-id}.md     # Markdown revisions (legacy) or human-readable export
 │       └── {revision-id}.json   # BlockNote JSON revisions (canonical)
 ├── assets/
@@ -316,10 +316,12 @@ marrow-export-{workspace-slug}-slim-{timestamp}.zip     # slim
 └── links.json           # internal links, broken links, orphaned pages
 ```
 
-v1/v2 bundles had only `.md` files. v3 adds `.json` as canonical for JSON-format revisions.
-Restore supports v1, v2, and v3 bundles.
+v1/v2 bundles had only `.md` files. v3 adds `.json` as canonical for JSON-format revisions. v4 switches from the old `pages` key to `nodes` in the manifest and includes folder metadata; it also supports a `trash` section when exported with `--include-trash`.
+Restore supports v1, v2, v3, and v4 bundles (v3 → v4 auto-upgrade at restore time).
 
 **Slim bundles** omit the `revisions/` directory entirely and set `"slim": true` + `"revisions": []` in `manifest.json`. Restore recreates one revision per page from `pages/` content. CLI: `marrow export --slim`; API: `?slim=true`.
+
+**Trash export**: `marrow export --include-trash` adds a `trash/` section to the bundle containing soft-deleted nodes. The manifest sets `"include_trash": true`. Restore re-creates trashed nodes with `deleted_at` set.
 
 ### Authentication
 
@@ -341,7 +343,7 @@ Marrow supports three authentication methods, checked in priority order:
 - **Auto-save**: `PageEditor` debounces saves 2 seconds after last keystroke; shows Saving… / Saved / Error status
 - **Content format**: new saves store BlockNote JSON (`content_format='json'`); legacy Markdown revisions are loaded via `tryParseMarkdownToBlocks` for backward compat
 - **Editor features**: code blocks (Shiki syntax highlighting), tables (`TableHandlesController`), `@` member mentions (custom inline-content spec carrying `userId` + `displayName`, fed by `listOrgMembers`), `/page` slash item that opens a page picker and inserts a WikiLink (`searchWorkspace`)
-- **Sidebar create flows**: the tree renders a mixed list of folders and pages sorted by `position` (fractional index). Hover-to-reveal `+` buttons appear on spaces and folder nodes; clicking opens a type-picker (Folder / Page), then a `CreateDialog`. New nodes are appended after the last sibling using fractional-index arithmetic so they can later be reordered without renumbering all siblings.
+- **Sidebar create flows**: the tree renders a mixed list of folders and pages sorted by `position` (fractional index). Hover-to-reveal `+` buttons appear on spaces and folder nodes; clicking opens a type-picker (Folder / Page), then a `CreateDialog`. New nodes are appended after the last sibling using fractional-index arithmetic so they can later be reordered without renumbering all siblings. Slugs are auto-generated via `slugify()` and the POST goes to `/api/spaces/{sid}/nodes` with `parent_id` set for nested items.
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 

@@ -83,14 +83,34 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 Migrations run automatically on container start.
 
-:::danger[Breaking change: upgrading from v0.1 to v0.2]
-v0.2 replaces the `collections` + `pages` schema with a unified `nodes` table (the node-tree model). The migration `bd52bac0673f` runs automatically, but **it drops the old tables** — data not yet migrated will be lost.
+## Upgrading from v0.1 to v0.2
 
-Before upgrading:
+v0.2 replaces the `collections` + `pages` schema with a unified `nodes` table (the node-tree model). The migration `bd52bac0673f` runs automatically on container start, but **it drops the old tables** — this is irreversible.
+
+:::danger[Back up before upgrading]
+Before pulling v0.2 images:
 
 1. **Export all workspaces** with the v0.1 CLI: `marrow export --workspace <slug> --output backup.zip`
-2. **Back up the database volume**: `docker compose -f docker-compose.prod.yml stop api web && docker run --rm -v marrow_postgres_data:/data -v $(pwd):/out alpine tar czf /out/pg-backup.tar.gz /data`
-3. **Back up the storage volume** (attachments): back up the `api_storage` volume or its bind-mount path.
+2. **Back up the database volume**:
 
-After a successful upgrade, run `marrow restore backup.zip` to load your data into the new schema.
+```bash
+docker compose -f docker-compose.prod.yml stop api web
+docker run --rm \
+  -v marrow_postgres_data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/postgres-backup-$(date +%Y%m%d).tar.gz -C /data .
+```
+
+3. **Back up the storage volume** (attachments):
+
+```bash
+docker run --rm \
+  -v marrow_api_storage:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/storage-backup-$(date +%Y%m%d).tar.gz -C /data .
+```
+
+After a successful upgrade, your data is migrated automatically. If the migration fails, restore from the snapshot above and open a bug report.
 :::
+
+**Do not attempt a v0.1 → v0.2 upgrade on a live instance without a tested backup.**

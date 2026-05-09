@@ -36,6 +36,16 @@ Bundles are zip files containing Markdown, JSON, and a `manifest.json`. No propr
 
 `marrow restore` accepts bundles from earlier Marrow versions, including bundles produced before the project was renamed (the `freehold-export-*.zip` filename prefix is still recognized). v3 bundles (produced by Marrow v0.1) are automatically upgraded to v4 on restore — pages are mapped to the node-tree model and the manifest is rewritten. No manual conversion needed. The restore guarantee is a forward promise — old bundles must continue to restore on new versions.
 
+### 5. Soft-delete transparency
+
+Soft-deleted nodes (trash) are excluded from standard export bundles. Pass `--include-trash` to include them:
+
+```bash
+marrow export --workspace mywiki --include-trash
+```
+
+The manifest records `"include_trash": true` and a `trash/` section with soft-deleted node metadata. Restore recreates those nodes with `deleted_at` set, preserving the full deletion history.
+
 ## What this rules out
 
 The guarantee imposes constraints contributors should be aware of:

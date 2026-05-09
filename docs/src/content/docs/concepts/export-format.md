@@ -28,12 +28,14 @@ bundle.zip
 │       └── {revision-id}.json
 ├── assets/
 │   └── {attachment-id}{ext}
-└── links.json
+├── links.json
+└── trash/              # only present when exported with --include-trash
+    └── {node-id}.json
 ```
 
 ### `manifest.json`
 
-Contains workspace and org metadata, all entity IDs, and the bundle schema version. Schema is currently **v4**. Restore supports v1, v2, v3, and v4 (v3 bundles are auto-upgraded on restore).
+Contains workspace and org metadata, all entity IDs, and the bundle schema version. Schema is currently **v4**. Restore supports v1, v2, v3, and v4 (v3 bundles are auto-upgraded to v4 on restore).
 
 ### `pages/`
 
@@ -73,7 +75,7 @@ Internal node-to-node links, broken links, and orphaned pages. Used to reconstru
 | v3 | v0.1 | Added `.json` files alongside `.md` for canonical BlockNote content. |
 | v4 | v0.2 (current) | Node-tree model: manifest includes full folder/page hierarchy; `--include-trash` support. |
 
-Restore is backward-compatible: v3 bundles are auto-upgraded on restore; v1/v2 bundles continue to work.
+Restore is backward-compatible: any older bundle restores cleanly into a current Marrow workspace. v3 bundles are auto-upgraded to v4 on restore.
 
 ## Inspecting a bundle
 
