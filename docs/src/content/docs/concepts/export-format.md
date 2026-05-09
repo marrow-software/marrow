@@ -20,10 +20,10 @@ The `marrow restore` CLI also accepts the legacy `freehold-export-*` prefix from
 bundle.zip
 ├── manifest.json
 ├── pages/
-│   ├── {page-id}.md
-│   └── {page-id}.json
+│   ├── {node-id}.md
+│   └── {node-id}.json
 ├── revisions/
-│   └── {page-id}/
+│   └── {node-id}/
 │       ├── {revision-id}.md
 │       └── {revision-id}.json
 ├── assets/
@@ -33,24 +33,28 @@ bundle.zip
 
 ### `manifest.json`
 
-Contains workspace and org metadata, all entity IDs, and the bundle schema version. Schema is currently **v3**. Restore supports v1, v2, and v3.
+Contains workspace and org metadata, all entity IDs, and the bundle schema version. Schema is currently **v4**. Restore supports v1, v2, v3, and v4 (v3 bundles are auto-upgraded on restore).
 
 ### `pages/`
 
-Current state of every page.
+Current state of every page node.
 
-- `{page-id}.md` — Markdown render of the current revision (always present).
-- `{page-id}.json` — canonical BlockNote JSON (present when the current revision is JSON-format).
+- `{node-id}.md` — Markdown render of the current revision (always present).
+- `{node-id}.json` — canonical BlockNote JSON (present when the current revision is JSON-format).
 
 The Markdown is for humans. The JSON is what gets restored byte-for-byte.
 
+Folder nodes have no content files. Their metadata (name, slug, position, description) lives entirely in `manifest.json`.
+
 ### `revisions/`
 
-The full append-only history. Each page has a subfolder containing every revision. Same `.md` + `.json` convention as `pages/`.
+The full append-only history. Each page node has a subfolder containing every revision. Same `.md` + `.json` convention as `pages/`.
 
 **Slim bundles** omit this directory entirely. The manifest sets `"slim": true` and `"revisions": []`. Restore recreates a single revision per page from the `pages/` content.
 
 CLI: `marrow export --slim`. API: `?slim=true`.
+
+**Trash**: soft-deleted nodes are excluded by default. Pass `--include-trash` (CLI) or `?include_trash=true` (API) to include them in the bundle. Restore skips trash nodes unless the flag was set at export time.
 
 ### `assets/`
 
@@ -58,7 +62,7 @@ Every attachment, named by attachment ID with the original extension.
 
 ### `links.json`
 
-Internal page-to-page links, broken links, and orphaned pages. Used to reconstruct cross-references on restore.
+Internal node-to-node links, broken links, and orphaned pages. Used to reconstruct cross-references on restore.
 
 ## Bundle schema versions
 
@@ -66,9 +70,10 @@ Internal page-to-page links, broken links, and orphaned pages. Used to reconstru
 | --- | --- | --- |
 | v1 | Initial | Markdown-only revisions. |
 | v2 | — | Added `links.json`. |
-| v3 | Current | Added `.json` files alongside `.md` for canonical BlockNote content. |
+| v3 | v0.1 | Added `.json` files alongside `.md` for canonical BlockNote content. |
+| v4 | v0.2 (current) | Node-tree model: manifest includes full folder/page hierarchy; `--include-trash` support. |
 
-Restore is backward-compatible: any older bundle restores cleanly into a current Marrow workspace.
+Restore is backward-compatible: v3 bundles are auto-upgraded on restore; v1/v2 bundles continue to work.
 
 ## Inspecting a bundle
 

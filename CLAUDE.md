@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Marrow is a self-hosted, open-source knowledge base (wiki) built around a non-negotiable **restore guarantee**: a Marrow export bundle must always be restorable to an exact replica of the original workspace. This guarantee is the architectural foundation — every decision flows from it.
 
-Current status: **v0.1 MVP** — core hierarchy, append-only revisions, export/restore, file attachments, and a working Next.js frontend are all implemented and tested.
+Current status: **v0.2** — node-tree hierarchy (folders + pages), append-only revisions, export/restore, file attachments, full-text search, OIDC + RBAC, and a working Next.js frontend are all implemented and tested.
 
 ---
 
@@ -268,16 +268,25 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET/POST | /api/workspaces/ | List / create workspaces | viewer/editor |
 | GET/DELETE | /api/workspaces/{id} | Get / delete workspace | viewer/owner |
 | GET | /api/workspaces/{id}/tree | Full hierarchy (sidebar) | viewer |
-| GET | /api/workspaces/{id}/search?q= | Full-text search across workspace pages | viewer |
+| GET | /api/workspaces/{id}/search?q= | Full-text search across workspace nodes | viewer |
 | GET | /api/workspaces/{id}/export?slim=false | Download workspace as zip bundle | viewer |
 | GET | /api/workspaces/{id}/export/estimate | Pre-compression byte estimates for full & slim exports | viewer |
 | POST | /api/workspaces/restore | Restore a workspace from an uploaded export bundle zip | — |
 | GET/POST | /api/workspaces/{id}/spaces/ | List / create spaces | viewer/editor |
 | GET/DELETE | /api/workspaces/{id}/spaces/{sid} | Get / delete space | viewer/owner |
+| POST | /api/spaces/{sid}/nodes | Create a node (folder or page) inside a space | editor |
+| GET | /api/spaces/{sid}/nodes | List root-level nodes in a space | viewer |
+| GET | /api/nodes/{nid} | Get node with current revision content | viewer |
+| PATCH | /api/nodes/{nid} | Update node (name, content, parent, position) | editor |
+| DELETE | /api/nodes/{nid} | Soft-delete node and all descendants | editor |
+| GET | /api/nodes/{nid}/children | List direct children | viewer |
+| GET | /api/nodes/{nid}/revisions | List all revisions | viewer |
+| GET | /api/nodes/{nid}/revisions/{rid} | Get a specific revision | viewer |
+| POST | /api/nodes/{nid}/attachments | Upload attachment to node | editor |
+| GET | /api/nodes/{nid}/attachments | List node attachments | viewer |
+| GET | /api/nodes/{nid}/attachments/{aid}/file | Download attachment file | viewer |
 
-> **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
->
-> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
+> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`.
 
 ### Storage Adapter Interface
 
@@ -322,7 +331,7 @@ Marrow supports three authentication methods, checked in priority order:
 
 **OIDC flow**: The backend is the OIDC Relying Party. `GET /api/auth/login` redirects to the IdP. `GET /api/auth/callback` exchanges the code, upserts the user in the `users` table, claims any pending org memberships matching the user's email, auto-creates a personal org if the user has no memberships, and sets an httpOnly session cookie. The `COOKIE_DOMAIN` env var controls the cookie domain (set to `localhost` for dev so the cookie is shared between `:3000` and `:8000`).
 
-**RBAC**: Org membership with roles (owner/editor/viewer) enforced on all data routes. Role is resolved by following the resource chain (page → collection → space → workspace → org → membership). Dependency factories in `rbac.py` handle resolution for each resource level.
+**RBAC**: Org membership with roles (owner/editor/viewer) enforced on all data routes. Role is resolved by following the resource chain (node → space → workspace → org → membership). Dependency factories in `rbac.py` handle resolution for each resource level.
 
 **Key files**: `auth.py` (config, JWT helpers), `dependencies.py` (`verify_auth` + `AuthContext`), `rbac.py` (role enforcement dependencies), `routers/auth.py` (login/callback/me/logout), `routers/organizations.py` (org CRUD + member management).
 
@@ -332,7 +341,7 @@ Marrow supports three authentication methods, checked in priority order:
 - **Auto-save**: `PageEditor` debounces saves 2 seconds after last keystroke; shows Saving… / Saved / Error status
 - **Content format**: new saves store BlockNote JSON (`content_format='json'`); legacy Markdown revisions are loaded via `tryParseMarkdownToBlocks` for backward compat
 - **Editor features**: code blocks (Shiki syntax highlighting), tables (`TableHandlesController`), `@` member mentions (custom inline-content spec carrying `userId` + `displayName`, fed by `listOrgMembers`), `/page` slash item that opens a page picker and inserts a WikiLink (`searchWorkspace`)
-- **Sidebar create flows**: hover-to-reveal `+` buttons open `CreateDialog` with slug auto-generation via `slugify()`
+- **Sidebar create flows**: the tree renders a mixed list of folders and pages sorted by `position` (fractional index). Hover-to-reveal `+` buttons appear on spaces and folder nodes; clicking opens a type-picker (Folder / Page), then a `CreateDialog`. New nodes are appended after the last sibling using fractional-index arithmetic so they can later be reordered without renumbering all siblings.
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 
@@ -364,8 +373,7 @@ Tests in `api/tests/` are **integration tests** — they hit a real database. A 
 - Meilisearch upgrade for fuzzy/typo-tolerant search (PostgreSQL FTS is implemented)
 - S3-compatible storage adapter
 - Rich text / TipTap editor (currently plain Markdown textarea)
-- User permissions and workspace-level access control (OIDC auth is implemented but no per-user data scoping)
+- Trash UI — soft-delete is enforced at the DB level (`deleted_at`); a "Trash" view and permanent-delete are not yet exposed in the frontend
 - Audit log / audit_events table
 - Task management and integrations
-- Deployment docs (Docker image, K8s, systemd)
 - Page templates, collaborative editing, offline sync

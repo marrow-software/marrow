@@ -30,11 +30,11 @@ Bundles are zip files containing Markdown, JSON, and a `manifest.json`. No propr
 
 ### 3. The round-trip test
 
-`api/tests/test_round_trip.py` is a regression anchor: it creates a workspace with multiple spaces, collections, pages, revisions, and attachments, exports it, wipes the database, restores from the bundle, and verifies the result is byte-equivalent to the original. This test must pass at all times. It runs in CI on every change.
+`api/tests/test_round_trip.py` is a regression anchor: it creates a workspace with multiple spaces, folders, pages, revisions, and attachments, exports it, wipes the database, restores from the bundle, and verifies the result is byte-equivalent to the original. This test must pass at all times. It runs in CI on every change.
 
 ### 4. Legacy bundle compatibility
 
-`marrow restore` accepts bundles from earlier Marrow versions, including bundles produced before the project was renamed (the `freehold-export-*.zip` filename prefix is still recognized). The restore guarantee is a forward promise — old bundles must continue to restore on new versions.
+`marrow restore` accepts bundles from earlier Marrow versions, including bundles produced before the project was renamed (the `freehold-export-*.zip` filename prefix is still recognized). v3 bundles (produced by Marrow v0.1) are automatically upgraded to v4 on restore — pages are mapped to the node-tree model and the manifest is rewritten. No manual conversion needed. The restore guarantee is a forward promise — old bundles must continue to restore on new versions.
 
 ## What this rules out
 
