@@ -78,8 +78,8 @@ export function listWorkspaces(): Promise<Workspace[]> {
   return apiFetch("/api/workspaces");
 }
 
-export function createWorkspace(slug: string, name: string): Promise<Workspace> {
-  return apiFetch("/api/workspaces", {
+export function createWorkspace(orgId: string, slug: string, name: string): Promise<Workspace> {
+  return apiFetch(`/api/orgs/${orgId}/workspaces`, {
     method: "POST",
     body: JSON.stringify({ slug, name }),
   });

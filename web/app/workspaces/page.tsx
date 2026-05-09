@@ -18,19 +18,25 @@ export default function WorkspacesPage() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
 
   useEffect(() => {
     listWorkspaces().then(setWorkspaces).catch(() => toast.error("Failed to load workspaces"));
-    listOrgs().then(setOrgs).catch(() => {});
+    listOrgs().then((orgs) => {
+      setOrgs(orgs);
+      if (orgs.length > 0) setActiveOrgId(orgs[0].id);
+    }).catch(() => {});
     getAuthStatus().then(setAuth).catch(() => {});
   }, []);
 
+  const activeOrg = orgs.find((o) => o.id === activeOrgId) ?? orgs[0] ?? null;
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !activeOrg) return;
     setCreating(true);
     try {
-      const ws = await createWorkspace(slugify(name), name.trim());
+      const ws = await createWorkspace(activeOrg.id, slugify(name), name.trim());
       router.push(`/w/${ws.id}`);
     } catch (err) {
       toast.error(String(err));
@@ -113,7 +119,26 @@ export default function WorkspacesPage() {
         )}
 
         {/* Create workspace */}
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-lg border bg-card p-4 space-y-3">
+          {orgs.length > 1 && activeOrg && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Creating workspace in</span>
+              <select
+                className="rounded border bg-background px-2 py-1 text-sm font-medium text-foreground"
+                value={activeOrgId ?? ""}
+                onChange={(e) => setActiveOrgId(e.target.value)}
+              >
+                {orgs.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {orgs.length === 1 && activeOrg && (
+            <p className="text-xs text-muted-foreground">
+              Creating workspace in <span className="font-semibold">{activeOrg.name}</span>
+            </p>
+          )}
           <form onSubmit={handleCreate} className="flex gap-2">
             <Input
               placeholder="New workspace name"
@@ -121,7 +146,7 @@ export default function WorkspacesPage() {
               onChange={(e) => setName(e.target.value)}
               disabled={creating}
             />
-            <Button type="submit" disabled={creating || !name.trim()}>
+            <Button type="submit" disabled={creating || !name.trim() || !activeOrg}>
               Create
             </Button>
           </form>
