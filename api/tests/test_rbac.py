@@ -1,4 +1,5 @@
-"""Tests for role-based access control: org membership enforcement on API routes."""
+"""Role-based access control: org membership enforcement on workspace,
+space, and node API routes."""
 
 import os
 import uuid
@@ -8,11 +9,10 @@ from fastapi.testclient import TestClient
 
 from marrow.auth import COOKIE_NAME, create_session_jwt, reset_oidc_config
 from marrow.models import (
-    Collection,
+    Node,
     Organization,
     OrgMembership,
     OrgRole,
-    Page,
     Revision,
     Space,
     User,
@@ -52,7 +52,7 @@ def _make_user(session, email: str, name: str = "Test User") -> User:
 
 
 def _make_org_with_workspace(session) -> tuple:
-    """Create an org with a workspace containing a full hierarchy."""
+    """Create an org with a workspace, space, folder node, and child page node."""
     org = Organization(slug=f"org-{uuid.uuid4().hex[:6]}", name="Test Org")
     session.add(org)
     session.flush()
@@ -65,21 +65,34 @@ def _make_org_with_workspace(session) -> tuple:
     session.add(space)
     session.flush()
 
-    col = Collection(space_id=space.id, slug="docs", name="Docs")
-    session.add(col)
+    folder = Node(
+        space_id=space.id,
+        type="folder",
+        name="Docs",
+        slug="docs",
+        position="a0",
+    )
+    session.add(folder)
     session.flush()
 
-    page = Page(collection_id=col.id, slug="test-page", title="Test Page")
+    page = Node(
+        space_id=space.id,
+        parent_id=folder.id,
+        type="page",
+        name="Test Page",
+        slug="test-page",
+        position="a0",
+    )
     session.add(page)
     session.flush()
 
-    rev = Revision(page_id=page.id, content="# Test")
+    rev = Revision(node_id=page.id, content="# Test")
     session.add(rev)
     session.flush()
     page.current_revision_id = rev.id
     session.flush()
 
-    return org, ws, space, col, page
+    return org, ws, space, folder, page
 
 
 def _add_membership(session, org, user, role: OrgRole) -> OrgMembership:
@@ -94,9 +107,12 @@ def _auth_cookie(client, user):
     client.cookies.set(COOKIE_NAME, token)
 
 
-class TestWorkspaceRBAC:
-    """Test role enforcement on workspace endpoints."""
+# ---------------------------------------------------------------------------
+# Workspace-level enforcement
+# ---------------------------------------------------------------------------
 
+
+class TestWorkspaceRBAC:
     def test_viewer_can_read_workspace(self, client):
         from marrow.dependencies import get_db
 
@@ -121,7 +137,6 @@ class TestWorkspaceRBAC:
         try:
             user = _make_user(db, "outsider@test.com")
             org, ws, *_ = _make_org_with_workspace(db)
-            # No membership added
             db.commit()
 
             _auth_cookie(client, user)
@@ -165,6 +180,64 @@ class TestWorkspaceRBAC:
             db.rollback()
             client.cookies.clear()
 
+    def test_org_owner_can_create_workspace(self, client):
+        """Org-owner role grants workspace creation."""
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "org-owner@test.com")
+            org = Organization(slug=f"org-{uuid.uuid4().hex[:6]}", name="Owner Org")
+            db.add(org)
+            db.flush()
+            _add_membership(db, org, user, OrgRole.OWNER)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.post(
+                "/api/workspaces",
+                json={
+                    "org_id": str(org.id),
+                    "slug": f"ws-{uuid.uuid4().hex[:6]}",
+                    "name": "Created WS",
+                },
+            )
+            assert res.status_code in (200, 201), res.text
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    @pytest.mark.xfail(
+        reason="POST /api/workspaces does not currently gate on org role; "
+        "any member may create. Tracked as a follow-up to v0.2 RBAC.",
+        strict=False,
+    )
+    def test_viewer_cannot_create_workspace(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "viewer-create@test.com")
+            org = Organization(slug=f"org-{uuid.uuid4().hex[:6]}", name="Viewer Org")
+            db.add(org)
+            db.flush()
+            _add_membership(db, org, user, OrgRole.VIEWER)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.post(
+                "/api/workspaces",
+                json={
+                    "org_id": str(org.id),
+                    "slug": f"ws-{uuid.uuid4().hex[:6]}",
+                    "name": "Forbidden WS",
+                },
+            )
+            assert res.status_code == 403
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
     def test_api_key_bypasses_rbac(self, client, monkeypatch):
         monkeypatch.setenv("API_KEY", "test-key")
         from marrow.dependencies import get_db
@@ -191,7 +264,6 @@ class TestWorkspaceRBAC:
             org1, ws1, *_ = _make_org_with_workspace(db)
             org2, ws2, *_ = _make_org_with_workspace(db)
             _add_membership(db, org1, user, OrgRole.VIEWER)
-            # user is NOT a member of org2
             db.commit()
 
             _auth_cookie(client, user)
@@ -205,9 +277,12 @@ class TestWorkspaceRBAC:
             client.cookies.clear()
 
 
-class TestEditorRole:
-    """Test that editors can create/edit but not delete."""
+# ---------------------------------------------------------------------------
+# Space + node CRUD enforcement
+# ---------------------------------------------------------------------------
 
+
+class TestSpaceAndNodeRBAC:
     def test_editor_can_create_space(self, client):
         from marrow.dependencies import get_db
 
@@ -245,42 +320,134 @@ class TestEditorRole:
             db.rollback()
             client.cookies.clear()
 
-    def test_viewer_cannot_create_page(self, client):
+    def test_viewer_cannot_create_node(self, client):
         from marrow.dependencies import get_db
 
         db = next(get_db())
         try:
-            user = _make_user(db, "viewer-page@test.com")
-            org, ws, space, col, _ = _make_org_with_workspace(db)
+            user = _make_user(db, "viewer-node@test.com")
+            org, ws, space, *_ = _make_org_with_workspace(db)
             _add_membership(db, org, user, OrgRole.VIEWER)
             db.commit()
 
             _auth_cookie(client, user)
             res = client.post(
-                f"/api/collections/{col.id}/pages",
-                json={"slug": "new-page", "title": "New Page", "content": "# Hello"},
+                f"/api/spaces/{space.id}/nodes",
+                json={"type": "page", "name": "New Page", "content": "# Hi"},
             )
             assert res.status_code == 403
         finally:
             db.rollback()
             client.cookies.clear()
 
-    def test_editor_can_update_page(self, client):
+    def test_editor_can_create_node(self, client):
         from marrow.dependencies import get_db
 
         db = next(get_db())
         try:
-            user = _make_user(db, "editor-page@test.com")
-            org, ws, space, col, page = _make_org_with_workspace(db)
+            user = _make_user(db, "editor-node@test.com")
+            org, ws, space, *_ = _make_org_with_workspace(db)
+            _add_membership(db, org, user, OrgRole.EDITOR)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.post(
+                f"/api/spaces/{space.id}/nodes",
+                json={"type": "page", "name": "Editor Page", "content": "# Hi"},
+            )
+            assert res.status_code == 201, res.text
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_viewer_can_read_node(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "viewer-read-node@test.com")
+            org, ws, space, folder, page = _make_org_with_workspace(db)
+            _add_membership(db, org, user, OrgRole.VIEWER)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.get(f"/api/nodes/{page.id}")
+            assert res.status_code == 200
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_editor_can_update_node(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "editor-update@test.com")
+            org, ws, space, folder, page = _make_org_with_workspace(db)
             _add_membership(db, org, user, OrgRole.EDITOR)
             db.commit()
 
             _auth_cookie(client, user)
             res = client.patch(
-                f"/api/pages/{page.id}",
+                f"/api/nodes/{page.id}",
                 json={"content": "# Updated"},
             )
             assert res.status_code == 200
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_viewer_cannot_update_node(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "viewer-update@test.com")
+            org, ws, space, folder, page = _make_org_with_workspace(db)
+            _add_membership(db, org, user, OrgRole.VIEWER)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.patch(
+                f"/api/nodes/{page.id}",
+                json={"content": "# Forbidden"},
+            )
+            assert res.status_code == 403
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_editor_cannot_delete_node(self, client):
+        """Node deletion requires owner role."""
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "editor-deletenode@test.com")
+            org, ws, space, folder, page = _make_org_with_workspace(db)
+            _add_membership(db, org, user, OrgRole.EDITOR)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.delete(f"/api/nodes/{page.id}")
+            assert res.status_code == 403
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_owner_can_delete_node(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "owner-delnode@test.com")
+            org, ws, space, folder, page = _make_org_with_workspace(db)
+            _add_membership(db, org, user, OrgRole.OWNER)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.delete(f"/api/nodes/{page.id}")
+            assert res.status_code == 204
         finally:
             db.rollback()
             client.cookies.clear()
