@@ -10,7 +10,7 @@ export type SideDrawerKind = "backlinks" | "history";
 
 interface Props {
   which: SideDrawerKind;
-  pageId: string;
+  nodeId: string;
   onClose: () => void;
   onRestore: (content: string, contentFormat: string) => Promise<void>;
 }
@@ -20,7 +20,7 @@ const TITLES: Record<SideDrawerKind, string> = {
   history: "Version history",
 };
 
-export function SideDrawer({ which, pageId, onClose, onRestore }: Props) {
+export function SideDrawer({ which, nodeId, onClose, onRestore }: Props) {
   return (
     <aside
       className="absolute inset-y-0 right-0 z-15 flex w-[360px] flex-col border-l border-border bg-card shadow-[-20px_0_40px_-20px_rgba(0,0,0,0.3)]"
@@ -46,7 +46,7 @@ export function SideDrawer({ which, pageId, onClose, onRestore }: Props) {
       <div className="flex-1 overflow-auto px-4 py-4">
         {which === "backlinks" && <BacklinksEmptyState />}
         {which === "history" && (
-          <HistoryList pageId={pageId} onRestore={onRestore} onClose={onClose} />
+          <HistoryList nodeId={nodeId} onRestore={onRestore} onClose={onClose} />
         )}
       </div>
     </aside>
@@ -67,11 +67,11 @@ function BacklinksEmptyState() {
 }
 
 function HistoryList({
-  pageId,
+  nodeId,
   onRestore,
   onClose,
 }: {
-  pageId: string;
+  nodeId: string;
   onRestore: (content: string, contentFormat: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -84,7 +84,7 @@ function HistoryList({
     let cancelled = false;
     (async () => {
       try {
-        const revs = await listRevisions(pageId);
+        const revs = await listRevisions(nodeId);
         if (!cancelled) setRevisions(revs);
       } catch {
         if (!cancelled) toast.error("Failed to load revisions");
@@ -95,11 +95,11 @@ function HistoryList({
     return () => {
       cancelled = true;
     };
-  }, [pageId]);
+  }, [nodeId]);
 
   async function handleSelect(rev: Revision) {
     try {
-      const detail = await getRevision(pageId, rev.id);
+      const detail = await getRevision(nodeId, rev.id);
       setSelected(detail);
     } catch {
       toast.error("Failed to load revision content");

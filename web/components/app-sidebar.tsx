@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, ChevronRight, FilePlus, FolderPlus, Plus, Settings } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FilePlus,
+  FolderPlus,
+  Plus,
+  Settings,
+} from "lucide-react";
 import { ExportDialog } from "@/components/export-dialog";
 import {
   SidebarGroup,
@@ -13,12 +20,12 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { InlineCreateRow } from "@/components/sidebar/inline-create-row";
-import { createCollection, createPage, createSpace, slugify } from "@/lib/api";
+import { createNode, createSpace, slugify } from "@/lib/api";
 import { SearchPanel } from "@/components/rail-panels/search-panel";
 import { StarredPanel } from "@/components/rail-panels/starred-panel";
 import { InboxPanel } from "@/components/rail-panels/inbox-panel";
 import type { RailPanel } from "@/components/app-rail";
-import type { CollectionTreeItem, SpaceTreeItem, User, WorkspaceTree } from "@/lib/types";
+import type { NodeTreeItem, SpaceTreeItem, User, WorkspaceTree } from "@/lib/types";
 
 interface Props {
   tree: WorkspaceTree;
@@ -28,79 +35,148 @@ interface Props {
   searchInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
-function CollectionSection({
-  col,
+// ---------------------------------------------------------------------------
+// Node row — recursive, handles both folders and pages
+// ---------------------------------------------------------------------------
+
+function NodeRow({
+  node,
+  spaceId,
   workspaceId,
   activePath,
+  depth,
   onCreated,
 }: {
-  col: CollectionTreeItem;
+  node: NodeTreeItem;
+  spaceId: string;
   workspaceId: string;
   activePath: string;
+  depth: number;
   onCreated: () => void;
 }) {
-  const [open, setOpen] = useState(true);
-  const [creating, setCreating] = useState(false);
   const router = useRouter();
+  const isFolder = node.type === "folder";
+  const [open, setOpen] = useState(true);
+  const [creatingPage, setCreatingPage] = useState(false);
+  const [creatingFolder, setCreatingFolder] = useState(false);
 
-  function startCreate() {
-    setOpen(true);
-    setCreating(true);
+  const href = `/w/${workspaceId}/n/${node.id}`;
+  const isActive = activePath === href || activePath.startsWith(href + "/");
+  const indent = { paddingLeft: 8 + depth * 12 };
+
+  if (!isFolder) {
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          render={<a href={href} />}
+          isActive={isActive}
+          size="sm"
+          style={indent}
+        >
+          {node.name}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
   }
 
   return (
-    <div className="ml-3">
-      <div className="flex items-center justify-between py-0.5 group">
+    <div>
+      <div className="group flex items-center justify-between" style={indent}>
         <button
           onClick={() => setOpen((o) => !o)}
-          className="flex flex-1 items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+          className="flex flex-1 items-center gap-1 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
-          {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          {col.name}
+          {open ? (
+            <ChevronDown className="h-3 w-3" />
+          ) : (
+            <ChevronRight className="h-3 w-3" />
+          )}
+          <a
+            href={href}
+            onClick={(e) => e.stopPropagation()}
+            className={`truncate ${isActive ? "text-foreground" : ""}`}
+          >
+            {node.name}
+          </a>
         </button>
-        <button
-          type="button"
-          onClick={startCreate}
-          className="hidden group-hover:flex items-center text-muted-foreground hover:text-foreground"
-          title="New page"
-          aria-label="New page"
-        >
-          <FilePlus className="h-3 w-3" />
-        </button>
+        <div className="hidden gap-1 pr-1 group-hover:flex">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setCreatingFolder(true);
+            }}
+            className="text-muted-foreground hover:text-foreground"
+            title="New folder"
+            aria-label="New folder"
+          >
+            <FolderPlus className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setCreatingPage(true);
+            }}
+            className="text-muted-foreground hover:text-foreground"
+            title="New page"
+            aria-label="New page"
+          >
+            <FilePlus className="h-3 w-3" />
+          </button>
+        </div>
       </div>
       {open && (
         <SidebarMenu>
-          {creating && (
+          {creatingFolder && (
+            <InlineCreateRow
+              placeholder="Folder name"
+              className="flex items-center gap-2 py-0.5"
+              icon={<FolderPlus className="h-3 w-3 text-muted-foreground" />}
+              onCommit={async (name) => {
+                await createNode(spaceId, "folder", name, node.id, {
+                  slug: slugify(name),
+                });
+                setCreatingFolder(false);
+                onCreated();
+              }}
+              onCancel={() => setCreatingFolder(false)}
+            />
+          )}
+          {creatingPage && (
             <InlineCreateRow
               placeholder="Page title"
               className="flex items-center gap-2 px-2 py-1"
               icon={<FilePlus className="h-3 w-3 text-muted-foreground" />}
               onCommit={async (name) => {
-                const page = await createPage(col.id, slugify(name), name);
-                setCreating(false);
-                router.push(`/w/${workspaceId}/pages/${page.id}?new=1`);
+                const newNode = await createNode(spaceId, "page", name, node.id, {
+                  slug: slugify(name),
+                });
+                setCreatingPage(false);
+                router.push(`/w/${workspaceId}/n/${newNode.id}?new=1`);
                 onCreated();
               }}
-              onCancel={() => setCreating(false)}
+              onCancel={() => setCreatingPage(false)}
             />
           )}
-          {col.pages.map((page) => {
-            const href = `/w/${workspaceId}/pages/${page.id}`;
-            const isActive = activePath === href;
-            return (
-              <SidebarMenuItem key={page.id}>
-                <SidebarMenuButton
-                  render={<a href={href} />}
-                  isActive={isActive}
-                  size="sm"
-                >
-                  {page.title}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-          {!creating && col.pages.length === 0 && (
-            <p className="px-2 py-1 text-xs text-muted-foreground">No pages yet</p>
+          {node.children.map((child) => (
+            <NodeRow
+              key={child.id}
+              node={child}
+              spaceId={spaceId}
+              workspaceId={workspaceId}
+              activePath={activePath}
+              depth={depth + 1}
+              onCreated={onCreated}
+            />
+          ))}
+          {!creatingFolder && !creatingPage && node.children.length === 0 && (
+            <p
+              className="py-1 text-xs text-muted-foreground"
+              style={{ paddingLeft: 8 + (depth + 1) * 12 }}
+            >
+              Empty
+            </p>
           )}
         </SidebarMenu>
       )}
@@ -120,12 +196,9 @@ function SpaceSection({
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(true);
-  const [creating, setCreating] = useState(false);
-
-  function startCreate() {
-    setOpen(true);
-    setCreating(true);
-  }
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [creatingPage, setCreatingPage] = useState(false);
+  const router = useRouter();
 
   return (
     <SidebarGroup>
@@ -139,42 +212,79 @@ function SpaceSection({
           </span>
           {space.name}
         </SidebarGroupLabel>
-        <button
-          type="button"
-          onClick={startCreate}
-          className="mr-2 hidden group-hover:flex items-center text-muted-foreground hover:text-foreground"
-          title="New collection"
-          aria-label="New collection"
-        >
-          <FolderPlus className="h-3.5 w-3.5" />
-        </button>
+        <div className="mr-2 hidden gap-1 group-hover:flex">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setCreatingFolder(true);
+            }}
+            className="text-muted-foreground hover:text-foreground"
+            title="New folder"
+            aria-label="New folder"
+          >
+            <FolderPlus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setCreatingPage(true);
+            }}
+            className="text-muted-foreground hover:text-foreground"
+            title="New page"
+            aria-label="New page"
+          >
+            <FilePlus className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       {open && (
         <SidebarGroupContent>
-          {creating && (
+          {creatingFolder && (
             <InlineCreateRow
-              placeholder="Collection name"
+              placeholder="Folder name"
               className="ml-3 flex items-center gap-2 py-0.5"
               icon={<FolderPlus className="h-3 w-3 text-muted-foreground" />}
               onCommit={async (name) => {
-                await createCollection(space.id, slugify(name), name);
-                setCreating(false);
+                await createNode(space.id, "folder", name, null, {
+                  slug: slugify(name),
+                });
+                setCreatingFolder(false);
                 onCreated();
               }}
-              onCancel={() => setCreating(false)}
+              onCancel={() => setCreatingFolder(false)}
             />
           )}
-          {space.collections.map((col) => (
-            <CollectionSection
-              key={col.id}
-              col={col}
+          {creatingPage && (
+            <InlineCreateRow
+              placeholder="Page title"
+              className="ml-3 flex items-center gap-2 py-0.5"
+              icon={<FilePlus className="h-3 w-3 text-muted-foreground" />}
+              onCommit={async (name) => {
+                const newNode = await createNode(space.id, "page", name, null, {
+                  slug: slugify(name),
+                });
+                setCreatingPage(false);
+                router.push(`/w/${workspaceId}/n/${newNode.id}?new=1`);
+                onCreated();
+              }}
+              onCancel={() => setCreatingPage(false)}
+            />
+          )}
+          {space.nodes.map((node) => (
+            <NodeRow
+              key={node.id}
+              node={node}
+              spaceId={space.id}
               workspaceId={workspaceId}
               activePath={activePath}
+              depth={0}
               onCreated={onCreated}
             />
           ))}
-          {!creating && space.collections.length === 0 && (
-            <p className="px-4 py-1 text-xs text-muted-foreground">No collections yet</p>
+          {!creatingFolder && !creatingPage && space.nodes.length === 0 && (
+            <p className="px-4 py-1 text-xs text-muted-foreground">No content yet</p>
           )}
         </SidebarGroupContent>
       )}
@@ -182,7 +292,13 @@ function SpaceSection({
   );
 }
 
-function WorkspaceHeader({ tree, memberCount }: { tree: WorkspaceTree; memberCount: number | null }) {
+function WorkspaceHeader({
+  tree,
+  memberCount,
+}: {
+  tree: WorkspaceTree;
+  memberCount: number | null;
+}) {
   return (
     <div className="flex items-center gap-2 border-b border-sidebar-border px-3.5 py-3 group">
       <div className="min-w-0 flex-1">
@@ -193,13 +309,15 @@ function WorkspaceHeader({ tree, memberCount }: { tree: WorkspaceTree; memberCou
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <ExportDialog workspaceId={tree.id} workspaceName={tree.name} />
-        <a
-          href={`/orgs/${tree.org_id}/settings`}
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Organization settings"
-        >
-          <Settings className="h-3.5 w-3.5" />
-        </a>
+        {tree.org_id && (
+          <a
+            href={`/orgs/${tree.org_id}/settings`}
+            className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="Organization settings"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </a>
+        )}
       </div>
       <button
         type="button"

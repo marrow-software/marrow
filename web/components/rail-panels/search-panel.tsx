@@ -28,6 +28,12 @@ function HighlightedSnippet({ text }: { text: string }) {
   );
 }
 
+function formatLocation(r: SearchResultItem): string {
+  return r.node_path.length > 0
+    ? `${r.space_name} / ${r.node_path.join(" / ")}`
+    : r.space_name;
+}
+
 export function SearchPanel({ workspaceId, inputRef: externalRef }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultItem[]>([]);
@@ -68,7 +74,7 @@ export function SearchPanel({ workspaceId, inputRef: externalRef }: Props) {
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter" && results[activeIndex]) {
       e.preventDefault();
-      router.push(`/w/${workspaceId}/pages/${results[activeIndex].page_id}`);
+      router.push(`/w/${workspaceId}/n/${results[activeIndex].node_id}`);
     }
   }
 
@@ -96,17 +102,17 @@ export function SearchPanel({ workspaceId, inputRef: externalRef }: Props) {
         )}
         {visibleResults.map((r, i) => (
           <button
-            key={r.page_id}
+            key={r.node_id}
             type="button"
-            onClick={() => router.push(`/w/${workspaceId}/pages/${r.page_id}`)}
+            onClick={() => router.push(`/w/${workspaceId}/n/${r.node_id}`)}
             onMouseEnter={() => setActiveIndex(i)}
             className={`rounded-md border border-border px-3 py-2 text-left transition-colors ${
               i === activeIndex ? "bg-accent" : "bg-background hover:bg-accent/60"
             }`}
           >
-            <div className="text-sm font-medium text-foreground">{r.title}</div>
+            <div className="text-sm font-medium text-foreground">{r.name}</div>
             <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-              {r.space_name} / {r.collection_name}
+              {formatLocation(r)}
             </div>
             <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
               <HighlightedSnippet text={r.snippet} />
