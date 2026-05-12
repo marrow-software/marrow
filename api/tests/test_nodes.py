@@ -299,6 +299,196 @@ class TestDeleteNode:
             client.cookies.clear()
 
 
+class TestTrash:
+    def test_restore_cascades_to_descendants(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "owner-restore@test.com")
+            org, ws, space = _make_workspace(db)
+            _add_membership(db, org, user, OrgRole.OWNER)
+
+            parent = Node(
+                space_id=space.id, type="folder", name="P", slug="p", position="a0"
+            )
+            db.add(parent)
+            db.flush()
+            child = Node(
+                space_id=space.id,
+                parent_id=parent.id,
+                type="page",
+                name="C",
+                slug="c",
+                position="a0",
+            )
+            db.add(child)
+            db.commit()
+
+            _auth_cookie(client, user)
+            assert client.delete(f"/api/nodes/{parent.id}").status_code == 204
+            res = client.post(f"/api/nodes/{parent.id}/restore")
+            assert res.status_code == 200, res.text
+
+            db.expire_all()
+            db.refresh(parent)
+            db.refresh(child)
+            assert parent.deleted_at is None
+            assert child.deleted_at is None
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_restore_orphaned_node_returns_422(self, client):
+        from datetime import datetime, timezone
+
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "owner-orphan@test.com")
+            org, ws, space = _make_workspace(db)
+            _add_membership(db, org, user, OrgRole.OWNER)
+
+            parent = Node(
+                space_id=space.id,
+                type="folder",
+                name="OP",
+                slug="op",
+                position="a0",
+                deleted_at=datetime.now(timezone.utc),
+            )
+            db.add(parent)
+            db.flush()
+            child = Node(
+                space_id=space.id,
+                parent_id=parent.id,
+                type="page",
+                name="OC",
+                slug="oc",
+                position="a0",
+                deleted_at=datetime.now(timezone.utc),
+            )
+            db.add(child)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.post(f"/api/nodes/{child.id}/restore")
+            assert res.status_code == 422
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_trash_list_returns_top_level_only(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "owner-trashlist@test.com")
+            org, ws, space = _make_workspace(db)
+            _add_membership(db, org, user, OrgRole.OWNER)
+
+            parent = Node(
+                space_id=space.id, type="folder", name="TP", slug="tp", position="a0"
+            )
+            db.add(parent)
+            db.flush()
+            child = Node(
+                space_id=space.id,
+                parent_id=parent.id,
+                type="page",
+                name="TC",
+                slug="tc",
+                position="a0",
+            )
+            db.add(child)
+            db.commit()
+
+            _auth_cookie(client, user)
+            client.delete(f"/api/nodes/{parent.id}")
+
+            res = client.get(f"/api/workspaces/{ws.id}/trash")
+            assert res.status_code == 200
+            ids = {n["id"] for n in res.json()}
+            assert str(parent.id) in ids
+            assert str(child.id) not in ids
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_purge_hard_deletes(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "owner-purge@test.com")
+            org, ws, space = _make_workspace(db)
+            _add_membership(db, org, user, OrgRole.OWNER)
+
+            node = Node(
+                space_id=space.id, type="folder", name="X", slug="x", position="a0"
+            )
+            db.add(node)
+            db.commit()
+            node_id = node.id
+
+            _auth_cookie(client, user)
+            res = client.delete(f"/api/nodes/{node_id}/purge")
+            assert res.status_code == 204
+
+            db.expire_all()
+            assert db.get(Node, node_id) is None
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_purge_trash_cli_respects_threshold(self, client):
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import text
+
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            org, ws, space = _make_workspace(db)
+            old = Node(
+                space_id=space.id,
+                type="folder",
+                name="Old",
+                slug="old",
+                position="a0",
+                deleted_at=datetime.now(timezone.utc) - timedelta(days=60),
+            )
+            recent = Node(
+                space_id=space.id,
+                type="folder",
+                name="New",
+                slug="new",
+                position="a0",
+                deleted_at=datetime.now(timezone.utc) - timedelta(days=5),
+            )
+            db.add(old)
+            db.add(recent)
+            db.commit()
+            old_id, recent_id = old.id, recent.id
+
+            db.execute(
+                text(
+                    "DELETE FROM nodes WHERE deleted_at IS NOT NULL "
+                    "AND deleted_at < NOW() - make_interval(days => :days)"
+                ),
+                {"days": 30},
+            )
+            db.commit()
+
+            assert db.get(Node, old_id) is None
+            assert db.get(Node, recent_id) is not None
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+
 class TestRevisions:
     def test_list_revisions_multiple_entries(self, client):
         from marrow.dependencies import get_db

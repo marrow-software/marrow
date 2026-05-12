@@ -89,5 +89,38 @@ def restore(
         raise typer.Exit(1)
 
 
+@app.command("purge-trash")
+def purge_trash(
+    days: int = typer.Option(
+        30, "--days", help="Hard-delete nodes whose deleted_at is older than this many days"
+    ),
+    database_url: str | None = typer.Option(
+        None, "--database-url", envvar="DATABASE_URL", help="PostgreSQL connection URL"
+    ),
+) -> None:
+    """Permanently delete trashed nodes older than the threshold (default 30 days).
+
+    Safe to run repeatedly. Cron recipe (daily at 03:00):
+
+        0 3 * * * /usr/local/bin/marrow purge-trash >> /var/log/marrow-purge.log 2>&1
+    """
+    load_dotenv()
+
+    from sqlalchemy import text
+
+    from .db import get_session
+
+    with get_session(database_url) as session:
+        result = session.execute(
+            text(
+                "DELETE FROM nodes WHERE deleted_at IS NOT NULL "
+                "AND deleted_at < NOW() - make_interval(days => :days)"
+            ),
+            {"days": days},
+        )
+        session.commit()
+        typer.echo(f"Purged {result.rowcount} trashed node(s) older than {days} days")
+
+
 if __name__ == "__main__":
     app()

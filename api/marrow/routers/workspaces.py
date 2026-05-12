@@ -18,6 +18,7 @@ from ..dependencies import AuthContext, get_db, get_search_backend, verify_auth
 from ..models import Node, OrgMembership, OrgRole, Space, Workspace
 from ..rbac import require_workspace_role
 from ..schemas import (
+    NodeRead,
     NodeTreeItem,
     SearchResponse,
     SearchResultItem,
@@ -219,6 +220,41 @@ def search_workspace(
         query=q,
         results=[SearchResultItem(**vars(r)) for r in results],
     )
+
+
+@router.get("/{workspace_id}/trash", response_model=list[NodeRead])
+def list_workspace_trash(
+    workspace_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_workspace_role(OrgRole.VIEWER)),
+):
+    """List top-level trashed nodes — those whose nearest non-trashed ancestor is the space."""
+    ws = db.get(Workspace, workspace_id)
+    if ws is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    space_ids_subq = select(Space.id).where(Space.workspace_id == workspace_id).scalar_subquery()
+    parent_alias = Node.__table__.alias("parent")
+
+    # Top-level trashed = node is trashed AND (parent is null OR parent is not trashed).
+    # Using outer join to handle the null-parent case.
+    from sqlalchemy import or_
+
+    nodes = (
+        db.execute(
+            select(Node)
+            .outerjoin(parent_alias, Node.parent_id == parent_alias.c.id)
+            .where(
+                Node.space_id.in_(space_ids_subq),
+                Node.deleted_at.is_not(None),
+                or_(Node.parent_id.is_(None), parent_alias.c.deleted_at.is_(None)),
+            )
+            .order_by(Node.deleted_at.desc())
+        )
+        .scalars()
+        .all()
+    )
+    return nodes
 
 
 @router.get("/{workspace_id}/export/estimate")
