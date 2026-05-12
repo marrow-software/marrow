@@ -78,13 +78,22 @@ export default function WorkspacesPage() {
                         {org.name}
                       </p>
                     </div>
-                    <Link
-                      href={`/orgs/${org.id}/settings`}
-                      className="text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100"
-                      title="Organization settings"
-                    >
-                      <Settings className="h-3.5 w-3.5" />
-                    </Link>
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100">
+                      <Link
+                        href={`/orgs/${org.id}/admin`}
+                        className="text-muted-foreground hover:text-foreground transition-colors text-xs"
+                        title="Admin dashboard"
+                      >
+                        Admin
+                      </Link>
+                      <Link
+                        href={`/orgs/${org.id}/settings`}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                        title="Organization settings"
+                      >
+                        <Settings className="h-3.5 w-3.5" />
+                      </Link>
+                    </div>
                   </div>
                   <div className="grid gap-2">
                     {orgWorkspaces.map((ws) => (

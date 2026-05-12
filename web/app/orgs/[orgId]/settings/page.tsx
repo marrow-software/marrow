@@ -101,9 +101,14 @@ export default function OrgSettingsPage() {
           <ArrowLeft className="h-3 w-3" />
           Workspaces
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold">{org.name}</h1>
-          <p className="text-sm text-muted-foreground">Organization settings</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">{org.name}</h1>
+            <p className="text-sm text-muted-foreground">Organization settings</p>
+          </div>
+          <Button render={<Link href={`/orgs/${orgId}/admin`} />} variant="outline" size="sm">
+            Admin dashboard
+          </Button>
         </div>
       </div>
 

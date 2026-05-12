@@ -169,6 +169,7 @@ marrow/
 │   │   ├── login/page.tsx            # SSO login page (shown when OIDC enabled)
 │   │   ├── auth/callback/page.tsx    # Post-OIDC callback landing page
 │   │   ├── orgs/[orgId]/settings/page.tsx  # Org member management UI
+│   │   ├── orgs/[orgId]/admin/page.tsx     # Admin dashboard (mission control + section nav, owner-gated)
 │   │   ├── workspaces/page.tsx       # Workspace list + creation
 │   │   └── w/[workspaceId]/
 │   │       ├── layout.tsx            # Workspace shell with sidebar + auth status
