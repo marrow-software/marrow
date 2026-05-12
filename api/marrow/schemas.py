@@ -176,13 +176,21 @@ class SearchResponse(BaseModel):
 class OrganizationCreate(BaseModel):
     slug: str
     name: str
+    type: Literal["individual", "organization"] = "organization"
 
 
 class OrganizationRead(_ReadBase):
     id: UUID
     slug: str
     name: str
+    type: Literal["individual", "organization"]
+    allow_member_space_creation: bool
     created_at: datetime
+
+
+class OrganizationUpdate(BaseModel):
+    name: str | None = None
+    allow_member_space_creation: bool | None = None
 
 
 # ---------------------------------------------------------------------------

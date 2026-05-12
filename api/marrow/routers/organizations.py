@@ -8,14 +8,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, verify_auth
-from ..models import Organization, OrgMembership, OrgRole, User
-from ..rbac import require_org_role
+from ..models import Organization, OrgMembership, OrgRole, User, Workspace
+from ..rbac import ROLE_HIERARCHY, require_org_role
 from ..schemas import (
     OrganizationCreate,
     OrganizationRead,
+    OrganizationUpdate,
     OrgMembershipCreate,
     OrgMembershipRead,
     OrgMembershipUpdate,
+    WorkspaceCreate,
+    WorkspaceRead,
 )
 from .billing import TIER_SEAT_LIMITS, _saas_mode
 
@@ -50,7 +53,7 @@ def create_org(
     auth: AuthContext = Depends(verify_auth),
 ):
     """Create an org. The creating user becomes the owner."""
-    org = Organization(slug=body.slug, name=body.name)
+    org = Organization(slug=body.slug, name=body.name, type=body.type)
     db.add(org)
     try:
         db.flush()
@@ -169,6 +172,73 @@ def update_member_role(
     db.commit()
     db.refresh(membership)
     return membership
+
+
+@router.patch("/{org_id}", response_model=OrganizationRead)
+def update_org(
+    org_id: UUID,
+    body: OrganizationUpdate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_org_role(OrgRole.OWNER)),
+):
+    """Update org settings (admin only)."""
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise HTTPException(404, "Organization not found")
+    if body.name is not None:
+        org.name = body.name
+    if body.allow_member_space_creation is not None:
+        org.allow_member_space_creation = body.allow_member_space_creation
+    db.commit()
+    db.refresh(org)
+    return org
+
+
+@router.post("/{org_id}/workspaces", response_model=WorkspaceRead, status_code=201)
+def create_workspace_in_org(
+    org_id: UUID,
+    body: WorkspaceCreate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(verify_auth),
+):
+    """Create a workspace inside an org.
+
+    - Individual orgs: any member can create (effectively just the single owner).
+    - Organization orgs: only OWNER (admin) role may create workspaces.
+    """
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise HTTPException(404, "Organization not found")
+
+    if auth.method not in ("api_key", "anonymous"):
+        membership_role = db.execute(
+            select(OrgMembership.role).where(
+                OrgMembership.org_id == org_id,
+                OrgMembership.user_id == auth.user_id,
+            )
+        ).scalar_one_or_none()
+        if membership_role is None:
+            raise HTTPException(403, "Not a member of this organization")
+
+        min_role = OrgRole.VIEWER if org.type == "individual" else OrgRole.OWNER
+        if ROLE_HIERARCHY[OrgRole(membership_role)] < ROLE_HIERARCHY[min_role]:
+            if org.type == "organization":
+                raise HTTPException(
+                    403, "Only organization admins can create workspaces"
+                )
+            raise HTTPException(403, f"Requires {min_role.value} role or higher")
+
+    ws = Workspace(org_id=org_id, slug=body.slug, name=body.name)
+    db.add(ws)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail=f"Workspace slug '{body.slug}' already exists"
+        )
+    db.refresh(ws)
+    return ws
 
 
 @router.delete("/{org_id}/members/{membership_id}", status_code=204)

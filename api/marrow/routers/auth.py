@@ -115,6 +115,7 @@ async def callback(request: Request):
             personal_org = Organization(
                 name=f"{name}'s Space",
                 slug=slug,
+                type="individual",
             )
             db.add(personal_org)
             db.flush()

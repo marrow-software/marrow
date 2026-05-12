@@ -5,16 +5,27 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppRail, type RailPanel } from "@/components/app-rail";
 import { AppSidebar } from "@/components/app-sidebar";
 import { WorkspaceTreeProvider } from "@/components/workspace-tree-context";
-import type { User, WorkspaceTree } from "@/lib/types";
+import type { Organization, OrgMembership, User, Workspace, WorkspaceTree } from "@/lib/types";
 
 interface Props {
   tree: WorkspaceTree;
   user: User | null;
   memberCount: number | null;
+  workspaces?: Workspace[];
+  orgs?: Organization[];
+  userMemberships?: Record<string, OrgMembership["role"]>;
   children: React.ReactNode;
 }
 
-export function WorkspaceShell({ tree, user, memberCount, children }: Props) {
+export function WorkspaceShell({
+  tree,
+  user,
+  memberCount,
+  workspaces = [],
+  orgs = [],
+  userMemberships = {},
+  children,
+}: Props) {
   const [panel, setPanel] = useState<RailPanel>("pages");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -46,6 +57,10 @@ export function WorkspaceShell({ tree, user, memberCount, children }: Props) {
           sidebarOpen={sidebarOpen}
           onSidebarToggle={() => setSidebarOpen((v) => !v)}
           user={user}
+          workspaces={workspaces}
+          orgs={orgs}
+          userMemberships={userMemberships}
+          currentWorkspaceId={tree.id}
         />
         {sidebarOpen && (
           <AppSidebar

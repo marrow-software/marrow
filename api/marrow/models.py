@@ -13,6 +13,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKeyConstraint,
@@ -46,6 +47,14 @@ class Organization(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
+    # Account type: 'individual' (single-user personal org) or 'organization'.
+    # Governs workspace-creation RBAC: org-type requires OWNER role.
+    type: Mapped[str] = mapped_column(Text, nullable=False, server_default="individual")
+    # When true, non-OWNER members can create spaces. Admins can disable this.
+    allow_member_space_creation: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+
     # Billing
     tier: Mapped[str] = mapped_column(Text, nullable=False, server_default="starter")
     billing_interval: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -58,6 +67,12 @@ class Organization(Base):
     )
     workspaces: Mapped[list["Workspace"]] = relationship(
         back_populates="organization", passive_deletes=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('individual', 'organization')", name="organizations_type_valid"
+        ),
     )
 
 

@@ -4,6 +4,8 @@ export interface Organization {
   id: string;
   slug: string;
   name: string;
+  type: "individual" | "organization";
+  allow_member_space_creation: boolean;
   created_at: string;
 }
 

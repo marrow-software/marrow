@@ -7,9 +7,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db
-from ..models import OrgRole, Space, Workspace
-from ..rbac import require_workspace_role
+from ..models import Organization, OrgMembership, OrgRole, Space, Workspace
+from ..rbac import ROLE_HIERARCHY, require_workspace_role
 from ..schemas import SpaceCreate, SpaceRead
+from sqlalchemy import select
 
 router = APIRouter(prefix="/api/workspaces/{workspace_id}/spaces", tags=["spaces"])
 
@@ -38,7 +39,24 @@ def create_space(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_workspace_role(OrgRole.EDITOR)),
 ):
-    _get_workspace_or_404(workspace_id, db)
+    ws = _get_workspace_or_404(workspace_id, db)
+
+    # Org admins can restrict space creation to admins only via
+    # `allow_member_space_creation=false`. Session users below OWNER are blocked then.
+    if auth.method not in ("api_key", "anonymous"):
+        org = db.get(Organization, ws.org_id)
+        if org is not None and not org.allow_member_space_creation:
+            role = db.execute(
+                select(OrgMembership.role).where(
+                    OrgMembership.org_id == ws.org_id,
+                    OrgMembership.user_id == auth.user_id,
+                )
+            ).scalar_one_or_none()
+            if role is None or ROLE_HIERARCHY[OrgRole(role)] < ROLE_HIERARCHY[OrgRole.OWNER]:
+                raise HTTPException(
+                    403, "Only admins can create spaces in this organization"
+                )
+
     space = Space(workspace_id=workspace_id, slug=body.slug, name=body.name)
     db.add(space)
     try:

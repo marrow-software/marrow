@@ -85,6 +85,17 @@ export function createWorkspace(slug: string, name: string): Promise<Workspace> 
   });
 }
 
+export function createWorkspaceInOrg(
+  orgId: string,
+  slug: string,
+  name: string
+): Promise<Workspace> {
+  return apiFetch(`/api/orgs/${orgId}/workspaces`, {
+    method: "POST",
+    body: JSON.stringify({ slug, name }),
+  });
+}
+
 export function getWorkspace(id: string): Promise<Workspace> {
   return apiFetch(`/api/workspaces/${id}`);
 }
@@ -279,6 +290,16 @@ export function createOrg(slug: string, name: string): Promise<Organization> {
 
 export function getOrg(orgId: string): Promise<Organization> {
   return apiFetch(`/api/orgs/${orgId}`);
+}
+
+export function updateOrg(
+  orgId: string,
+  patch: { name?: string; allow_member_space_creation?: boolean }
+): Promise<Organization> {
+  return apiFetch(`/api/orgs/${orgId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
 }
 
 export function listOrgMembers(orgId: string): Promise<OrgMembership[]> {
