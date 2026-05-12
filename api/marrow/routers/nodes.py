@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_storage
+from ..fractional_index import after
 from ..models import Attachment, Node, OrgRole, Revision, Space
 from ..rbac import require_node_role, require_space_role
 from ..schemas import (
@@ -53,13 +54,26 @@ def create_node(
 ):
     slug = body.slug or _slugify(body.name)
 
+    sibling_filter = (
+        Node.parent_id == body.parent_id
+        if body.parent_id is not None
+        else Node.parent_id.is_(None)
+    )
+    last_position = db.execute(
+        select(Node.position)
+        .where(Node.space_id == space_id, sibling_filter, Node.deleted_at.is_(None))
+        .order_by(Node.position.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    position = after(last_position)
+
     node = Node(
         space_id=space_id,
         parent_id=body.parent_id,
         type=body.type,
         name=body.name,
         slug=slug,
-        position="a0",
+        position=position,
         description=body.description if body.type == "folder" else None,
     )
     db.add(node)
@@ -137,6 +151,25 @@ def update_node(
     if body.slug is not None:
         node.slug = body.slug
     if body.position is not None:
+        target_parent_id = body.parent_id if body.parent_id is not None else node.parent_id
+        sibling_filter = (
+            Node.parent_id == target_parent_id
+            if target_parent_id is not None
+            else Node.parent_id.is_(None)
+        )
+        conflict = db.execute(
+            select(Node.id)
+            .where(
+                Node.space_id == node.space_id,
+                sibling_filter,
+                Node.position == body.position,
+                Node.id != node.id,
+                Node.deleted_at.is_(None),
+            )
+            .limit(1)
+        ).scalar_one_or_none()
+        if conflict is not None:
+            raise HTTPException(422, "Position already in use by a sibling")
         node.position = body.position
     if body.description is not None and node.type == "folder":
         node.description = body.description

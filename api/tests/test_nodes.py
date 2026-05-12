@@ -234,6 +234,49 @@ class TestPatchNode:
             db.rollback()
             client.cookies.clear()
 
+    def test_patch_position_duplicate_among_siblings_rejected(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "editor-pos@test.com")
+            org, ws, space = _make_workspace(db)
+            _add_membership(db, org, user, OrgRole.EDITOR)
+
+            a = Node(space_id=space.id, type="folder", name="A", slug="a", position="a0")
+            b = Node(space_id=space.id, type="folder", name="B", slug="b", position="a1")
+            db.add_all([a, b])
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.patch(f"/api/nodes/{a.id}", json={"position": "a1"})
+            assert res.status_code == 422
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_patch_position_unique_accepted(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "editor-pos2@test.com")
+            org, ws, space = _make_workspace(db)
+            _add_membership(db, org, user, OrgRole.EDITOR)
+
+            a = Node(space_id=space.id, type="folder", name="A", slug="a", position="a0")
+            b = Node(space_id=space.id, type="folder", name="B", slug="b", position="a1")
+            db.add_all([a, b])
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.patch(f"/api/nodes/{a.id}", json={"position": "a2"})
+            assert res.status_code == 200
+            assert res.json()["position"] == "a2"
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
     def test_patch_parent_id_cross_workspace_rejected(self, client):
         from marrow.dependencies import get_db
 
