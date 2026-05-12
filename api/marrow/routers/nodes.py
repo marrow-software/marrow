@@ -11,7 +11,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_storage
-from ..models import Attachment, Node, OrgRole, Revision, Space
+from ..models import Attachment, Node, NodeWatch, OrgRole, Revision, Space
+from ..notifications import notify_watchers
 from ..rbac import require_node_role, require_space_role
 from ..schemas import (
     AttachmentRead,
@@ -20,6 +21,7 @@ from ..schemas import (
     NodeReadWithContent,
     NodeUpdate,
     RevisionRead,
+    WatchStatus,
 )
 
 router = APIRouter(tags=["nodes"])
@@ -141,6 +143,7 @@ def update_node(
     if body.description is not None and node.type == "folder":
         node.description = body.description
 
+    content_changed = False
     if body.content is not None and node.type == "page":
         rev = Revision(
             node_id=node.id,
@@ -150,8 +153,12 @@ def update_node(
         db.add(rev)
         db.flush()
         node.current_revision_id = rev.id
+        content_changed = True
 
     node.updated_at = datetime.now(timezone.utc)
+
+    if content_changed:
+        notify_watchers(db, node, auth.user_id, kind="node.updated")
 
     try:
         db.commit()
@@ -291,3 +298,62 @@ def download_attachment(
         raise HTTPException(404, "Attachment not found")
     data = storage.read(str(attachment.id), attachment.filename)
     return Response(content=data, media_type="application/octet-stream")
+
+
+@router.get("/api/nodes/{node_id}/watching", response_model=WatchStatus)
+def get_watching(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    _node_or_404(node_id, db)
+    if auth.user_id is None:
+        return WatchStatus(watching=False)
+    exists = db.execute(
+        select(NodeWatch.id).where(
+            NodeWatch.node_id == node_id, NodeWatch.user_id == auth.user_id
+        )
+    ).scalar_one_or_none()
+    return WatchStatus(watching=exists is not None)
+
+
+@router.post("/api/nodes/{node_id}/watch", response_model=WatchStatus, status_code=201)
+def watch_node(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    _node_or_404(node_id, db)
+    if auth.user_id is None:
+        raise HTTPException(400, "Watching requires an authenticated user")
+    existing = db.execute(
+        select(NodeWatch).where(
+            NodeWatch.node_id == node_id, NodeWatch.user_id == auth.user_id
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        db.add(NodeWatch(user_id=auth.user_id, node_id=node_id))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+    return WatchStatus(watching=True)
+
+
+@router.delete("/api/nodes/{node_id}/watch", status_code=204)
+def unwatch_node(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    _node_or_404(node_id, db)
+    if auth.user_id is None:
+        return
+    watch = db.execute(
+        select(NodeWatch).where(
+            NodeWatch.node_id == node_id, NodeWatch.user_id == auth.user_id
+        )
+    ).scalar_one_or_none()
+    if watch is not None:
+        db.delete(watch)
+        db.commit()
