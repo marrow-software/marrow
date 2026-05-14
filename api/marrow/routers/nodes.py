@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_storage
 from ..models import Attachment, Node, OrgRole, Revision, Space
+from ..notifications import deliver_mention_notifications
 from ..rbac import require_node_role, require_space_role
 from ..schemas import (
     AttachmentRead,
@@ -80,6 +81,7 @@ def create_node(
         db.flush()
         node.current_revision_id = rev.id
         db.flush()
+        deliver_mention_notifications(db, node, content, auth.user_id)
 
     db.commit()
     db.refresh(node)
@@ -150,6 +152,7 @@ def update_node(
         db.add(rev)
         db.flush()
         node.current_revision_id = rev.id
+        deliver_mention_notifications(db, node, body.content, auth.user_id)
 
     node.updated_at = datetime.now(timezone.utc)
 

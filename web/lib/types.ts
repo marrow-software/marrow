@@ -129,3 +129,24 @@ export interface AuthStatus {
   method: string;
   oidc_enabled: boolean;
 }
+
+// Notifications
+export type NotificationKind =
+  | "mention"
+  | "comment_reply"
+  | "share_request"
+  | "watch_event";
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  kind: NotificationKind;
+  payload: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationList {
+  items: Notification[];
+  unread_count: number;
+}

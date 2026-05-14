@@ -224,3 +224,26 @@ class AuthStatus(BaseModel):
     user: UserRead | None = None
     method: str
     oidc_enabled: bool
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+
+class NotificationRead(_ReadBase):
+    id: UUID
+    user_id: UUID
+    kind: Literal["mention", "comment_reply", "share_request", "watch_event"]
+    payload: dict
+    read_at: datetime | None
+    created_at: datetime
+
+
+class NotificationList(BaseModel):
+    items: list[NotificationRead]
+    unread_count: int
+
+
+class NotificationUpdate(BaseModel):
+    read: bool = True

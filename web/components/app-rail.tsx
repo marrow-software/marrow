@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { FolderClosed, Search, Star, Inbox, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SettingsDialog } from "@/components/settings-dialog";
-import { logout } from "@/lib/api";
+import { listMyNotifications, logout } from "@/lib/api";
 import type { User } from "@/lib/types";
 
 export type RailPanel = "pages" | "search" | "starred" | "inbox";
@@ -40,6 +40,26 @@ export function AppRail({
   onSidebarToggle,
   user,
 }: Props) {
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function poll() {
+      try {
+        const data = await listMyNotifications({ unreadOnly: true, limit: 1 });
+        if (!cancelled) setUnread(data.unread_count);
+      } catch {
+        // Silent — inbox may be unavailable (e.g. anonymous auth).
+      }
+    }
+    poll();
+    const interval = window.setInterval(poll, 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [panel]);
+
   return (
     <div className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar py-3.5">
       <button
@@ -52,6 +72,7 @@ export function AppRail({
 
       {TABS.map(({ id, label, Icon }) => {
         const active = panel === id && sidebarOpen;
+        const showBadge = id === "inbox" && unread > 0;
         return (
           <button
             key={id}
@@ -64,17 +85,25 @@ export function AppRail({
                 if (!sidebarOpen) onSidebarToggle();
               }
             }}
-            title={label}
-            aria-label={label}
+            title={showBadge ? `${label} (${unread} unread)` : label}
+            aria-label={showBadge ? `${label}, ${unread} unread` : label}
             aria-pressed={active}
             className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+              "relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
               active
                 ? "bg-primary/15 text-primary"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
             <Icon className="h-4 w-4" />
+            {showBadge && (
+              <span
+                aria-hidden
+                className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-none text-primary-foreground"
+              >
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
           </button>
         );
       })}

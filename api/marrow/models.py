@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -253,3 +253,33 @@ class User(Base):
     __table_args__ = (UniqueConstraint("oidc_issuer", "oidc_subject"),)
 
     memberships: Mapped[list["OrgMembership"]] = relationship(back_populates="user")
+
+
+class NotificationKind(str, enum.Enum):
+    MENTION = "mention"
+    COMMENT_REPLY = "comment_reply"
+    SHARE_REQUEST = "share_request"
+    WATCH_EVENT = "watch_event"
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        CheckConstraint(
+            "kind IN ('mention', 'comment_reply', 'share_request', 'watch_event')",
+            name="notifications_kind_valid",
+        ),
+    )

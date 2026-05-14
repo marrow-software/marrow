@@ -10,6 +10,8 @@ import type {
   Attachment,
   AuthStatus,
   Collection,
+  Notification,
+  NotificationList,
   Organization,
   OrgMembership,
   Page,
@@ -311,6 +313,31 @@ export function removeMember(orgId: string, membershipId: string): Promise<void>
   return apiFetch(`/api/orgs/${orgId}/members/${membershipId}`, {
     method: "DELETE",
   });
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (Inbox)
+// ---------------------------------------------------------------------------
+
+export function listMyNotifications(
+  opts: { unreadOnly?: boolean; limit?: number } = {}
+): Promise<NotificationList> {
+  const params = new URLSearchParams();
+  if (opts.unreadOnly) params.set("unread_only", "true");
+  if (opts.limit) params.set("limit", String(opts.limit));
+  const qs = params.toString();
+  return apiFetch(`/api/users/me/notifications${qs ? `?${qs}` : ""}`);
+}
+
+export function markNotificationRead(nid: string, read: boolean = true): Promise<Notification> {
+  return apiFetch(`/api/notifications/${nid}`, {
+    method: "PATCH",
+    body: JSON.stringify({ read }),
+  });
+}
+
+export function markAllNotificationsRead(): Promise<void> {
+  return apiFetch(`/api/users/me/notifications/read-all`, { method: "POST" });
 }
 
 /** Convert a display name to a URL-safe slug. */

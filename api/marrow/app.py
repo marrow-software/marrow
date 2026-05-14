@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .dependencies import verify_auth
-from .routers import auth, billing, nodes, organizations, spaces, workspaces
+from .routers import auth, billing, nodes, notifications, organizations, spaces, workspaces
 
 
 def _truthy(value: str | None) -> bool:
@@ -59,6 +59,7 @@ app.include_router(billing.router)
 app.include_router(workspaces.router, dependencies=_auth)
 app.include_router(spaces.router, dependencies=_auth)
 app.include_router(nodes.router, dependencies=_auth)
+app.include_router(notifications.router, dependencies=_auth)
 
 
 @app.get("/health")
