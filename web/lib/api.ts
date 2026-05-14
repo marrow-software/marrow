@@ -321,3 +321,121 @@ export function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 }
+
+// ---------------------------------------------------------------------------
+// Node properties (2.4)
+// ---------------------------------------------------------------------------
+
+export type PropertyValueType =
+  | "text"
+  | "number"
+  | "date"
+  | "select"
+  | "multi_select"
+  | "checkbox";
+
+export interface NodeProperty {
+  id: string;
+  node_id: string;
+  key: string;
+  value_type: PropertyValueType;
+  value: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InheritedPropertySchema {
+  key: string;
+  label: string | null;
+  value_type: PropertyValueType;
+  options: string[];
+  required: boolean;
+  source_node_id: string;
+}
+
+export interface NodePropertiesView {
+  properties: NodeProperty[];
+  inherited_schema: InheritedPropertySchema[];
+}
+
+export interface NodePropertySchemaEntry {
+  id: string;
+  node_id: string;
+  key: string;
+  label: string | null;
+  value_type: PropertyValueType;
+  options: string[];
+  required: boolean;
+  position: string;
+  created_at: string;
+}
+
+export function listNodeProperties(nodeId: string): Promise<NodePropertiesView> {
+  return apiFetch(`/api/nodes/${nodeId}/properties`);
+}
+
+export function setNodeProperty(
+  nodeId: string,
+  key: string,
+  value_type: PropertyValueType,
+  value: unknown
+): Promise<NodeProperty> {
+  return apiFetch(`/api/nodes/${nodeId}/properties/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body: JSON.stringify({ value_type, value }),
+  });
+}
+
+export function deleteNodeProperty(nodeId: string, key: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/properties/${encodeURIComponent(key)}`, {
+    method: "DELETE",
+  });
+}
+
+export function listPropertySchema(nodeId: string): Promise<NodePropertySchemaEntry[]> {
+  return apiFetch(`/api/nodes/${nodeId}/property-schema`);
+}
+
+export function createPropertySchemaEntry(
+  nodeId: string,
+  entry: {
+    key: string;
+    value_type: PropertyValueType;
+    label?: string;
+    options?: string[];
+    required?: boolean;
+    position?: string;
+  }
+): Promise<NodePropertySchemaEntry> {
+  return apiFetch(`/api/nodes/${nodeId}/property-schema`, {
+    method: "POST",
+    body: JSON.stringify(entry),
+  });
+}
+
+export function updatePropertySchemaEntry(
+  nodeId: string,
+  key: string,
+  patch: Partial<{
+    label: string;
+    value_type: PropertyValueType;
+    options: string[];
+    required: boolean;
+    position: string;
+  }>
+): Promise<NodePropertySchemaEntry> {
+  return apiFetch(
+    `/api/nodes/${nodeId}/property-schema/${encodeURIComponent(key)}`,
+    { method: "PATCH", body: JSON.stringify(patch) }
+  );
+}
+
+export function deletePropertySchemaEntry(
+  nodeId: string,
+  key: string
+): Promise<void> {
+  return apiFetch(
+    `/api/nodes/${nodeId}/property-schema/${encodeURIComponent(key)}`,
+    { method: "DELETE" }
+  );
+}

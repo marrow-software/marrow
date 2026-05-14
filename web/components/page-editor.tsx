@@ -60,6 +60,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { EditorHeader } from "@/components/inset-header";
+import { PropertyEditor } from "@/components/property-editor";
 import { SideDrawer, type SideDrawerKind } from "@/components/side-drawer";
 import { CommentsDrawer } from "@/components/comments-drawer";
 import { CommentBubbleFab } from "@/components/comment-bubble-fab";
@@ -418,6 +419,9 @@ export function PageEditor({ initialPage }: Props) {
           placeholder="Untitled"
         />
       </div>
+
+      {/* Typed key-value metadata */}
+      <PropertyEditor nodeId={initialPage.id} />
 
       {/* BlockNote editor */}
       <div className="flex-1 overflow-auto">

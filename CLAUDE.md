@@ -129,7 +129,8 @@ marrow/
 │   │       ├── c333d20a46d9_add_content_format_to_revisions.py
 │   │       ├── bd52bac0673f_node_tree_schema_collapse_collections_.py
 │   │       ├── 2b5326d2d299_add_rls_tenant_isolation.py
-│   │       └── fdf65c08ffa8_add_node_fts_triggers_and_gin_index.py
+│   │       ├── fdf65c08ffa8_add_node_fts_triggers_and_gin_index.py
+│   │       └── a7b91c4f8e23_add_node_properties.py
 │   ├── marrow/                       # Main package
 │   │   ├── app.py                    # FastAPI app factory, CORS + session middleware
 │   │   ├── auth.py                   # OIDC config, session JWT helpers, cookie params
@@ -239,6 +240,8 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | revisions | id, node_id (FK cascade — must reference type='page'), content (TEXT), content_format ('markdown'\|'json') — **immutable via PG trigger** |
 | attachments | id, node_id (FK cascade), filename, hash (SHA256), size_bytes |
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
+| node_property_schemas | id, node_id (folder FK), key, label, value_type, options (jsonb), required, position; unique (node_id, key) |
+| node_properties | id, node_id (FK), key, value_type ∈ {text,number,date,select,multi_select,checkbox}, value (jsonb); unique (node_id, key) |
 
 **Node shape constraint**: A CHECK constraint (`nodes_shape_by_type`) enforces that folder rows have `current_revision_id` and `search_vector` NULL, while page rows have `description` NULL. A second CHECK on `revisions` (`revisions_node_is_page`) ensures revisions only reference page-typed nodes.
 
@@ -274,6 +277,12 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | POST | /api/workspaces/restore | Restore a workspace from an uploaded export bundle zip | — |
 | GET/POST | /api/workspaces/{id}/spaces/ | List / create spaces | viewer/editor |
 | GET/DELETE | /api/workspaces/{id}/spaces/{sid} | Get / delete space | viewer/owner |
+| GET | /api/nodes/{id}/properties | List values + inherited folder schemas | viewer |
+| PUT | /api/nodes/{id}/properties/{key} | Set/replace a property value | editor |
+| DELETE | /api/nodes/{id}/properties/{key} | Clear a property value | editor |
+| GET | /api/nodes/{id}/property-schema | List folder-defined schema entries | viewer |
+| POST | /api/nodes/{id}/property-schema | Add schema entry (folder only) | editor |
+| PATCH/DELETE | /api/nodes/{id}/property-schema/{key} | Edit / remove schema entry (folder only) | editor |
 
 > **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
 >

@@ -13,6 +13,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKeyConstraint,
@@ -20,7 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -191,6 +192,77 @@ class Node(Base):
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="node", passive_deletes=True
     )
+    properties: Mapped[list["NodeProperty"]] = relationship(
+        back_populates="node", passive_deletes=True, cascade="all, delete-orphan"
+    )
+    property_schemas: Mapped[list["NodePropertySchema"]] = relationship(
+        back_populates="node", passive_deletes=True, cascade="all, delete-orphan"
+    )
+
+
+PROPERTY_VALUE_TYPES = ("text", "number", "date", "select", "multi_select", "checkbox")
+
+
+class NodePropertySchema(Base):
+    """Folder-defined property schema. Pages inherit from ancestor folders."""
+
+    __tablename__ = "node_property_schemas"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    value_type: Mapped[str] = mapped_column(Text, nullable=False)
+    options: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    required: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    position: Mapped[str] = mapped_column(Text, nullable=False, server_default="a0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        UniqueConstraint("node_id", "key", name="uq_property_schema_node_key"),
+        CheckConstraint(
+            "value_type IN ('text', 'number', 'date', 'select', 'multi_select', 'checkbox')",
+            name="node_property_schemas_value_type_valid",
+        ),
+    )
+
+    node: Mapped["Node"] = relationship(back_populates="property_schemas")
+
+
+class NodeProperty(Base):
+    """Typed key-value property attached to a node."""
+
+    __tablename__ = "node_properties"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    value_type: Mapped[str] = mapped_column(Text, nullable=False)
+    value: Mapped[object | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        UniqueConstraint("node_id", "key", name="uq_node_property_node_key"),
+        CheckConstraint(
+            "value_type IN ('text', 'number', 'date', 'select', 'multi_select', 'checkbox')",
+            name="node_properties_value_type_valid",
+        ),
+    )
+
+    node: Mapped["Node"] = relationship(back_populates="properties")
 
 
 class Revision(Base):

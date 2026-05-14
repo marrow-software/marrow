@@ -1,10 +1,12 @@
 """Pydantic request/response schemas for the Marrow REST API."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
+
+PropertyValueType = Literal["text", "number", "date", "select", "multi_select", "checkbox"]
 
 
 class _ReadBase(BaseModel):
@@ -146,6 +148,73 @@ class AttachmentRead(_ReadBase):
     hash: str
     size_bytes: int
     created_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Properties
+# ---------------------------------------------------------------------------
+
+
+class NodePropertySchemaCreate(BaseModel):
+    key: str
+    value_type: PropertyValueType
+    label: str | None = None
+    options: list[str] = []
+    required: bool = False
+    position: str | None = None
+
+
+class NodePropertySchemaUpdate(BaseModel):
+    label: str | None = None
+    value_type: PropertyValueType | None = None
+    options: list[str] | None = None
+    required: bool | None = None
+    position: str | None = None
+
+
+class NodePropertySchemaRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    key: str
+    label: str | None
+    value_type: PropertyValueType
+    options: list[str]
+    required: bool
+    position: str
+    created_at: datetime
+
+
+class NodePropertyWrite(BaseModel):
+    value_type: PropertyValueType
+    value: Any = None
+
+
+class NodePropertyRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    key: str
+    value_type: PropertyValueType
+    value: Any = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class InheritedPropertySchema(BaseModel):
+    """A property schema entry inherited from an ancestor folder."""
+
+    key: str
+    label: str | None
+    value_type: PropertyValueType
+    options: list[str]
+    required: bool
+    source_node_id: UUID
+
+
+class NodePropertiesView(BaseModel):
+    """Combined view: this node's values + inherited schemas from ancestors."""
+
+    properties: list[NodePropertyRead]
+    inherited_schema: list[InheritedPropertySchema]
 
 
 # ---------------------------------------------------------------------------
