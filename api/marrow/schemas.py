@@ -224,3 +224,41 @@ class AuthStatus(BaseModel):
     user: UserRead | None = None
     method: str
     oidc_enabled: bool
+
+
+# ---------------------------------------------------------------------------
+# Share Links
+# ---------------------------------------------------------------------------
+
+
+class ShareLinkCreate(BaseModel):
+    expires_at: datetime | None = None
+
+
+class ShareLinkRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    token: str
+    created_by: UUID | None
+    expires_at: datetime | None
+    revoked_at: datetime | None
+    created_at: datetime
+
+
+class SharedNodeChild(BaseModel):
+    id: UUID
+    type: Literal["folder", "page"]
+    name: str
+    slug: str
+
+
+class SharedNodeRead(BaseModel):
+    id: UUID
+    type: Literal["folder", "page"]
+    name: str
+    slug: str
+    description: str | None = None
+    content: str | None = None
+    content_format: Literal["markdown", "json"] | None = None
+    children: list[SharedNodeChild] = []
+    expires_at: datetime | None = None

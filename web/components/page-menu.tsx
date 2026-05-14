@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -8,10 +8,13 @@ import {
   Eye,
   History,
   Link as LinkIcon,
+  Share2,
   Star,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import { ShareDialog } from "@/components/share-dialog";
 
 export type PageMenuDrawer = "backlinks" | "history";
 
@@ -40,6 +43,7 @@ const ITEMS: Item[] = [
   { kind: "action", id: "star", icon: Star, label: "Star", meta: "⌥S" },
   { kind: "action", id: "watch", icon: Eye, label: "Watch" },
   { kind: "divider" },
+  { kind: "action", id: "share", icon: Share2, label: "Share…" },
   { kind: "action", id: "duplicate", icon: Copy, label: "Duplicate" },
   { kind: "action", id: "move", icon: ArrowRight, label: "Move…" },
   { kind: "action", id: "export", icon: BookOpen, label: "Export as Markdown" },
@@ -52,10 +56,12 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   onOpenDrawer: (which: PageMenuDrawer) => void;
   trigger: React.ReactNode;
+  nodeId?: string;
 }
 
-export function PageMenu({ open, onOpenChange, onOpenDrawer, trigger }: Props) {
+export function PageMenu({ open, onOpenChange, onOpenDrawer, trigger, nodeId }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -92,6 +98,13 @@ export function PageMenu({ open, onOpenChange, onOpenDrawer, trigger }: Props) {
                 onClick={() => {
                   if (item.kind === "drawer") {
                     onOpenDrawer(item.id);
+                  } else if (item.id === "share") {
+                    if (!nodeId) {
+                      toast.error("Cannot share — no node id available");
+                    } else {
+                      setShareOpen(true);
+                    }
+                    onOpenChange(false);
                   } else {
                     toast.info(`${item.label} — coming soon`);
                     onOpenChange(false);
@@ -116,6 +129,9 @@ export function PageMenu({ open, onOpenChange, onOpenDrawer, trigger }: Props) {
             );
           })}
         </div>
+      )}
+      {nodeId && (
+        <ShareDialog open={shareOpen} onOpenChange={setShareOpen} nodeId={nodeId} />
       )}
     </div>
   );

@@ -253,3 +253,32 @@ class User(Base):
     __table_args__ = (UniqueConstraint("oidc_issuer", "oidc_subject"),)
 
     memberships: Mapped[list["OrgMembership"]] = relationship(back_populates="user")
+
+
+class ShareLink(Base):
+    """View-only public sharing link for a node (folder or page).
+
+    Sharing a folder shares its visible (non-trashed) subtree. Links may
+    optionally have an expiry date and may be revoked.
+    """
+
+    __tablename__ = "share_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="SET NULL"),
+    )
+
+    node: Mapped["Node"] = relationship()

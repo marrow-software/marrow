@@ -15,6 +15,8 @@ import type {
   Page,
   Revision,
   SearchResponse,
+  SharedNode,
+  ShareLink,
   Space,
   Workspace,
   WorkspaceTree,
@@ -311,6 +313,39 @@ export function removeMember(orgId: string, membershipId: string): Promise<void>
   return apiFetch(`/api/orgs/${orgId}/members/${membershipId}`, {
     method: "DELETE",
   });
+}
+
+// ---------------------------------------------------------------------------
+// Share Links
+// ---------------------------------------------------------------------------
+
+export function listShareLinks(nodeId: string): Promise<ShareLink[]> {
+  return apiFetch(`/api/nodes/${nodeId}/share-links`);
+}
+
+export function createShareLink(
+  nodeId: string,
+  expiresAt: string | null = null,
+): Promise<ShareLink> {
+  return apiFetch(`/api/nodes/${nodeId}/share-links`, {
+    method: "POST",
+    body: JSON.stringify({ expires_at: expiresAt }),
+  });
+}
+
+export function revokeShareLink(linkId: string): Promise<void> {
+  return apiFetch(`/api/share-links/${linkId}`, { method: "DELETE" });
+}
+
+export function getSharedNode(token: string): Promise<SharedNode> {
+  return apiFetch(`/shared/${token}`);
+}
+
+export function shareLinkUrl(token: string): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/shared/${token}`;
+  }
+  return `/shared/${token}`;
 }
 
 /** Convert a display name to a URL-safe slug. */

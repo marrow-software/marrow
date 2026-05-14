@@ -129,3 +129,33 @@ export interface AuthStatus {
   method: string;
   oidc_enabled: boolean;
 }
+
+// Share Links
+export interface ShareLink {
+  id: string;
+  node_id: string;
+  token: string;
+  created_by: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface SharedNodeChild {
+  id: string;
+  type: "folder" | "page";
+  name: string;
+  slug: string;
+}
+
+export interface SharedNode {
+  id: string;
+  type: "folder" | "page";
+  name: string;
+  slug: string;
+  description: string | null;
+  content: string | null;
+  content_format: "markdown" | "json" | null;
+  children: SharedNodeChild[];
+  expires_at: string | null;
+}

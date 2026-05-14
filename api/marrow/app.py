@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .dependencies import verify_auth
-from .routers import auth, billing, nodes, organizations, spaces, workspaces
+from .routers import auth, billing, nodes, organizations, share, spaces, workspaces
 
 
 def _truthy(value: str | None) -> bool:
@@ -59,6 +59,10 @@ app.include_router(billing.router)
 app.include_router(workspaces.router, dependencies=_auth)
 app.include_router(spaces.router, dependencies=_auth)
 app.include_router(nodes.router, dependencies=_auth)
+# Share router is registered WITHOUT the global auth dependency — `/shared/{token}`
+# must be reachable without authentication. Management routes carry their own
+# require_node_role / verify_auth deps.
+app.include_router(share.router)
 
 
 @app.get("/health")
