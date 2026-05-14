@@ -11,7 +11,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_storage
-from ..models import Attachment, Node, OrgRole, Revision, Space
+from ..links import reconcile_node_links
+from ..models import Attachment, Node, NodeLink, OrgRole, Revision, Space
 from ..rbac import require_node_role, require_space_role
 from ..schemas import (
     AttachmentRead,
@@ -80,6 +81,7 @@ def create_node(
         db.flush()
         node.current_revision_id = rev.id
         db.flush()
+        reconcile_node_links(db, node.id, content, body.content_format)
 
     db.commit()
     db.refresh(node)
@@ -150,6 +152,7 @@ def update_node(
         db.add(rev)
         db.flush()
         node.current_revision_id = rev.id
+        reconcile_node_links(db, node.id, body.content, body.content_format or "markdown")
 
     node.updated_at = datetime.now(timezone.utc)
 
@@ -233,6 +236,29 @@ def get_revision(
     if rev is None or rev.node_id != node_id:
         raise HTTPException(404, "Revision not found")
     return rev
+
+
+@router.get("/api/nodes/{node_id}/backlinks", response_model=list[NodeRead])
+def list_backlinks(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    """Return live nodes whose current content links to *node_id*."""
+    _node_or_404(node_id, db)
+    return (
+        db.execute(
+            select(Node)
+            .join(NodeLink, NodeLink.source_node_id == Node.id)
+            .where(
+                NodeLink.target_node_id == node_id,
+                Node.deleted_at.is_(None),
+            )
+            .order_by(Node.name)
+        )
+        .scalars()
+        .all()
+    )
 
 
 @router.post("/api/nodes/{node_id}/attachments", response_model=AttachmentRead, status_code=201)

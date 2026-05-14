@@ -233,6 +233,26 @@ class Attachment(Base):
     node: Mapped["Node"] = relationship(back_populates="attachments")
 
 
+class NodeLink(Base):
+    __tablename__ = "node_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    source_node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    target_node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["source_node_id"], ["nodes.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["target_node_id"], ["nodes.id"], ondelete="CASCADE"),
+        UniqueConstraint("source_node_id", "target_node_id", name="uq_node_links_pair"),
+        CheckConstraint("source_node_id <> target_node_id", name="node_links_no_self"),
+    )
+
+
 class User(Base):
     __tablename__ = "users"
 
