@@ -313,6 +313,32 @@ export function removeMember(orgId: string, membershipId: string): Promise<void>
   });
 }
 
+// ---------------------------------------------------------------------------
+// Stars
+// ---------------------------------------------------------------------------
+
+export interface StarredNode {
+  node_id: string;
+  space_id: string;
+  workspace_id: string;
+  type: "folder" | "page";
+  name: string;
+  slug: string;
+  starred_at: string;
+}
+
+export function listStarred(): Promise<StarredNode[]> {
+  return apiFetch("/api/users/me/starred");
+}
+
+export function starNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/star`, { method: "POST" });
+}
+
+export function unstarNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/star`, { method: "DELETE" });
+}
+
 /** Convert a display name to a URL-safe slug. */
 export function slugify(name: string): string {
   return name

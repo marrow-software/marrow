@@ -11,6 +11,7 @@ interface Props {
   saveLabel: string;
   onOpenDrawer: (which: PageMenuDrawer) => void;
   onShare: () => void;
+  nodeId?: string;
 }
 
 const MOCK_AVATARS = [
@@ -71,6 +72,7 @@ export function EditorHeader({
   saveLabel,
   onOpenDrawer,
   onShare,
+  nodeId,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -98,6 +100,7 @@ export function EditorHeader({
       <PageMenu
         open={menuOpen}
         onOpenChange={setMenuOpen}
+        nodeId={nodeId}
         onOpenDrawer={(which) => {
           setMenuOpen(false);
           onOpenDrawer(which);

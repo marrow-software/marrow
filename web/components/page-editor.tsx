@@ -394,6 +394,7 @@ export function PageEditor({ initialPage }: Props) {
         saveLabel={statusLabel}
         onOpenDrawer={handleOpenDrawer}
         onShare={handleShareStub}
+        nodeId={initialPage.id}
       />
 
       {/* Attachments — retained while Phase A omits an Attachments menu entry */}

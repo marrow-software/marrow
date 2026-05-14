@@ -253,3 +253,22 @@ class User(Base):
     __table_args__ = (UniqueConstraint("oidc_issuer", "oidc_subject"),)
 
     memberships: Mapped[list["OrgMembership"]] = relationship(back_populates="user")
+
+
+class UserStar(Base):
+    __tablename__ = "user_stars"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        UniqueConstraint("user_id", "node_id", name="uq_user_stars_user_node"),
+    )

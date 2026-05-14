@@ -224,3 +224,18 @@ class AuthStatus(BaseModel):
     user: UserRead | None = None
     method: str
     oidc_enabled: bool
+
+
+# ---------------------------------------------------------------------------
+# Stars
+# ---------------------------------------------------------------------------
+
+
+class StarredNode(_ReadBase):
+    node_id: UUID
+    space_id: UUID
+    workspace_id: UUID
+    type: Literal["folder", "page"]
+    name: str
+    slug: str
+    starred_at: datetime
