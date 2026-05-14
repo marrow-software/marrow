@@ -122,6 +122,39 @@ class WorkspaceTree(_ReadBase):
 
 
 # ---------------------------------------------------------------------------
+# Node View
+# ---------------------------------------------------------------------------
+
+
+NodeViewType = Literal["table", "board", "list"]
+
+
+class NodeViewCreate(BaseModel):
+    name: str
+    view_type: NodeViewType
+    config: dict = {}
+    position: str | None = None
+
+
+class NodeViewUpdate(BaseModel):
+    name: str | None = None
+    view_type: NodeViewType | None = None
+    config: dict | None = None
+    position: str | None = None
+
+
+class NodeViewRead(_ReadBase):
+    id: UUID
+    folder_node_id: UUID
+    name: str
+    view_type: NodeViewType
+    config: dict
+    position: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------------------------------------------------------------------
 # Revision
 # ---------------------------------------------------------------------------
 
