@@ -253,3 +253,30 @@ class User(Base):
     __table_args__ = (UniqueConstraint("oidc_issuer", "oidc_subject"),)
 
     memberships: Mapped[list["OrgMembership"]] = relationship(back_populates="user")
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    author_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    parent_comment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # Reserved for future block-level comments — currently always NULL.
+    block_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["author_user_id"], ["users.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["parent_comment_id"], ["comments.id"], ondelete="CASCADE"),
+    )

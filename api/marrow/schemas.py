@@ -224,3 +224,33 @@ class AuthStatus(BaseModel):
     user: UserRead | None = None
     method: str
     oidc_enabled: bool
+
+
+# ---------------------------------------------------------------------------
+# Comments
+# ---------------------------------------------------------------------------
+
+
+class CommentCreate(BaseModel):
+    body: str
+    parent_comment_id: UUID | None = None
+
+
+class CommentUpdate(BaseModel):
+    body: str | None = None
+    resolved: bool | None = None
+
+
+class CommentRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    author_user_id: UUID
+    parent_comment_id: UUID | None
+    body: str
+    resolved_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class UnreadCountResponse(BaseModel):
+    unread: int

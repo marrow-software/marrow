@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from .dependencies import AuthContext, get_db, verify_auth
 from .models import (
+    Comment,
     Node,
     OrgMembership,
     OrgRole,
@@ -99,6 +100,28 @@ def require_space_role(min_role: OrgRole):
         if org_id is None:
             raise HTTPException(404, "Space not found")
         _check_membership(db, org_id, auth, min_role)
+        return auth
+
+    return _dep
+
+
+def require_comment_role(min_role: OrgRole):
+    """Dependency factory: resolve comment → node → space → workspace → org, then enforce role."""
+
+    def _dep(
+        comment_id: uuid.UUID,
+        db: Session = Depends(get_db),
+        auth: AuthContext = Depends(verify_auth),
+    ) -> AuthContext:
+        comment = db.get(Comment, comment_id)
+        if comment is None:
+            raise HTTPException(404, "Comment not found")
+        node = db.get(Node, comment.node_id)
+        if node is None:
+            raise HTTPException(404, "Comment not found")
+        space = db.get(Space, node.space_id)
+        workspace = db.get(Workspace, space.workspace_id)
+        _check_membership(db, workspace.org_id, auth, min_role)
         return auth
 
     return _dep
