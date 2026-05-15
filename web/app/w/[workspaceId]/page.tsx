@@ -7,7 +7,7 @@ export default function WorkspaceHomePage() {
       <div className="space-y-1">
         <h2 className="font-heading text-lg font-semibold">Welcome to your workspace</h2>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Organize your knowledge into spaces, collections, and pages.
+          Organize your knowledge into spaces, folders, and pages.
           Select a page from the sidebar, or create a space to get started.
         </p>
       </div>
