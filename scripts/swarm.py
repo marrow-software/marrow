@@ -338,7 +338,7 @@ class SwarmCoordinator:
         fp_map = {fp.number: fp for fp in footprints}
         assignment: dict[int, int] = {}
 
-        for fp in footprints:
+        for fp in sorted(footprints, key=lambda x: x.number):
             used = {assignment[n] for n in graph[fp.number] if n in assignment}
             batch = 0
             while batch in used:
