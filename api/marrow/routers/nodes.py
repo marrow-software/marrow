@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_storage, verify_auth
+from ..fractional_index import after as fi_after
 from ..models import Attachment, Node, OrgRole, Revision, Space, Workspace
 from ..rbac import _check_membership, require_node_role, require_space_role
 from ..schemas import (
@@ -72,13 +73,23 @@ def create_node(
 ):
     slug = body.slug or _slugify(body.name)
 
+    # Assign position after the current last sibling.
+    max_pos = db.scalar(
+        select(func.max(Node.position)).where(
+            Node.space_id == space_id,
+            Node.parent_id == body.parent_id,
+            Node.deleted_at.is_(None),
+        )
+    )
+    position = fi_after(max_pos)
+
     node = Node(
         space_id=space_id,
         parent_id=body.parent_id,
         type=body.type,
         name=body.name,
         slug=slug,
-        position="a0",
+        position=position,
         description=body.description if body.type == "folder" else None,
     )
     db.add(node)
@@ -156,6 +167,18 @@ def update_node(
     if body.slug is not None:
         node.slug = body.slug
     if body.position is not None:
+        # Validate that no live sibling already occupies this position.
+        conflict = db.scalar(
+            select(Node.id).where(
+                Node.space_id == node.space_id,
+                Node.parent_id == node.parent_id,
+                Node.position == body.position,
+                Node.deleted_at.is_(None),
+                Node.id != node.id,
+            )
+        )
+        if conflict is not None:
+            raise HTTPException(422, "position already occupied by a sibling node")
         node.position = body.position
     if body.description is not None and node.type == "folder":
         node.description = body.description
