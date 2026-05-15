@@ -6,13 +6,13 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..dependencies import AuthContext, get_db, get_storage
-from ..models import Attachment, Node, OrgRole, Revision, Space
-from ..rbac import require_node_role, require_space_role
+from ..dependencies import AuthContext, get_db, get_storage, verify_auth
+from ..models import Attachment, Node, OrgRole, Revision, Space, Workspace
+from ..rbac import _check_membership, require_node_role, require_space_role
 from ..schemas import (
     AttachmentRead,
     NodeCreate,
@@ -34,6 +34,21 @@ def _node_or_404(node_id: UUID, db: Session) -> Node:
     if node is None or node.deleted_at is not None:
         raise HTTPException(404, "Node not found")
     return node
+
+
+def _trashed_node_or_404(node_id: UUID, db: Session) -> Node:
+    """Fetch a node (possibly soft-deleted) for trash operations."""
+    node = db.get(Node, node_id)
+    if node is None:
+        raise HTTPException(404, "Node not found")
+    return node
+
+
+def _authorize_node(db: Session, node: Node, auth: AuthContext, min_role: OrgRole) -> None:
+    """Resolve node → org and enforce role. Works for soft-deleted nodes too."""
+    space = db.get(Space, node.space_id)
+    workspace = db.get(Workspace, space.workspace_id)
+    _check_membership(db, workspace.org_id, auth, min_role)
 
 
 def _with_content(node: Node) -> NodeReadWithContent:
@@ -169,17 +184,80 @@ def delete_node(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_node_role(OrgRole.OWNER)),
 ):
-    node = _node_or_404(node_id, db)
-    now = datetime.now(timezone.utc)
+    """Soft-delete a node and all descendants in a single transaction."""
+    _node_or_404(node_id, db)
+    db.execute(
+        text("""
+            WITH RECURSIVE subtree(id) AS (
+                SELECT id FROM nodes WHERE id = :root AND deleted_at IS NULL
+                UNION ALL
+                SELECT n.id FROM nodes n
+                JOIN subtree s ON n.parent_id = s.id
+                WHERE n.deleted_at IS NULL
+            )
+            UPDATE nodes SET deleted_at = NOW()
+            WHERE id IN (SELECT id FROM subtree)
+        """),
+        {"root": node_id},
+    )
+    db.commit()
 
-    def _soft_delete(n: Node) -> None:
-        n.deleted_at = now
-        for child in db.execute(
-            select(Node).where(Node.parent_id == n.id, Node.deleted_at.is_(None))
-        ).scalars():
-            _soft_delete(child)
 
-    _soft_delete(node)
+@router.post("/api/nodes/{node_id}/restore", response_model=NodeRead)
+def restore_node(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(verify_auth),
+):
+    """Restore a soft-deleted node and its trashed subtree.
+
+    422 if the node's parent is itself trashed (no live ancestor to attach to)."""
+    node = _trashed_node_or_404(node_id, db)
+    _authorize_node(db, node, auth, OrgRole.EDITOR)
+
+    if node.deleted_at is None:
+        raise HTTPException(409, "Node is not trashed")
+
+    if node.parent_id is not None:
+        parent = db.get(Node, node.parent_id)
+        if parent is None or parent.deleted_at is not None:
+            raise HTTPException(
+                422, "Cannot restore: parent node is missing or trashed"
+            )
+
+    db.execute(
+        text("""
+            WITH RECURSIVE subtree(id) AS (
+                SELECT id FROM nodes WHERE id = :root AND deleted_at IS NOT NULL
+                UNION ALL
+                SELECT n.id FROM nodes n
+                JOIN subtree s ON n.parent_id = s.id
+                WHERE n.deleted_at IS NOT NULL
+            )
+            UPDATE nodes SET deleted_at = NULL
+            WHERE id IN (SELECT id FROM subtree)
+        """),
+        {"root": node_id},
+    )
+    db.commit()
+    db.refresh(node)
+    return node
+
+
+@router.delete("/api/nodes/{node_id}/purge", status_code=204)
+def purge_node(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(verify_auth),
+):
+    """Hard-delete a trashed node and its subtree (owners only)."""
+    node = _trashed_node_or_404(node_id, db)
+    _authorize_node(db, node, auth, OrgRole.OWNER)
+
+    if node.deleted_at is None:
+        raise HTTPException(409, "Node must be trashed before it can be purged")
+
+    db.delete(node)
     db.commit()
 
 
