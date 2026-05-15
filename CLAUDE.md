@@ -61,6 +61,13 @@ STORAGE_PATH=./storage       # resolves relative to api/ directory
 API_KEY=                     # optional; if set, enforces X-API-Key header on all routes
 CORS_ORIGINS=http://localhost:3000
 
+# Cloudflare R2 storage (optional — set STORAGE_BACKEND=r2 to use R2 instead of local disk)
+# STORAGE_BACKEND=r2
+# R2_ACCOUNT_ID=             # your Cloudflare account ID
+# R2_ACCESS_KEY_ID=
+# R2_SECRET_ACCESS_KEY=
+# R2_BUCKET=
+
 # OIDC Authentication (optional — omit OIDC_ISSUER to disable)
 # OIDC_ISSUER=https://accounts.google.com
 # OIDC_CLIENT_ID=
