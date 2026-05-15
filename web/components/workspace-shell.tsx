@@ -11,10 +11,11 @@ interface Props {
   tree: WorkspaceTree;
   user: User | null;
   memberCount: number | null;
+  showOrgSettings: boolean;
   children: React.ReactNode;
 }
 
-export function WorkspaceShell({ tree, user, memberCount, children }: Props) {
+export function WorkspaceShell({ tree, user, memberCount, showOrgSettings, children }: Props) {
   const [panel, setPanel] = useState<RailPanel>("pages");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -53,6 +54,7 @@ export function WorkspaceShell({ tree, user, memberCount, children }: Props) {
             user={user}
             panel={panel}
             memberCount={memberCount}
+            showOrgSettings={showOrgSettings}
             searchInputRef={searchInputRef}
           />
         )}
