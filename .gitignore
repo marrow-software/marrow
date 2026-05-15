@@ -27,3 +27,6 @@ node_modules/
 *.log
 *.zip
 *.Zone.Identifier
+
+# Swarm coordinator runtime artifacts
+.swarm/
