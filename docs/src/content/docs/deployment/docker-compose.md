@@ -82,3 +82,15 @@ docker compose -f docker-compose.prod.yml up -d --build
 ```
 
 Migrations run automatically on container start.
+
+:::danger[Upgrading from v0.1 → v0.2]
+v0.2.0 ships a one-shot, **breaking** schema migration: the old `collections` and `pages` tables collapse into a single self-referential `nodes` tree (folders + pages). The migration runs automatically on the next container start, but it rewrites primary keys and cascades on existing data.
+
+**Before you pull:**
+
+1. **Back up the database.** With the stack up: `docker compose -f docker-compose.prod.yml exec db pg_dump -U marrow marrow | gzip > marrow-pre-v0.2.sql.gz`
+2. **Back up the storage volume.** `docker run --rm -v marrow_api_storage:/data -v "$PWD":/backup alpine tar czf /backup/api_storage-pre-v0.2.tgz -C /data .` (adjust the volume name if you renamed the project).
+3. Also keep a fresh `marrow export` bundle for each workspace as a portable, version-agnostic fallback.
+
+Downgrading back to v0.1 after the migration runs is not supported — restore from the SQL/volume backups (or from an export bundle into a fresh v0.1 stack).
+:::
