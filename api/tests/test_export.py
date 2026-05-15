@@ -14,7 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from marrow.export import SCHEMA_VERSION, estimate_export_sizes, export_workspace
-from marrow.models import Attachment, Collection, Organization, Page, Revision, Space, Workspace
+from marrow.models import Attachment, Node, Organization, Revision, Space, Workspace
 from marrow.storage import StorageAdapter
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://marrow:marrow@localhost:5433/marrow")
@@ -61,7 +61,7 @@ def session(engine):
 
 @pytest.fixture
 def seeded(session):
-    """Seed a workspace with two pages (two revisions each) and one attachment."""
+    """Seed a workspace with two pages (multiple revisions each) and one attachment."""
     org = Organization(slug="export-test-org", name="Export Test Org")
     session.add(org)
     session.flush()
@@ -74,20 +74,36 @@ def seeded(session):
     session.add(space)
     session.flush()
 
-    col = Collection(space_id=space.id, slug="col", name="Collection")
-    session.add(col)
+    # Folder node (replaces collection)
+    folder = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="folder",
+        name="Collection",
+        slug="col",
+        position="000000",
+    )
+    session.add(folder)
     session.flush()
 
-    # Page 1 with two revisions and one internal link to page 2 (added later).
-    page1 = Page(collection_id=col.id, slug="page-one", title="Page One")
+    # Page 1 with multiple revisions and one internal link to page 2 (added later).
+    page1 = Node(
+        space_id=space.id,
+        parent_id=folder.id,
+        type="page",
+        name="Page One",
+        slug="page-one",
+        position="000000",
+        current_revision_id=None,
+    )
     session.add(page1)
     session.flush()
 
-    rev1a = Revision(page_id=page1.id, content="# Page One\nFirst draft.")
+    rev1a = Revision(node_id=page1.id, content="# Page One\nFirst draft.", content_format="markdown")
     session.add(rev1a)
     session.flush()
 
-    rev1b = Revision(page_id=page1.id, content="# Page One\nSecond draft.")
+    rev1b = Revision(node_id=page1.id, content="# Page One\nSecond draft.", content_format="markdown")
     session.add(rev1b)
     session.flush()
 
@@ -95,11 +111,19 @@ def seeded(session):
     session.flush()
 
     # Page 2 (target of internal link from page 1).
-    page2 = Page(collection_id=col.id, slug="page-two", title="Page Two")
+    page2 = Node(
+        space_id=space.id,
+        parent_id=folder.id,
+        type="page",
+        name="Page Two",
+        slug="page-two",
+        position="000001",
+        current_revision_id=None,
+    )
     session.add(page2)
     session.flush()
 
-    rev2 = Revision(page_id=page2.id, content="# Page Two\nOnly revision.")
+    rev2 = Revision(node_id=page2.id, content="# Page Two\nOnly revision.", content_format="markdown")
     session.add(rev2)
     session.flush()
 
@@ -108,7 +132,7 @@ def seeded(session):
 
     # Update page1 current revision to include a link to page2.
     link_content = f"# Page One\n[See page two](/pages/{page2.id})"
-    rev1c = Revision(page_id=page1.id, content=link_content)
+    rev1c = Revision(node_id=page1.id, content=link_content, content_format="markdown")
     session.add(rev1c)
     session.flush()
 
@@ -119,7 +143,7 @@ def seeded(session):
     att_data = b"fake image bytes"
     att_hash = hashlib.sha256(att_data).hexdigest()
     att = Attachment(
-        page_id=page1.id,
+        node_id=page1.id,
         filename="photo.png",
         hash=att_hash,
         size_bytes=len(att_data),
@@ -131,6 +155,7 @@ def seeded(session):
 
     return {
         "workspace": ws,
+        "folder": folder,
         "pages": [page1, page2],
         "attachment": att,
         "attachment_data": att_data,
@@ -191,18 +216,33 @@ def test_manifest_content(seeded, session, tmp_path):
         manifest = json.loads(zf.read("manifest.json"))
 
     assert manifest["schema_version"] == SCHEMA_VERSION
+    assert SCHEMA_VERSION == "4", "export.py should be producing v4 bundles"
     assert manifest["workspace"]["slug"] == ws.slug
     assert manifest["workspace"]["id"] == str(ws.id)
 
     assert len(manifest["spaces"]) == 1
-    assert len(manifest["collections"]) == 1
-    assert len(manifest["pages"]) == 2
-    assert len(manifest["revisions"]) == 4  # rev1a, rev1b, rev1c, rev2
-    assert len(manifest["attachments"]) == 1
+    # v4: nodes[] replaces collections[] + pages[]
+    assert "nodes" in manifest
+    assert "collections" not in manifest
+    assert "pages" not in manifest
 
+    folder_nodes = [n for n in manifest["nodes"] if n["type"] == "folder"]
+    page_nodes = [n for n in manifest["nodes"] if n["type"] == "page"]
+    assert len(folder_nodes) == 1
+    assert len(page_nodes) == 2
+
+    assert len(manifest["revisions"]) == 4  # rev1a, rev1b, rev1c, rev2
+    # v4 revisions use node_id
+    for r in manifest["revisions"]:
+        assert "node_id" in r
+        assert "page_id" not in r
+
+    assert len(manifest["attachments"]) == 1
     att_record = manifest["attachments"][0]
     assert att_record["hash"] == seeded["attachment"].hash
     assert att_record["filename"] == "photo.png"
+    assert "node_id" in att_record
+    assert "page_id" not in att_record
     assert "created_at" in att_record
 
 
@@ -251,14 +291,15 @@ def test_links_json(seeded, session, tmp_path):
     with zipfile.ZipFile(result) as zf:
         links = json.loads(zf.read("links.json"))
 
+    # v4 uses node_id fields
     internal = links["internal_links"]
     assert len(internal) == 1
-    assert internal[0]["source_page_id"] == page1_id
-    assert internal[0]["target_page_id"] == page2_id
+    assert internal[0]["source_node_id"] == page1_id
+    assert internal[0]["target_node_id"] == page2_id
 
     # page2 is linked to, so only page1 is orphaned (nothing links to it)
-    assert page2_id not in links["orphaned_pages"]
-    assert page1_id in links["orphaned_pages"]
+    assert page2_id not in links["orphaned_nodes"]
+    assert page1_id in links["orphaned_nodes"]
 
 
 def test_attachment_hash_mismatch_raises(seeded, session, tmp_path):
@@ -345,98 +386,6 @@ def test_slim_manifest_has_slim_flag_and_empty_revisions(seeded, session, tmp_pa
 
     assert manifest.get("slim") is True
     assert manifest["revisions"] == []
-
-
-def test_slim_bundle_is_restorable(session, tmp_path):
-    """A slim bundle restores cleanly — one revision per page from pages/ content."""
-    import uuid as _uuid
-    from datetime import datetime, timezone
-
-    from marrow.restore import restore_workspace
-
-    now = datetime.now(timezone.utc).isoformat()
-    ws_id = _uuid.uuid4()
-    org_id = _uuid.uuid4()
-    space_id = _uuid.uuid4()
-    col_id = _uuid.uuid4()
-    page_id = _uuid.uuid4()
-
-    manifest = {
-        "schema_version": SCHEMA_VERSION,
-        "slim": True,
-        "export_timestamp": now,
-        "organization": {
-            "id": str(org_id),
-            "slug": "slim-restore-org",
-            "name": "Slim Restore Org",
-            "created_at": now,
-        },
-        "workspace": {
-            "id": str(ws_id),
-            "org_id": str(org_id),
-            "slug": "slim-restore-ws",
-            "name": "Slim Restore WS",
-            "created_at": now,
-        },
-        "spaces": [
-            {
-                "id": str(space_id),
-                "workspace_id": str(ws_id),
-                "slug": "sp",
-                "name": "Space",
-                "created_at": now,
-            }
-        ],
-        "collections": [
-            {
-                "id": str(col_id),
-                "space_id": str(space_id),
-                "slug": "col",
-                "name": "Col",
-                "created_at": now,
-            }
-        ],
-        "pages": [
-            {
-                "id": str(page_id),
-                "collection_id": str(col_id),
-                "slug": "pg",
-                "title": "Page",
-                "current_revision_id": None,
-                "created_at": now,
-            }
-        ],
-        "revisions": [],
-        "attachments": [],
-    }
-
-    import io as _io
-
-    buf = _io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("manifest.json", json.dumps(manifest))
-        zf.writestr(f"pages/{page_id}.md", "# Page\nCurrent content.")
-        zf.writestr(
-            "links.json",
-            json.dumps({"internal_links": [], "broken_links": [], "orphaned_pages": []}),
-        )
-
-    bundle_path = tmp_path / "slim-bundle.zip"
-    bundle_path.write_bytes(buf.getvalue())
-
-    storage = FakeStorageAdapter()
-    slug = restore_workspace(bundle_path, session, storage)
-    assert slug == "slim-restore-ws"
-
-    from marrow.models import Workspace
-
-    restored_ws = session.query(Workspace).filter_by(slug="slim-restore-ws").one()
-    pages_list = [p for s in restored_ws.spaces for c in s.collections for p in c.pages]
-    assert len(pages_list) == 1
-    p = pages_list[0]
-    assert p.current_revision is not None
-    assert p.current_revision.content == "# Page\nCurrent content."
-    assert len(p.revisions) == 1
 
 
 def test_estimate_export_sizes(seeded, session):

@@ -1,8 +1,6 @@
-# ruff: noqa: F821
-# (#123) v3 restore logic below references the removed Page/Collection ORM
-# classes; these calls NameError at runtime. The v3 → v4 migration lands in
-# #133 (2.0k), which will reference this code as the legacy bundle reader.
 """Restore a workspace from an export bundle.
+
+Accepts v3 (collections + pages) and v4 (nodes) bundles transparently.
 
 Usage:
     marrow restore <bundle.zip>
@@ -10,6 +8,7 @@ Usage:
 
 import hashlib
 import json
+import logging
 import uuid
 import zipfile
 from datetime import datetime
@@ -17,12 +16,12 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from .models import Attachment, Organization, Revision, Space, Workspace
-
-# NOTE (#123): Page/Collection imports removed; the v3 restore logic below still
-# references them and will NameError at call time. Rewrite for the node-tree
-# data model lands in #133 (2.0k) — v3 → v4 bundle migration.
+from .models import Attachment, Node, Organization, Revision, Space, Workspace
 from .storage import StorageAdapter
+
+logger = logging.getLogger(__name__)
+
+SUPPORTED_VERSIONS = ("1", "2", "3", "4")
 
 
 def _sha256(data: bytes) -> str:
@@ -33,6 +32,11 @@ def _dt(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
+def _pos(idx: int) -> str:
+    """Generate a sortable position string for the given index."""
+    return str(idx).zfill(6)
+
+
 def restore_workspace(
     bundle_path: Path,
     session: Session,
@@ -40,6 +44,7 @@ def restore_workspace(
 ) -> str:
     """Restore a workspace from *bundle_path* into *session*.
 
+    Accepts v3 (collections + pages) and v4 (nodes) bundles transparently.
     Returns the workspace slug on success. Raises on any validation failure.
     The caller is responsible for committing the session.
     """
@@ -54,10 +59,15 @@ def restore_workspace(
         manifest = json.loads(zf.read("manifest.json"))
 
         schema_version = manifest.get("schema_version")
-        if schema_version not in ("1", "2", "3"):
+        if schema_version not in SUPPORTED_VERSIONS:
             raise ValueError(
-                f"Unsupported bundle schema version '{schema_version}' (expected '1', '2', or '3')"
+                f"Unsupported bundle schema version '{schema_version}' "
+                f"(expected one of: {', '.join(SUPPORTED_VERSIONS)})"
             )
+
+        logger.info(
+            "Restoring bundle schema_version=%s from %s", schema_version, Path(bundle_path).name
+        )
 
         is_slim = manifest.get("slim", False)
 
@@ -76,8 +86,7 @@ def restore_workspace(
             )
 
         # --- Organization ---
-        # v2/v3 bundles include org metadata; v1 bundles create a new org from workspace name.
-        if schema_version in ("2", "3") and "organization" in manifest:
+        if schema_version in ("2", "3", "4") and "organization" in manifest:
             org_meta = manifest["organization"]
             org_id = uuid.UUID(org_meta["id"])
             existing_org = session.get(Organization, org_id)
@@ -95,7 +104,6 @@ def restore_workspace(
             # v1 bundle: create a new org named after the workspace
             org_id = uuid.uuid4()
             slug_candidate = f"{ws_meta['slug']}-imported"
-            # Ensure slug uniqueness
             counter = 0
             slug = slug_candidate
             while session.query(Organization).filter_by(slug=slug).first() is not None:
@@ -135,120 +143,277 @@ def restore_workspace(
             )
         session.flush()
 
-        # --- Collections ---
-        for c in manifest["collections"]:
-            session.add(
-                Collection(
-                    id=uuid.UUID(c["id"]),
-                    space_id=uuid.UUID(c["space_id"]),
-                    slug=c["slug"],
-                    name=c["name"],
-                    created_at=_dt(c["created_at"]),
-                )
-            )
-        session.flush()
-
-        # --- Pages (current_revision_id set after revisions are inserted) ---
-        page_current_revisions: dict[uuid.UUID, uuid.UUID] = {}
-        for p in manifest["pages"]:
-            page_id = uuid.UUID(p["id"])
-            session.add(
-                Page(
-                    id=page_id,
-                    collection_id=uuid.UUID(p["collection_id"]),
-                    slug=p["slug"],
-                    title=p["title"],
-                    current_revision_id=None,
-                    created_at=_dt(p["created_at"]),
-                )
-            )
-            if p["current_revision_id"]:
-                page_current_revisions[page_id] = uuid.UUID(p["current_revision_id"])
-        session.flush()
-
-        # --- Revisions ---
-        if is_slim:
-            # Slim bundles omit revision history. Recreate one revision per page
-            # from the current page content stored in pages/.
-            for p in manifest["pages"]:
-                page_id = uuid.UUID(p["id"])
-                # Detect JSON vs Markdown from available files
-                json_file = f"pages/{p['id']}.json"
-                md_file = f"pages/{p['id']}.md"
-                if json_file in names:
-                    content = zf.read(json_file).decode()
-                    content_format = "json"
-                elif md_file in names:
-                    content = zf.read(md_file).decode()
-                    content_format = "markdown"
-                else:
-                    content = ""
-                    content_format = "markdown"
-                new_rev_id = uuid.uuid4()
-                session.add(
-                    Revision(
-                        id=new_rev_id,
-                        page_id=page_id,
-                        content=content,
-                        content_format=content_format,
-                    )
-                )
-                page_current_revisions[page_id] = new_rev_id
+        # Dispatch to the appropriate restore path based on bundle version.
+        if schema_version in ("1", "2", "3"):
+            _restore_v3_nodes(manifest, zf, session, storage, names, is_slim)
         else:
-            for r in manifest["revisions"]:
-                content_format = r.get("content_format", "markdown")
-                if content_format == "json":
-                    # v3 bundle: canonical content is the .json file
-                    rev_file = f"revisions/{r['page_id']}/{r['id']}.json"
-                else:
-                    rev_file = f"revisions/{r['page_id']}/{r['id']}.md"
-                if rev_file not in names:
-                    raise ValueError(f"Bundle is missing revision file: {rev_file}")
-                content = zf.read(rev_file).decode()
-                session.add(
-                    Revision(
-                        id=uuid.UUID(r["id"]),
-                        page_id=uuid.UUID(r["page_id"]),
-                        content=content,
-                        content_format=content_format,
-                        created_at=_dt(r["created_at"]),
-                    )
-                )
-        session.flush()
-
-        # --- Wire up current_revision_id now that revisions exist ---
-        for page_id, rev_id in page_current_revisions.items():
-            page = session.get(Page, page_id)
-            page.current_revision_id = rev_id
-        session.flush()
-
-        # --- Attachments ---
-        for att in manifest["attachments"]:
-            att_id = att["id"]
-            ext = Path(att["filename"]).suffix
-            asset_file = f"assets/{att_id}{ext}"
-            if asset_file not in names:
-                raise ValueError(f"Bundle is missing asset file: {asset_file}")
-
-            data = zf.read(asset_file)
-            actual_hash = _sha256(data)
-            if actual_hash != att["hash"]:
-                raise RuntimeError(
-                    f"Hash mismatch for attachment {att_id} ({att['filename']}): "
-                    f"expected {att['hash']}, got {actual_hash}"
-                )
-
-            storage.write(att_id, att["filename"], data)
-            session.add(
-                Attachment(
-                    id=uuid.UUID(att_id),
-                    page_id=uuid.UUID(att["page_id"]),
-                    filename=att["filename"],
-                    hash=att["hash"],
-                    size_bytes=att["size_bytes"],
-                    created_at=_dt(att["created_at"]),
-                )
-            )
-        session.flush()
+            _restore_v4_nodes(manifest, zf, session, storage, names, is_slim)
 
     return ws_meta["slug"]
+
+
+def _restore_v3_nodes(
+    manifest: dict,
+    zf: zipfile.ZipFile,
+    session: Session,
+    storage: StorageAdapter,
+    names: set[str],
+    is_slim: bool,
+) -> None:
+    """Synthesize Node rows from v3 collections + pages manifest entries.
+
+    Collections become folder-type nodes at the root of their space.
+    Pages become page-type nodes parented to their collection's folder node.
+    Original UUIDs are preserved for referential integrity.
+    """
+    # Map: old collection_id (str) → synthesized folder Node's space_id
+    col_to_space_id: dict[str, uuid.UUID] = {}
+
+    # --- Folders (synthesized from collections) ---
+    for idx, c in enumerate(manifest.get("collections", [])):
+        folder_id = uuid.UUID(c["id"])
+        space_id = uuid.UUID(c["space_id"])
+        col_to_space_id[c["id"]] = space_id
+        session.add(
+            Node(
+                id=folder_id,
+                space_id=space_id,
+                parent_id=None,
+                type="folder",
+                name=c["name"],
+                slug=c["slug"],
+                position=_pos(idx),
+                created_at=_dt(c["created_at"]),
+            )
+        )
+    session.flush()
+
+    # --- Pages (synthesized from pages, parented to folder nodes) ---
+    node_current_revisions: dict[uuid.UUID, uuid.UUID] = {}
+    # old page_id → synthesized page Node id (same UUID, preserved)
+    page_to_node_id: dict[str, uuid.UUID] = {}
+
+    # Build a lookup from collection_id → space_id for page → space_id resolution
+    col_space_map: dict[str, uuid.UUID] = col_to_space_id
+
+    for idx, p in enumerate(manifest.get("pages", [])):
+        page_node_id = uuid.UUID(p["id"])
+        page_to_node_id[p["id"]] = page_node_id
+        parent_id = uuid.UUID(p["collection_id"]) if p.get("collection_id") else None
+        space_id = col_space_map.get(p.get("collection_id", ""))
+
+        session.add(
+            Node(
+                id=page_node_id,
+                space_id=space_id,
+                parent_id=parent_id,
+                type="page",
+                name=p.get("title", p.get("name", p["slug"])),
+                slug=p["slug"],
+                position=_pos(idx),
+                current_revision_id=None,  # wired up after revisions are inserted
+                created_at=_dt(p["created_at"]),
+            )
+        )
+        if p.get("current_revision_id"):
+            node_current_revisions[page_node_id] = uuid.UUID(p["current_revision_id"])
+    session.flush()
+
+    # --- Revisions ---
+    if is_slim:
+        for p in manifest.get("pages", []):
+            page_node_id = page_to_node_id[p["id"]]
+            json_file = f"pages/{p['id']}.json"
+            md_file = f"pages/{p['id']}.md"
+            if json_file in names:
+                content = zf.read(json_file).decode()
+                content_format = "json"
+            elif md_file in names:
+                content = zf.read(md_file).decode()
+                content_format = "markdown"
+            else:
+                content = ""
+                content_format = "markdown"
+            new_rev_id = uuid.uuid4()
+            session.add(
+                Revision(
+                    id=new_rev_id,
+                    node_id=page_node_id,
+                    content=content,
+                    content_format=content_format,
+                )
+            )
+            node_current_revisions[page_node_id] = new_rev_id
+    else:
+        for r in manifest.get("revisions", []):
+            content_format = r.get("content_format", "markdown")
+            page_id = r["page_id"]
+            rev_id = r["id"]
+            if content_format == "json":
+                rev_file = f"revisions/{page_id}/{rev_id}.json"
+            else:
+                rev_file = f"revisions/{page_id}/{rev_id}.md"
+            if rev_file not in names:
+                raise ValueError(f"Bundle is missing revision file: {rev_file}")
+            content = zf.read(rev_file).decode()
+            node_id = page_to_node_id.get(page_id, uuid.UUID(page_id))
+            session.add(
+                Revision(
+                    id=uuid.UUID(rev_id),
+                    node_id=node_id,
+                    content=content,
+                    content_format=content_format,
+                    created_at=_dt(r["created_at"]),
+                )
+            )
+    session.flush()
+
+    # --- Wire up current_revision_id now that revisions exist ---
+    for node_id, rev_id in node_current_revisions.items():
+        node = session.get(Node, node_id)
+        node.current_revision_id = rev_id
+    session.flush()
+
+    # --- Attachments ---
+    for att in manifest.get("attachments", []):
+        att_id = att["id"]
+        ext = Path(att["filename"]).suffix
+        asset_file = f"assets/{att_id}{ext}"
+        if asset_file not in names:
+            raise ValueError(f"Bundle is missing asset file: {asset_file}")
+        data = zf.read(asset_file)
+        actual_hash = _sha256(data)
+        if actual_hash != att["hash"]:
+            raise RuntimeError(
+                f"Hash mismatch for attachment {att_id} ({att['filename']}): "
+                f"expected {att['hash']}, got {actual_hash}"
+            )
+        storage.write(att_id, att["filename"], data)
+        node_id = page_to_node_id.get(att.get("page_id", ""), uuid.UUID(att.get("page_id", att_id)))
+        session.add(
+            Attachment(
+                id=uuid.UUID(att_id),
+                node_id=node_id,
+                filename=att["filename"],
+                hash=att["hash"],
+                size_bytes=att["size_bytes"],
+                created_at=_dt(att["created_at"]),
+            )
+        )
+    session.flush()
+
+
+def _restore_v4_nodes(
+    manifest: dict,
+    zf: zipfile.ZipFile,
+    session: Session,
+    storage: StorageAdapter,
+    names: set[str],
+    is_slim: bool,
+) -> None:
+    """Restore Node rows directly from a v4 bundle manifest."""
+    node_current_revisions: dict[uuid.UUID, uuid.UUID] = {}
+
+    # --- Nodes (folders and pages) ---
+    for node_data in manifest.get("nodes", []):
+        node_id = uuid.UUID(node_data["id"])
+        node = Node(
+            id=node_id,
+            space_id=uuid.UUID(node_data["space_id"]),
+            parent_id=uuid.UUID(node_data["parent_id"]) if node_data.get("parent_id") else None,
+            type=node_data["type"],
+            name=node_data["name"],
+            slug=node_data["slug"],
+            position=node_data["position"],
+            created_at=_dt(node_data["created_at"]),
+        )
+        if node_data["type"] == "folder":
+            node.description = node_data.get("description")
+        # current_revision_id is set after revisions are inserted
+        session.add(node)
+        if node_data.get("current_revision_id"):
+            node_current_revisions[node_id] = uuid.UUID(node_data["current_revision_id"])
+    session.flush()
+
+    # --- Revisions ---
+    if is_slim:
+        for node_data in manifest.get("nodes", []):
+            if node_data["type"] != "page":
+                continue
+            node_id = uuid.UUID(node_data["id"])
+            json_file = f"pages/{node_data['id']}.json"
+            md_file = f"pages/{node_data['id']}.md"
+            if json_file in names:
+                content = zf.read(json_file).decode()
+                content_format = "json"
+            elif md_file in names:
+                content = zf.read(md_file).decode()
+                content_format = "markdown"
+            else:
+                content = ""
+                content_format = "markdown"
+            new_rev_id = uuid.uuid4()
+            session.add(
+                Revision(
+                    id=new_rev_id,
+                    node_id=node_id,
+                    content=content,
+                    content_format=content_format,
+                )
+            )
+            node_current_revisions[node_id] = new_rev_id
+    else:
+        for r in manifest.get("revisions", []):
+            content_format = r.get("content_format", "markdown")
+            node_id_str = r["node_id"]
+            rev_id = r["id"]
+            if content_format == "json":
+                rev_file = f"revisions/{node_id_str}/{rev_id}.json"
+            else:
+                rev_file = f"revisions/{node_id_str}/{rev_id}.md"
+            if rev_file not in names:
+                raise ValueError(f"Bundle is missing revision file: {rev_file}")
+            content = zf.read(rev_file).decode()
+            session.add(
+                Revision(
+                    id=uuid.UUID(rev_id),
+                    node_id=uuid.UUID(node_id_str),
+                    content=content,
+                    content_format=content_format,
+                    created_at=_dt(r["created_at"]),
+                )
+            )
+    session.flush()
+
+    # --- Wire up current_revision_id now that revisions exist ---
+    for node_id, rev_id in node_current_revisions.items():
+        node = session.get(Node, node_id)
+        node.current_revision_id = rev_id
+    session.flush()
+
+    # --- Attachments ---
+    for att in manifest.get("attachments", []):
+        att_id = att["id"]
+        ext = Path(att["filename"]).suffix
+        asset_file = f"assets/{att_id}{ext}"
+        if asset_file not in names:
+            raise ValueError(f"Bundle is missing asset file: {asset_file}")
+        data = zf.read(asset_file)
+        actual_hash = _sha256(data)
+        if actual_hash != att["hash"]:
+            raise RuntimeError(
+                f"Hash mismatch for attachment {att_id} ({att['filename']}): "
+                f"expected {att['hash']}, got {actual_hash}"
+            )
+        storage.write(att_id, att["filename"], data)
+        session.add(
+            Attachment(
+                id=uuid.UUID(att_id),
+                node_id=uuid.UUID(att["node_id"]),
+                filename=att["filename"],
+                hash=att["hash"],
+                size_bytes=att["size_bytes"],
+                created_at=_dt(att["created_at"]),
+            )
+        )
+    session.flush()

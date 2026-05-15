@@ -8,6 +8,7 @@ Run from the api/ directory:
 """
 
 import hashlib
+import json as _json
 import os
 import uuid
 
@@ -20,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from alembic import command
 from marrow.export import export_workspace
-from marrow.models import Attachment, Collection, Organization, Page, Revision, Space, Workspace
+from marrow.models import Attachment, Node, Organization, Revision, Space, Workspace
 from marrow.restore import restore_workspace
 from marrow.storage import StorageAdapter
 
@@ -89,7 +90,7 @@ def db_url():
 
 
 # ---------------------------------------------------------------------------
-# Round-trip test
+# Round-trip test (v4 bundle)
 # ---------------------------------------------------------------------------
 
 
@@ -116,29 +117,51 @@ def test_export_restore_round_trip(db_url, tmp_path):
         session.add(space)
         session.flush()
 
-        col = Collection(space_id=space.id, slug="docs", name="Documentation")
-        session.add(col)
+        # Folder node (root of space)
+        folder = Node(
+            space_id=space.id,
+            parent_id=None,
+            type="folder",
+            name="Documentation",
+            slug="docs",
+            position="000000",
+        )
+        session.add(folder)
         session.flush()
 
-        # Two pages, page-one with multiple revisions.
-        page1 = Page(collection_id=col.id, slug="page-one", title="Page One")
-        page2 = Page(collection_id=col.id, slug="page-two", title="Page Two")
+        # Two page nodes under the folder
+        page1 = Node(
+            space_id=space.id,
+            parent_id=folder.id,
+            type="page",
+            name="Page One",
+            slug="page-one",
+            position="000000",
+            current_revision_id=None,
+        )
+        page2 = Node(
+            space_id=space.id,
+            parent_id=folder.id,
+            type="page",
+            name="Page Two",
+            slug="page-two",
+            position="000001",
+            current_revision_id=None,
+        )
         session.add_all([page1, page2])
         session.flush()
 
         rev1a = Revision(
-            page_id=page1.id,
+            node_id=page1.id,
             content="# Page One\nFirst draft.",
             content_format="markdown",
         )
         rev1b = Revision(
-            page_id=page1.id,
+            node_id=page1.id,
             content="# Page One\nSecond draft.",
             content_format="markdown",
         )
-        # Simulate a JSON revision (BlockNote format) for the current revision
-        import json as _json
-
+        # JSON revision (BlockNote format) for the current revision
         _h1_block = {
             "id": "a1",
             "type": "heading",
@@ -171,12 +194,12 @@ def test_export_restore_round_trip(db_url, tmp_path):
         }
         rev1c_content = _json.dumps([_h1_block, _p_block])
         rev1c = Revision(
-            page_id=page1.id,
+            node_id=page1.id,
             content=rev1c_content,
             content_format="json",
         )
         rev2a = Revision(
-            page_id=page2.id,
+            node_id=page2.id,
             content="# Page Two\nOnly revision.",
             content_format="markdown",
         )
@@ -190,7 +213,7 @@ def test_export_restore_round_trip(db_url, tmp_path):
         att_data = b"binary attachment content"
         att_hash = hashlib.sha256(att_data).hexdigest()
         att = Attachment(
-            page_id=page1.id,
+            node_id=page1.id,
             filename="diagram.png",
             hash=att_hash,
             size_bytes=len(att_data),
@@ -213,11 +236,15 @@ def test_export_restore_round_trip(db_url, tmp_path):
             "name": ws.name,
         }
         original["space"] = {"id": str(space.id), "slug": space.slug, "name": space.name}
-        original["collection"] = {"id": str(col.id), "slug": col.slug, "name": col.name}
+        original["folder"] = {
+            "id": str(folder.id),
+            "slug": folder.slug,
+            "name": folder.name,
+        }
         original["pages"] = {
             str(page1.id): {
                 "slug": page1.slug,
-                "title": page1.title,
+                "name": page1.name,
                 "current_revision_id": str(page1.current_revision_id),
                 "revisions": {
                     str(rev1a.id): {
@@ -236,7 +263,7 @@ def test_export_restore_round_trip(db_url, tmp_path):
             },
             str(page2.id): {
                 "slug": page2.slug,
-                "title": page2.title,
+                "name": page2.name,
                 "current_revision_id": str(page2.current_revision_id),
                 "revisions": {
                     str(rev2a.id): {
@@ -257,7 +284,7 @@ def test_export_restore_round_trip(db_url, tmp_path):
         session.commit()
 
     # ------------------------------------------------------------------
-    # Phase 2: Export
+    # Phase 2: Export (v4 bundle)
     # ------------------------------------------------------------------
     with Session(engine) as session:
         bundle_path = export_workspace(
@@ -268,6 +295,15 @@ def test_export_restore_round_trip(db_url, tmp_path):
         )
 
     assert bundle_path.exists(), "Export produced no bundle"
+
+    # Verify v4 bundle format
+    import zipfile
+    with zipfile.ZipFile(bundle_path) as zf:
+        manifest = _json.loads(zf.read("manifest.json"))
+    assert manifest["schema_version"] == "4"
+    assert "nodes" in manifest
+    assert "collections" not in manifest
+    assert "pages" not in manifest
 
     # ------------------------------------------------------------------
     # Phase 3: Wipe the database
@@ -306,28 +342,31 @@ def test_export_restore_round_trip(db_url, tmp_path):
         assert ws.name == original["workspace"]["name"]
         assert str(ws.org_id) == original["workspace"]["org_id"]
 
-        # Space / collection structure
+        # Space structure
         assert len(ws.spaces) == 1
         restored_space = ws.spaces[0]
         assert str(restored_space.id) == original["space"]["id"]
         assert restored_space.slug == original["space"]["slug"]
 
-        assert len(restored_space.collections) == 1
-        restored_col = restored_space.collections[0]
-        assert str(restored_col.id) == original["collection"]["id"]
-        assert restored_col.slug == original["collection"]["slug"]
+        # Node tree: folder node at root
+        folder_nodes = [n for n in restored_space.nodes if n.type == "folder"]
+        page_nodes = [n for n in restored_space.nodes if n.type == "page"]
+        assert len(folder_nodes) == 1
+        restored_folder = folder_nodes[0]
+        assert str(restored_folder.id) == original["folder"]["id"]
+        assert restored_folder.slug == original["folder"]["slug"]
 
         # Pages
-        restored_pages = {str(p.id): p for p in restored_col.pages}
+        restored_pages = {str(p.id): p for p in page_nodes}
         assert set(restored_pages.keys()) == set(original["pages"].keys()), (
-            f"Page IDs differ after restore. "
+            f"Page node IDs differ after restore. "
             f"Got: {set(restored_pages.keys())} Expected: {set(original['pages'].keys())}"
         )
 
         for page_id, expected in original["pages"].items():
             page = restored_pages[page_id]
             assert page.slug == expected["slug"]
-            assert page.title == expected["title"]
+            assert page.name == expected["name"]
             assert str(page.current_revision_id) == expected["current_revision_id"], (
                 f"current_revision_id mismatch for page {page_id}"
             )
@@ -363,5 +402,132 @@ def test_export_restore_round_trip(db_url, tmp_path):
             "Attachment hash mismatch after restore"
         )
         assert restored_data == exp_att["data"], "Attachment bytes differ after restore"
+
+    engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# Round-trip test (v3 bundle → v4 restore)
+# ---------------------------------------------------------------------------
+
+
+def test_export_restore_v3_bundle(db_url, tmp_path):
+    """Verify that a hand-crafted v3 bundle restores correctly as nodes."""
+    import zipfile as _zipfile
+    from datetime import datetime, timezone
+
+    engine = create_engine(db_url)
+    now = datetime.now(timezone.utc).isoformat()
+
+    ws_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+    space_id = uuid.uuid4()
+    col_id = uuid.uuid4()
+    page_id = uuid.uuid4()
+    rev_id = uuid.uuid4()
+
+    manifest = {
+        "schema_version": "3",
+        "export_timestamp": now,
+        "organization": {
+            "id": str(org_id),
+            "slug": "v3-test-org",
+            "name": "V3 Test Org",
+            "created_at": now,
+        },
+        "workspace": {
+            "id": str(ws_id),
+            "org_id": str(org_id),
+            "slug": "v3-test-ws",
+            "name": "V3 Test Workspace",
+            "created_at": now,
+        },
+        "spaces": [
+            {
+                "id": str(space_id),
+                "workspace_id": str(ws_id),
+                "slug": "main",
+                "name": "Main",
+                "created_at": now,
+            }
+        ],
+        "collections": [
+            {
+                "id": str(col_id),
+                "space_id": str(space_id),
+                "slug": "docs",
+                "name": "Documentation",
+                "created_at": now,
+            }
+        ],
+        "pages": [
+            {
+                "id": str(page_id),
+                "collection_id": str(col_id),
+                "slug": "intro",
+                "title": "Introduction",
+                "current_revision_id": str(rev_id),
+                "created_at": now,
+            }
+        ],
+        "revisions": [
+            {
+                "id": str(rev_id),
+                "page_id": str(page_id),
+                "content_format": "markdown",
+                "created_at": now,
+            }
+        ],
+        "attachments": [],
+    }
+
+    buf = __import__("io").BytesIO()
+    with _zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("manifest.json", _json.dumps(manifest))
+        zf.writestr(f"revisions/{page_id}/{rev_id}.md", "# Introduction\nHello world.")
+        zf.writestr(f"pages/{page_id}.md", "# Introduction\nHello world.")
+        zf.writestr("links.json", _json.dumps({"internal_links": [], "broken_links": [], "orphaned_pages": []}))
+
+    bundle_path = tmp_path / "v3-bundle.zip"
+    bundle_path.write_bytes(buf.getvalue())
+
+    from marrow.storage import StorageAdapter as _SA
+
+    class _FakeStorage(_SA):
+        def read(self, *a): raise FileNotFoundError
+        def write(self, *a): pass
+
+    with Session(engine) as session:
+        slug = restore_workspace(bundle_path, session, _FakeStorage())
+        session.commit()
+
+    assert slug == "v3-test-ws"
+
+    with Session(engine) as session:
+        ws = session.query(Workspace).filter_by(slug="v3-test-ws").one()
+        assert len(ws.spaces) == 1
+        space = ws.spaces[0]
+
+        # Collection → folder node
+        folder_nodes = [n for n in space.nodes if n.type == "folder"]
+        page_nodes_list = [n for n in space.nodes if n.type == "page"]
+        assert len(folder_nodes) == 1, "Collection should produce one folder node"
+        assert len(page_nodes_list) == 1, "Page should produce one page node"
+
+        folder_node = folder_nodes[0]
+        assert str(folder_node.id) == str(col_id), "Folder node should preserve collection UUID"
+        assert folder_node.slug == "docs"
+        assert folder_node.name == "Documentation"
+        assert folder_node.parent_id is None
+
+        page_node = page_nodes_list[0]
+        assert str(page_node.id) == str(page_id), "Page node should preserve page UUID"
+        assert page_node.slug == "intro"
+        assert page_node.name == "Introduction"
+        assert str(page_node.parent_id) == str(col_id), "Page should be parented to folder"
+
+        assert len(page_node.revisions) == 1
+        assert page_node.revisions[0].content == "# Introduction\nHello world."
+        assert str(page_node.current_revision_id) == str(rev_id)
 
     engine.dispose()
