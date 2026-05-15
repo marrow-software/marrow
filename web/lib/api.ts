@@ -78,8 +78,16 @@ export function listWorkspaces(): Promise<Workspace[]> {
   return apiFetch("/api/workspaces");
 }
 
+/** @deprecated Use createWorkspaceInOrg instead. */
 export function createWorkspace(slug: string, name: string): Promise<Workspace> {
   return apiFetch("/api/workspaces", {
+    method: "POST",
+    body: JSON.stringify({ slug, name }),
+  });
+}
+
+export function createWorkspaceInOrg(orgId: string, slug: string, name: string): Promise<Workspace> {
+  return apiFetch(`/api/orgs/${orgId}/workspaces`, {
     method: "POST",
     body: JSON.stringify({ slug, name }),
   });

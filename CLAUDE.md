@@ -265,7 +265,9 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | POST | /api/orgs/{oid}/members | Invite member by email | owner |
 | PATCH | /api/orgs/{oid}/members/{mid} | Change member role | owner |
 | DELETE | /api/orgs/{oid}/members/{mid} | Remove member | owner |
-| GET/POST | /api/workspaces/ | List / create workspaces | viewer/editor |
+| POST | /api/orgs/{oid}/workspaces | Create workspace in org (#129) | editor |
+| GET | /api/workspaces/ | List workspaces | viewer |
+| POST | /api/workspaces/ | **410 Gone** — use POST /api/orgs/{oid}/workspaces | — |
 | GET/DELETE | /api/workspaces/{id} | Get / delete workspace | viewer/owner |
 | GET | /api/workspaces/{id}/tree | Full hierarchy (sidebar) | viewer |
 | GET | /api/workspaces/{id}/search?q= | Full-text search across workspace pages | viewer |

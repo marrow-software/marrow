@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronRight, Settings } from "lucide-react";
-import { createWorkspace, getAuthStatus, listOrgs, listWorkspaces, logout, slugify } from "@/lib/api";
+import { ChevronRight, ChevronsUpDown, Settings } from "lucide-react";
+import { createWorkspaceInOrg, getAuthStatus, listOrgs, listWorkspaces, logout, slugify } from "@/lib/api";
 import type { AuthStatus, Organization, Workspace } from "@/lib/types";
 import { RestoreDialog } from "@/components/restore-dialog";
 
@@ -18,19 +18,31 @@ export default function WorkspacesPage() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
 
   useEffect(() => {
     listWorkspaces().then(setWorkspaces).catch(() => toast.error("Failed to load workspaces"));
-    listOrgs().then(setOrgs).catch(() => {});
+    listOrgs().then((loaded) => {
+      setOrgs(loaded);
+      if (loaded.length > 0 && !selectedOrgId) {
+        setSelectedOrgId(loaded[0].id);
+      }
+    }).catch(() => {});
     getAuthStatus().then(setAuth).catch(() => {});
   }, []);
+
+  const selectedOrg = orgs.find((o) => o.id === selectedOrgId) ?? orgs[0] ?? null;
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    if (!selectedOrg) {
+      toast.error("No organization available to create workspace in");
+      return;
+    }
     setCreating(true);
     try {
-      const ws = await createWorkspace(slugify(name), name.trim());
+      const ws = await createWorkspaceInOrg(selectedOrg.id, slugify(name), name.trim());
       router.push(`/w/${ws.id}`);
     } catch (err) {
       toast.error(String(err));
@@ -113,7 +125,31 @@ export default function WorkspacesPage() {
         )}
 
         {/* Create workspace */}
-        <div className="rounded-lg border bg-card p-4">
+        <div className="rounded-lg border bg-card p-4 space-y-3">
+          {selectedOrg && (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                Creating workspace in <span className="font-semibold text-foreground">{selectedOrg.name}</span>
+              </p>
+              {orgs.length > 1 && (
+                <div className="relative">
+                  <select
+                    value={selectedOrgId ?? ""}
+                    onChange={(e) => setSelectedOrgId(e.target.value)}
+                    className="appearance-none text-xs text-muted-foreground bg-transparent pr-5 cursor-pointer hover:text-foreground transition-colors focus:outline-none"
+                    disabled={creating}
+                  >
+                    {orgs.map((org) => (
+                      <option key={org.id} value={org.id}>
+                        {org.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronsUpDown className="pointer-events-none absolute right-0 top-0.5 h-3 w-3 text-muted-foreground" />
+                </div>
+              )}
+            </div>
+          )}
           <form onSubmit={handleCreate} className="flex gap-2">
             <Input
               placeholder="New workspace name"
@@ -121,7 +157,7 @@ export default function WorkspacesPage() {
               onChange={(e) => setName(e.target.value)}
               disabled={creating}
             />
-            <Button type="submit" disabled={creating || !name.trim()}>
+            <Button type="submit" disabled={creating || !name.trim() || !selectedOrg}>
               Create
             </Button>
           </form>

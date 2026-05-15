@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, verify_auth
-from ..models import Organization, OrgMembership, OrgRole, User
+from ..models import Organization, OrgMembership, OrgRole, User, Workspace
 from ..rbac import require_org_role
 from ..schemas import (
     OrganizationCreate,
@@ -16,6 +16,8 @@ from ..schemas import (
     OrgMembershipCreate,
     OrgMembershipRead,
     OrgMembershipUpdate,
+    WorkspaceCreate,
+    WorkspaceRead,
 )
 from .billing import TIER_SEAT_LIMITS, _saas_mode
 
@@ -71,6 +73,25 @@ def create_org(
     db.commit()
     db.refresh(org)
     return org
+
+
+@router.post("/{org_id}/workspaces", response_model=WorkspaceRead, status_code=201)
+def create_workspace_in_org(
+    org_id: UUID,
+    body: WorkspaceCreate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_org_role(OrgRole.EDITOR)),
+):
+    """Create a workspace in the given org. Requires editor or owner role."""
+    ws = Workspace(org_id=org_id, slug=body.slug, name=body.name)
+    db.add(ws)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, f"Workspace slug '{body.slug}' already exists")
+    db.refresh(ws)
+    return ws
 
 
 @router.get("/{org_id}", response_model=OrganizationRead)
