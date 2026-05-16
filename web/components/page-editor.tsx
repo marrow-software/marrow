@@ -60,6 +60,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { EditorHeader } from "@/components/inset-header";
+import { ShareDialog } from "@/components/share-dialog";
 import { SideDrawer, type SideDrawerKind } from "@/components/side-drawer";
 import { CommentsDrawer } from "@/components/comments-drawer";
 import { CommentBubbleFab } from "@/components/comment-bubble-fab";
@@ -382,9 +383,7 @@ export function PageEditor({ initialPage }: Props) {
     setSideDrawer(which);
   }
 
-  function handleShareStub() {
-    toast.info("Sharing lands with #40");
-  }
+  const [shareOpen, setShareOpen] = useState(false);
 
   return (
     <div className="relative flex h-full flex-col">
@@ -393,7 +392,14 @@ export function PageEditor({ initialPage }: Props) {
         pageTitle={title || "Untitled"}
         saveLabel={statusLabel}
         onOpenDrawer={handleOpenDrawer}
-        onShare={handleShareStub}
+        onShare={() => setShareOpen(true)}
+      />
+
+      <ShareDialog
+        nodeId={initialPage.id}
+        nodeName={title || "Untitled"}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
       />
 
       {/* Attachments — retained while Phase A omits an Attachments menu entry */}

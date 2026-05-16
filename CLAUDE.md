@@ -149,7 +149,9 @@ marrow/
 │   │       ├── auth.py               # OIDC login/callback/me/logout + personal org creation
 │   │       ├── organizations.py      # Org CRUD, member management (invite, role, remove)
 │   │       ├── workspaces.py
-│   │       └── spaces.py
+│   │       ├── spaces.py
+│   │       ├── nodes.py               # Node CRUD, revisions, attachments (#124)
+│   │       └── share_links.py         # View-only sharing links + public /shared/{token} (#40)
 │   │       # Node CRUD/tree routes land in #124 (2.0b); old collection/page routers
 │   │       # were removed by the v0.2 schema migration (#123).
 │   ├── tests/
@@ -183,6 +185,7 @@ marrow/
 │   │   ├── search-dialog.tsx         # Cmd+K search dialog
 │   │   ├── export-dialog.tsx         # Export workspace dialog (full / slim, size estimate)
 │   │   ├── restore-dialog.tsx        # Restore workspace from bundle dialog (drag-and-drop upload)
+│   │   ├── share-dialog.tsx          # Create/list/revoke view-only share links for a node (#40)
 │   │   ├── page-editor.tsx           # Title + markdown textarea, auto-save, attachments, revisions
 │   │   └── ui/                       # Shadcn/Base UI components
 │   ├── lib/
@@ -243,6 +246,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | revisions | id, node_id (FK cascade — must reference type='page'), content (TEXT), content_format ('markdown'\|'json') — **immutable via PG trigger** |
 | attachments | id, node_id (FK cascade), filename, hash (SHA256), size_bytes |
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
+| share_links | id, node_id (FK cascade), token (unique), created_by (FK users, SET NULL), expires_at (nullable), created_at |
 
 **Node shape constraint**: A CHECK constraint (`nodes_shape_by_type`) enforces that folder rows have `current_revision_id` and `search_vector` NULL, while page rows have `description` NULL. A second CHECK on `revisions` (`revisions_node_is_page`) ensures revisions only reference page-typed nodes.
 
@@ -283,7 +287,20 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET | /api/workspaces/{id}/trash | List top-level trashed nodes | viewer |
 | POST | /api/nodes/{id}/restore | Restore a trashed node + subtree (422 if parent still trashed) | editor |
 | DELETE | /api/nodes/{id}/purge | Hard-delete a trashed node and its subtree | owner |
+| GET/POST | /api/nodes/{node_id}/share-links | List / create view-only share links | viewer/editor |
+| DELETE | /api/share-links/{link_id} | Revoke a share link | editor |
+| GET | /shared/{token} | **Unauthenticated** read-only view of a shared node (page content or folder subtree) | — |
 
+> **Share links (#40):** `share_links` grant view-only public access to a node.
+> `GET /shared/{token}` requires no account: a page returns its current
+> revision content; a folder returns its visible (non-trashed) subtree
+> recursively. Expired links return 410, unknown/revoked return 404. The
+> public endpoint relies on RLS treating an unset `app.current_org` as
+> unrestricted (same pattern as the API-key/dev path). Export/restore
+> integration ("bundle v4") is **deferred**: `export.py`/`restore.py` still
+> reference removed Page/Collection classes and NameError at runtime until the
+> #132/#133 rewrites land — share links should be added to the bundle there.
+>
 > **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
 >
 > **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.

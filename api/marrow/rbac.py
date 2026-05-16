@@ -16,6 +16,7 @@ from .models import (
     Node,
     OrgMembership,
     OrgRole,
+    ShareLink,
     Space,
     Workspace,
 )
@@ -121,6 +122,26 @@ def require_node_role(min_role: OrgRole):
         workspace = db.get(Workspace, space.workspace_id)
         if workspace is None:
             raise HTTPException(404, "Workspace not found")
+        _check_membership(db, workspace.org_id, auth, min_role)
+        return auth
+
+    return _dep
+
+
+def require_share_link_role(min_role: OrgRole):
+    """Dependency factory: resolve link_id → node → space → workspace → org."""
+
+    def _dep(
+        link_id: uuid.UUID,
+        db: Session = Depends(get_db),
+        auth: AuthContext = Depends(verify_auth),
+    ) -> AuthContext:
+        link = db.get(ShareLink, link_id)
+        if link is None:
+            raise HTTPException(404, "Share link not found")
+        node = db.get(Node, link.node_id)
+        space = db.get(Space, node.space_id)
+        workspace = db.get(Workspace, space.workspace_id)
         _check_membership(db, workspace.org_id, auth, min_role)
         return auth
 
