@@ -271,6 +271,8 @@ def _restore_v3_nodes(
     # --- Wire up current_revision_id now that revisions exist ---
     for node_id, rev_id in node_current_revisions.items():
         node = session.get(Node, node_id)
+        if node is None:
+            raise ValueError(f"Cannot wire current_revision_id: node {node_id} not found")
         node.current_revision_id = rev_id
     session.flush()
 
@@ -289,7 +291,12 @@ def _restore_v3_nodes(
                 f"expected {att['hash']}, got {actual_hash}"
             )
         storage.write(att_id, att["filename"], data)
-        node_id = page_to_node_id.get(att.get("page_id", ""), uuid.UUID(att.get("page_id", att_id)))
+        page_id = att.get("page_id", "")
+        node_id = page_to_node_id.get(page_id)
+        if node_id is None:
+            raise ValueError(
+                f"Attachment {att_id} references unknown page_id '{page_id}'"
+            )
         session.add(
             Attachment(
                 id=uuid.UUID(att_id),
@@ -388,6 +395,8 @@ def _restore_v4_nodes(
     # --- Wire up current_revision_id now that revisions exist ---
     for node_id, rev_id in node_current_revisions.items():
         node = session.get(Node, node_id)
+        if node is None:
+            raise ValueError(f"Cannot wire current_revision_id: node {node_id} not found")
         node.current_revision_id = rev_id
     session.flush()
 
