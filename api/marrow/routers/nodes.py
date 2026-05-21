@@ -47,7 +47,11 @@ def _trashed_node_or_404(node_id: UUID, db: Session) -> Node:
 def _authorize_node(db: Session, node: Node, auth: AuthContext, min_role: OrgRole) -> None:
     """Resolve node → org and enforce role. Works for soft-deleted nodes too."""
     space = db.get(Space, node.space_id)
+    if space is None:
+        raise HTTPException(404, "Space not found")
     workspace = db.get(Workspace, space.workspace_id)
+    if workspace is None:
+        raise HTTPException(404, "Workspace not found")
     _check_membership(db, workspace.org_id, auth, min_role)
 
 

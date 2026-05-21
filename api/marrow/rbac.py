@@ -116,7 +116,11 @@ def require_node_role(min_role: OrgRole):
         if node is None or node.deleted_at is not None:
             raise HTTPException(404, "Node not found")
         space = db.get(Space, node.space_id)
+        if space is None:
+            raise HTTPException(404, "Space not found")
         workspace = db.get(Workspace, space.workspace_id)
+        if workspace is None:
+            raise HTTPException(404, "Workspace not found")
         _check_membership(db, workspace.org_id, auth, min_role)
         return auth
 
