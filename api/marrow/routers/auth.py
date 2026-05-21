@@ -115,6 +115,7 @@ async def callback(request: Request):
         )
         for membership in pending:
             membership.user_id = user.id
+        db.flush()  # flush claimed memberships so has_memberships query sees them
 
         # Auto-create personal org if user has no memberships
         has_memberships = (
