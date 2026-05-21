@@ -109,9 +109,10 @@ def purge_trash(
     """
     load_dotenv()
 
-    from sqlalchemy import text
+    from sqlalchemy import delete, text
 
     from .db import get_session
+    from .models import Node
 
     with get_session(database_url) as session:
         # Only delete top-level trashed nodes (parent is NULL or live); children
@@ -136,10 +137,7 @@ def purge_trash(
             typer.echo("No trashed nodes to purge.")
             return
 
-        session.execute(
-            text("DELETE FROM nodes WHERE id = ANY(:ids)"),
-            {"ids": ids},
-        )
+        session.execute(delete(Node).where(Node.id.in_(ids)))
         session.commit()
         typer.echo(f"Purged {len(ids)} trashed node(s) (cascaded to descendants).")
 
