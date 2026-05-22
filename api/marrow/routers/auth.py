@@ -31,24 +31,22 @@ def _unique_org_slug(db: Session, base: str) -> str:
     """Generate a unique org slug from a base string, appending a suffix on collision."""
     slug = re.sub(r"[^a-z0-9-]", "-", base.lower()).strip("-")[:50] or "org"
     candidate = slug
-    attempt = 0
-    while db.query(Organization).filter(Organization.slug == candidate).first() is not None:
-        attempt += 1
-        suffix = uuid.uuid4().hex[:4]
-        candidate = f"{slug}-{suffix}"
-    return candidate
+    for attempt in range(1, 20):
+        if db.query(Organization).filter(Organization.slug == candidate).first() is None:
+            return candidate
+        candidate = f"{slug}-{attempt:02x}{uuid.uuid4().hex[:2]}"
+    raise RuntimeError(f"Could not generate a unique org slug from base '{base}' after 20 attempts")
 
 
 def _unique_workspace_slug(db: Session, base: str) -> str:
     """Generate a unique workspace slug from a base string, appending a suffix on collision."""
     slug = re.sub(r"[^a-z0-9-]", "-", base.lower()).strip("-")[:50] or "workspace"
     candidate = slug
-    attempt = 0
-    while db.query(Workspace).filter(Workspace.slug == candidate).first() is not None:
-        attempt += 1
-        suffix = uuid.uuid4().hex[:4]
-        candidate = f"{slug}-{suffix}"
-    return candidate
+    for attempt in range(1, 20):
+        if db.query(Workspace).filter(Workspace.slug == candidate).first() is None:
+            return candidate
+        candidate = f"{slug}-{attempt:02x}{uuid.uuid4().hex[:2]}"
+    raise RuntimeError(f"Could not generate a unique workspace slug from base '{base}' after 20 attempts")
 
 
 @router.get("/login")
