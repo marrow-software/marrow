@@ -36,19 +36,26 @@ _secret_key = os.getenv("SECRET_KEY", "changeme")
 
 def _ensure_default_org_and_workspace() -> None:
     """Create a 'Default' org and workspace if none exist (API_KEY-only mode)."""
+    from sqlalchemy.exc import IntegrityError
     from sqlalchemy.orm import Session
 
     from .dependencies import _engine
     from .models import Organization, Workspace
+    from .routers.auth import _unique_org_slug, _unique_workspace_slug
 
     with Session(_engine) as db:
         if db.query(Organization).first() is not None:
             return
-        org = Organization(slug="default", name="Default")
+        org_slug = _unique_org_slug(db, "default")
+        org = Organization(slug=org_slug, name="Default")
         db.add(org)
         db.flush()
-        db.add(Workspace(org_id=org.id, slug="default", name="Default"))
-        db.commit()
+        ws_slug = _unique_workspace_slug(db, "default")
+        db.add(Workspace(org_id=org.id, slug=ws_slug, name="Default"))
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # another process won the race — that's fine
 
 
 @asynccontextmanager
