@@ -15,6 +15,7 @@ export default async function NodeRoute({ params }: Props) {
     node = await getNode(nodeId);
   } catch {
     notFound();
+    return; // unreachable at runtime but satisfies TypeScript narrowing
   }
 
   if (node.type === "folder") {
