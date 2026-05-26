@@ -18,7 +18,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from marrow.export import SCHEMA_VERSION
-from marrow.models import Attachment, Page, Revision, Workspace
+from marrow.models import Attachment, Node, Revision, Workspace
 from marrow.restore import restore_workspace
 from marrow.storage import StorageAdapter
 
@@ -48,7 +48,7 @@ class FakeStorageAdapter(StorageAdapter):
 
 
 # ---------------------------------------------------------------------------
-# Bundle builder helper
+# Bundle builder helpers
 # ---------------------------------------------------------------------------
 
 
@@ -64,8 +64,122 @@ def _make_bundle(
     schema_version: str = SCHEMA_VERSION,
     omit_manifest: bool = False,
     omit_revision_file: bool = False,
-) -> tuple[Path, dict]:
-    """Return (bundle_path written to a tmp BytesIO, manifest dict)."""
+) -> tuple[bytes, dict]:
+    """Build a v4 bundle (nodes-based) and return (bytes, manifest dict)."""
+    now = datetime.now(timezone.utc).isoformat()
+
+    ws_id = ws_id or uuid.uuid4()
+    org_id = org_id or uuid.uuid4()
+    space_id = uuid.uuid4()
+    folder_id = uuid.uuid4()
+    page_id = uuid.uuid4()
+    rev_id = uuid.uuid4()
+    att_id = uuid.uuid4()
+
+    att_hash = hashlib.sha256(attachment_data).hexdigest()
+
+    manifest: dict = {
+        "schema_version": schema_version,
+        "export_timestamp": now,
+        "organization": {
+            "id": str(org_id),
+            "slug": f"{ws_slug}-org",
+            "name": f"{ws_name} Org",
+            "created_at": now,
+        },
+        "workspace": {
+            "id": str(ws_id),
+            "org_id": str(org_id),
+            "slug": ws_slug,
+            "name": ws_name,
+            "created_at": now,
+        },
+        "spaces": [
+            {
+                "id": str(space_id),
+                "workspace_id": str(ws_id),
+                "slug": "sp",
+                "name": "Space",
+                "created_at": now,
+            }
+        ],
+        "nodes": [
+            {
+                "id": str(folder_id),
+                "space_id": str(space_id),
+                "parent_id": None,
+                "type": "folder",
+                "name": "Folder",
+                "slug": "folder",
+                "position": "000000",
+                "description": None,
+                "current_revision_id": None,
+                "created_at": now,
+            },
+            {
+                "id": str(page_id),
+                "space_id": str(space_id),
+                "parent_id": str(folder_id),
+                "type": "page",
+                "name": "Page",
+                "slug": "pg",
+                "position": "000000",
+                "description": None,
+                "current_revision_id": str(rev_id),
+                "created_at": now,
+            },
+        ],
+        "revisions": [
+            {"id": str(rev_id), "node_id": str(page_id), "content_format": "markdown", "created_at": now}
+        ],
+        "attachments": (
+            [
+                {
+                    "id": str(att_id),
+                    "node_id": str(page_id),
+                    "filename": "file.txt",
+                    "hash": att_hash,
+                    "size_bytes": len(attachment_data),
+                    "created_at": now,
+                }
+            ]
+            if with_attachment
+            else []
+        ),
+    }
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        if not omit_manifest:
+            zf.writestr("manifest.json", json.dumps(manifest))
+        if not omit_revision_file:
+            zf.writestr(f"revisions/{page_id}/{rev_id}.md", "# Page\nContent.")
+        zf.writestr(f"pages/{page_id}.md", "# Page\nContent.")
+        zf.writestr(
+            "links.json",
+            json.dumps(
+                {"internal_links": [], "broken_links": [], "orphaned_nodes": [str(page_id)]}
+            ),
+        )
+        if with_attachment:
+            asset_bytes = b"corrupted" if corrupt_attachment else attachment_data
+            zf.writestr(f"assets/{att_id}.txt", asset_bytes)
+
+    return buf.getvalue(), manifest
+
+
+def _make_v3_bundle(
+    *,
+    ws_id: uuid.UUID | None = None,
+    ws_slug: str = "v3-ws",
+    ws_name: str = "V3 Workspace",
+    org_id: uuid.UUID | None = None,
+    with_attachment: bool = False,
+    attachment_data: bytes = b"attachment bytes",
+    corrupt_attachment: bool = False,
+    omit_revision_file: bool = False,
+) -> tuple[bytes, dict]:
+    """Build a v3 bundle (collections + pages) for testing the migration path."""
     now = datetime.now(timezone.utc).isoformat()
 
     ws_id = ws_id or uuid.uuid4()
@@ -79,7 +193,7 @@ def _make_bundle(
     att_hash = hashlib.sha256(attachment_data).hexdigest()
 
     manifest: dict = {
-        "schema_version": schema_version,
+        "schema_version": "3",
         "export_timestamp": now,
         "organization": {
             "id": str(org_id),
@@ -122,7 +236,14 @@ def _make_bundle(
                 "created_at": now,
             }
         ],
-        "revisions": [{"id": str(rev_id), "page_id": str(page_id), "created_at": now}],
+        "revisions": [
+            {
+                "id": str(rev_id),
+                "page_id": str(page_id),
+                "content_format": "markdown",
+                "created_at": now,
+            }
+        ],
         "attachments": (
             [
                 {
@@ -141,8 +262,7 @@ def _make_bundle(
 
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
-        if not omit_manifest:
-            zf.writestr("manifest.json", json.dumps(manifest))
+        zf.writestr("manifest.json", json.dumps(manifest))
         if not omit_revision_file:
             zf.writestr(f"revisions/{page_id}/{rev_id}.md", "# Page\nContent.")
         zf.writestr(f"pages/{page_id}.md", "# Page\nContent.")
@@ -184,7 +304,7 @@ def storage():
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -192,6 +312,11 @@ def _write_bundle(tmp_path: Path, bundle_bytes: bytes, name: str = "bundle.zip")
     p = tmp_path / name
     p.write_bytes(bundle_bytes)
     return p
+
+
+# ---------------------------------------------------------------------------
+# v4 bundle tests
+# ---------------------------------------------------------------------------
 
 
 def test_restore_creates_workspace(session, storage, tmp_path):
@@ -232,14 +357,20 @@ def test_restore_preserves_full_hierarchy(session, storage, tmp_path):
     assert len(ws.spaces) == 1
     space = ws.spaces[0]
     assert str(space.id) == manifest["spaces"][0]["id"]
-    assert len(space.collections) == 1
-    col = space.collections[0]
-    assert str(col.id) == manifest["collections"][0]["id"]
-    assert len(col.pages) == 1
-    page = col.pages[0]
-    assert str(page.id) == manifest["pages"][0]["id"]
-    assert len(page.revisions) == 1
-    assert str(page.current_revision_id) == manifest["pages"][0]["current_revision_id"]
+
+    # v4: nodes instead of collections/pages
+    folder_nodes = [n for n in space.nodes if n.type == "folder"]
+    page_nodes = [n for n in space.nodes if n.type == "page"]
+    assert len(folder_nodes) == 1
+    assert len(page_nodes) == 1
+
+    folder_rec = next(n for n in manifest["nodes"] if n["type"] == "folder")
+    page_rec = next(n for n in manifest["nodes"] if n["type"] == "page")
+    assert str(folder_nodes[0].id) == folder_rec["id"]
+    assert str(page_nodes[0].id) == page_rec["id"]
+
+    assert len(page_nodes[0].revisions) == 1
+    assert str(page_nodes[0].current_revision_id) == manifest["revisions"][0]["id"]
 
 
 def test_restore_preserves_page_content(session, storage, tmp_path):
@@ -248,13 +379,13 @@ def test_restore_preserves_page_content(session, storage, tmp_path):
 
     restore_workspace(path, session, storage)
 
-    page_id = manifest["pages"][0]["id"]
-    rev_id = manifest["revisions"][0]["id"]
-    page = session.get(Page, uuid.UUID(page_id))
-    rev = session.get(Revision, uuid.UUID(rev_id))
+    page_rec = next(n for n in manifest["nodes"] if n["type"] == "page")
+    rev_rec = manifest["revisions"][0]
+    page_node = session.get(Node, uuid.UUID(page_rec["id"]))
+    rev = session.get(Revision, uuid.UUID(rev_rec["id"]))
     assert rev is not None
     assert rev.content == "# Page\nContent."
-    assert str(page.current_revision_id) == rev_id
+    assert str(page_node.current_revision_id) == rev_rec["id"]
 
 
 def test_restore_with_attachment(session, storage, tmp_path):
@@ -342,3 +473,185 @@ def test_restore_not_a_zip_raises(session, storage, tmp_path):
 
     with pytest.raises(ValueError, match="Not a valid zip"):
         restore_workspace(path, session, storage)
+
+
+# ---------------------------------------------------------------------------
+# v3 bundle migration tests
+# ---------------------------------------------------------------------------
+
+
+def test_restore_v3_bundle_creates_workspace(session, storage, tmp_path):
+    bundle_bytes, manifest = _make_v3_bundle(ws_slug="v3-creates-ws")
+    path = _write_bundle(tmp_path, bundle_bytes, name="v3-creates.zip")
+
+    slug = restore_workspace(path, session, storage)
+
+    assert slug == "v3-creates-ws"
+    ws = session.query(Workspace).filter_by(slug="v3-creates-ws").first()
+    assert ws is not None
+    assert str(ws.id) == manifest["workspace"]["id"]
+
+
+def test_restore_v3_bundle_synthesizes_nodes(session, storage, tmp_path):
+    """v3 collections → folder nodes; v3 pages → page nodes."""
+    bundle_bytes, manifest = _make_v3_bundle(ws_slug="v3-nodes-ws")
+    path = _write_bundle(tmp_path, bundle_bytes, name="v3-nodes.zip")
+
+    restore_workspace(path, session, storage)
+
+    ws = session.query(Workspace).filter_by(slug="v3-nodes-ws").first()
+    space = ws.spaces[0]
+
+    folder_nodes = [n for n in space.nodes if n.type == "folder"]
+    page_nodes_list = [n for n in space.nodes if n.type == "page"]
+    assert len(folder_nodes) == 1
+    assert len(page_nodes_list) == 1
+
+    col_rec = manifest["collections"][0]
+    page_rec = manifest["pages"][0]
+
+    # Collection UUID is preserved as the folder node UUID
+    assert str(folder_nodes[0].id) == col_rec["id"]
+    assert folder_nodes[0].slug == col_rec["slug"]
+    assert folder_nodes[0].parent_id is None
+
+    # Page UUID is preserved as the page node UUID
+    assert str(page_nodes_list[0].id) == page_rec["id"]
+    assert page_nodes_list[0].slug == page_rec["slug"]
+    # Page is parented to the folder (was collection)
+    assert str(page_nodes_list[0].parent_id) == col_rec["id"]
+
+    # Revision content preserved
+    assert len(page_nodes_list[0].revisions) == 1
+    assert page_nodes_list[0].revisions[0].content == "# Page\nContent."
+    assert str(page_nodes_list[0].current_revision_id) == manifest["revisions"][0]["id"]
+
+
+def test_restore_v3_bundle_with_attachment(session, storage, tmp_path):
+    att_data = b"v3 attachment bytes"
+    bundle_bytes, manifest = _make_v3_bundle(
+        ws_slug="v3-att-ws", with_attachment=True, attachment_data=att_data
+    )
+    path = _write_bundle(tmp_path, bundle_bytes, name="v3-att.zip")
+
+    restore_workspace(path, session, storage)
+
+    att_meta = manifest["attachments"][0]
+    att = session.get(Attachment, uuid.UUID(att_meta["id"]))
+    assert att is not None
+    assert att.hash == att_meta["hash"]
+    assert att.size_bytes == len(att_data)
+    assert storage.has(att_meta["id"], "file.txt")
+
+
+def test_restore_v3_bundle_hash_mismatch_raises(session, storage, tmp_path):
+    bundle_bytes, _ = _make_v3_bundle(
+        ws_slug="v3-hash-ws", with_attachment=True, corrupt_attachment=True
+    )
+    path = _write_bundle(tmp_path, bundle_bytes, name="v3-hash.zip")
+
+    with pytest.raises(RuntimeError, match="Hash mismatch"):
+        restore_workspace(path, session, storage)
+
+
+def test_restore_v3_missing_revision_file_raises(session, storage, tmp_path):
+    bundle_bytes, _ = _make_v3_bundle(ws_slug="v3-missing-rev-ws", omit_revision_file=True)
+    path = _write_bundle(tmp_path, bundle_bytes, name="v3-missing-rev.zip")
+
+    with pytest.raises(ValueError, match="missing revision file"):
+        restore_workspace(path, session, storage)
+
+
+# ---------------------------------------------------------------------------
+# Slim bundle tests (v4)
+# ---------------------------------------------------------------------------
+
+
+def test_slim_bundle_is_restorable(session, tmp_path):
+    """A slim bundle restores cleanly — one revision per page from pages/ content."""
+    now = datetime.now(timezone.utc).isoformat()
+    ws_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+    space_id = uuid.uuid4()
+    folder_id = uuid.uuid4()
+    page_id = uuid.uuid4()
+
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "slim": True,
+        "export_timestamp": now,
+        "organization": {
+            "id": str(org_id),
+            "slug": "slim-restore-org",
+            "name": "Slim Restore Org",
+            "created_at": now,
+        },
+        "workspace": {
+            "id": str(ws_id),
+            "org_id": str(org_id),
+            "slug": "slim-restore-ws",
+            "name": "Slim Restore WS",
+            "created_at": now,
+        },
+        "spaces": [
+            {
+                "id": str(space_id),
+                "workspace_id": str(ws_id),
+                "slug": "sp",
+                "name": "Space",
+                "created_at": now,
+            }
+        ],
+        "nodes": [
+            {
+                "id": str(folder_id),
+                "space_id": str(space_id),
+                "parent_id": None,
+                "type": "folder",
+                "name": "Folder",
+                "slug": "folder",
+                "position": "000000",
+                "description": None,
+                "current_revision_id": None,
+                "created_at": now,
+            },
+            {
+                "id": str(page_id),
+                "space_id": str(space_id),
+                "parent_id": str(folder_id),
+                "type": "page",
+                "name": "Page",
+                "slug": "pg",
+                "position": "000000",
+                "description": None,
+                "current_revision_id": None,
+                "created_at": now,
+            },
+        ],
+        "revisions": [],
+        "attachments": [],
+    }
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("manifest.json", json.dumps(manifest))
+        zf.writestr(f"pages/{page_id}.md", "# Page\nCurrent content.")
+        zf.writestr(
+            "links.json",
+            json.dumps({"internal_links": [], "broken_links": [], "orphaned_nodes": []}),
+        )
+
+    bundle_path = tmp_path / "slim-bundle.zip"
+    bundle_path.write_bytes(buf.getvalue())
+
+    storage = FakeStorageAdapter()
+    slug = restore_workspace(bundle_path, session, storage)
+    assert slug == "slim-restore-ws"
+
+    restored_ws = session.query(Workspace).filter_by(slug="slim-restore-ws").one()
+    page_nodes = [n for s in restored_ws.spaces for n in s.nodes if n.type == "page"]
+    assert len(page_nodes) == 1
+    p = page_nodes[0]
+    assert p.current_revision is not None
+    assert p.current_revision.content == "# Page\nCurrent content."
+    assert len(p.revisions) == 1

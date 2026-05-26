@@ -1,21 +1,17 @@
-# ruff: noqa: F821
-# (#123) v3 export logic below references the removed Page/Collection ORM
-# classes; these calls NameError at runtime. The v4 rewrite lands in #132 (2.0j),
-# which will reference this code as the migration source.
 """Export a workspace to a portable zip bundle.
 
-Bundle layout (schema v3):
+Bundle layout (schema v4):
     marrow-export-{workspace-slug}-{timestamp}.zip
     ├── manifest.json
-    ├── pages/{page-id}.json          # canonical BlockNote JSON (v3 only, format='json')
-    ├── pages/{page-id}.md            # human-readable Markdown (all versions)
+    ├── pages/{node-id}.json          # canonical BlockNote JSON (format='json')
+    ├── pages/{node-id}.md            # human-readable Markdown (all pages)
     ├── assets/{asset-id}{ext}
-    ├── revisions/{page-id}/{revision-id}.json   # for JSON-format revisions
-    ├── revisions/{page-id}/{revision-id}.md     # for all revisions
+    ├── revisions/{node-id}/{revision-id}.json   # for JSON-format revisions
+    ├── revisions/{node-id}/{revision-id}.md     # for all revisions
     └── links.json
 
-v1/v2 bundles only had .md files. v3 adds .json as the canonical format for
-revisions stored as BlockNote JSON.
+v3 bundles used collections[] + pages[] with page_id refs.
+v4 uses nodes[] (self-referential tree) with node_id refs throughout.
 """
 
 import hashlib
@@ -28,14 +24,10 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from .models import Attachment, Workspace
-
-# NOTE (#123): Page/Collection imports removed; the v3 export logic below still
-# references them and will NameError at call time. Rewrite for the node-tree
-# data model lands in #132 (2.0j) — bundle v4 format.
+from .models import Attachment, Node, Workspace
 from .storage import StorageAdapter
 
-SCHEMA_VERSION = "3"
+SCHEMA_VERSION = "4"
 
 
 def _sha256(data: bytes) -> str:
@@ -47,12 +39,17 @@ def _extract_hrefs(content: str) -> list[str]:
     return re.findall(r"\[(?:[^\]]*)\]\(([^)]+)\)", content)
 
 
-def _collect_pages(workspace: Workspace) -> list[Page]:
-    pages: list[Page] = []
+def _collect_all_nodes(workspace: Workspace) -> list[Node]:
+    """Return all non-deleted nodes (folders and pages) for the workspace."""
+    nodes: list[Node] = []
     for space in workspace.spaces:
-        for collection in space.collections:
-            pages.extend(collection.pages)
-    return pages
+        nodes.extend(n for n in space.nodes if n.deleted_at is None)
+    return nodes
+
+
+def _collect_page_nodes(workspace: Workspace) -> list[Node]:
+    """Return all non-deleted page-type nodes for the workspace."""
+    return [n for n in _collect_all_nodes(workspace) if n.type == "page"]
 
 
 # ---------------------------------------------------------------------------
@@ -191,58 +188,57 @@ def blocks_to_markdown(content_json: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _build_links(pages: list[Page], page_id_set: set[str]) -> dict:
+def _build_links(page_nodes: list[Node], node_id_set: set[str]) -> dict:
     internal_links: list[dict] = []
     broken_links: list[dict] = []
 
-    for page in pages:
-        if page.current_revision is None:
+    for node in page_nodes:
+        if node.current_revision is None:
             continue
-        content = page.current_revision.content or ""
-        content_format = page.current_revision.content_format
+        content = node.current_revision.content or ""
+        content_format = node.current_revision.content_format
 
-        # For JSON revisions, convert to markdown first for link extraction
         if content_format == "json":
             content = blocks_to_markdown(content)
 
         for href in _extract_hrefs(content):
-            source = str(page.id)
+            source = str(node.id)
             candidate = href.removeprefix("/pages/").rstrip("/")
-            if candidate in page_id_set:
+            if candidate in node_id_set:
                 internal_links.append(
-                    {"source_page_id": source, "target_page_id": candidate, "href": href}
+                    {"source_node_id": source, "target_node_id": candidate, "href": href}
                 )
             elif href.startswith("/") or not href.startswith(("http://", "https://")):
-                broken_links.append({"source_page_id": source, "href": href})
+                broken_links.append({"source_node_id": source, "href": href})
 
-    linked_ids = {lnk["target_page_id"] for lnk in internal_links}
-    orphaned = [str(p.id) for p in pages if str(p.id) not in linked_ids]
+    linked_ids = {lnk["target_node_id"] for lnk in internal_links}
+    orphaned = [str(n.id) for n in page_nodes if str(n.id) not in linked_ids]
 
     return {
         "internal_links": internal_links,
         "broken_links": broken_links,
-        "orphaned_pages": orphaned,
+        "orphaned_nodes": orphaned,
     }
 
 
 def _build_manifest(
     workspace: Workspace,
-    pages: list[Page],
+    all_nodes: list[Node],
+    page_nodes: list[Node],
     attachment_records: list[dict],
     export_timestamp: str,
 ) -> dict:
     spaces = workspace.spaces
-    collections = [c for s in spaces for c in s.collections]
 
     revision_records = [
         {
             "id": str(rev.id),
-            "page_id": str(rev.page_id),
+            "node_id": str(rev.node_id),
             "content_format": rev.content_format,
             "created_at": rev.created_at.isoformat(),
         }
-        for page in pages
-        for rev in page.revisions
+        for node in page_nodes
+        for rev in node.revisions
     ]
 
     org = workspace.organization
@@ -272,28 +268,22 @@ def _build_manifest(
             }
             for s in spaces
         ],
-        "collections": [
+        "nodes": [
             {
-                "id": str(c.id),
-                "space_id": str(c.space_id),
-                "slug": c.slug,
-                "name": c.name,
-                "created_at": c.created_at.isoformat(),
-            }
-            for c in collections
-        ],
-        "pages": [
-            {
-                "id": str(p.id),
-                "collection_id": str(p.collection_id),
-                "slug": p.slug,
-                "title": p.title,
+                "id": str(n.id),
+                "space_id": str(n.space_id),
+                "parent_id": str(n.parent_id) if n.parent_id else None,
+                "type": n.type,
+                "name": n.name,
+                "slug": n.slug,
+                "position": n.position,
+                "description": n.description if n.type == "folder" else None,
                 "current_revision_id": (
-                    str(p.current_revision_id) if p.current_revision_id else None
+                    str(n.current_revision_id) if n.current_revision_id else None
                 ),
-                "created_at": p.created_at.isoformat(),
+                "created_at": n.created_at.isoformat(),
             }
-            for p in pages
+            for n in all_nodes
         ],
         "revisions": revision_records,
         "attachments": attachment_records,
@@ -315,24 +305,21 @@ def estimate_export_sizes(
     if workspace is None:
         raise ValueError(f"Workspace '{slug}' not found")
 
-    pages = _collect_pages(workspace)
-    for page in pages:
-        _ = page.current_revision
-        _ = page.revisions
-        _ = page.attachments
+    page_nodes = _collect_page_nodes(workspace)
+    for node in page_nodes:
+        _ = node.current_revision
+        _ = node.revisions
+        _ = node.attachments
 
-    attachment_bytes = 0
-    for page in pages:
-        for att in page.attachments:
-            attachment_bytes += att.size_bytes
+    attachment_bytes = sum(att.size_bytes for node in page_nodes for att in node.attachments)
 
     current_content_bytes = sum(
-        len((page.current_revision.content or "").encode())
-        for page in pages
-        if page.current_revision
+        len((node.current_revision.content or "").encode())
+        for node in page_nodes
+        if node.current_revision
     )
     revision_bytes = sum(
-        len((rev.content or "").encode()) for page in pages for rev in page.revisions
+        len((rev.content or "").encode()) for node in page_nodes for rev in node.revisions
     )
 
     slim_bytes = current_content_bytes + attachment_bytes
@@ -357,14 +344,15 @@ def export_workspace(
     if workspace is None:
         raise ValueError(f"Workspace '{slug}' not found")
 
-    pages = _collect_pages(workspace)
-    page_id_set = {str(p.id) for p in pages}
+    all_nodes = _collect_all_nodes(workspace)
+    page_nodes = [n for n in all_nodes if n.type == "page"]
+    node_id_set = {str(n.id) for n in page_nodes}
 
     # Eagerly touch lazy-loaded relationships while the session is open.
-    for page in pages:
-        _ = page.current_revision
-        _ = page.revisions
-        _ = page.attachments
+    for node in page_nodes:
+        _ = node.current_revision
+        _ = node.revisions
+        _ = node.attachments
 
     export_timestamp = datetime.now(timezone.utc).isoformat()
     timestamp_fmt = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -380,40 +368,37 @@ def export_workspace(
     buf = BytesIO()
 
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for page in pages:
-            page_id = str(page.id)
+        for node in page_nodes:
+            node_id = str(node.id)
 
-            # Current page content — always write .md; also write .json for JSON format.
-            if page.current_revision:
-                content = page.current_revision.content
-                fmt = page.current_revision.content_format
+            if node.current_revision:
+                content = node.current_revision.content
+                fmt = node.current_revision.content_format
             else:
                 content = ""
                 fmt = "markdown"
 
             if fmt == "json":
-                zf.writestr(f"pages/{page_id}.json", content)
-                zf.writestr(f"pages/{page_id}.md", blocks_to_markdown(content))
+                zf.writestr(f"pages/{node_id}.json", content)
+                zf.writestr(f"pages/{node_id}.md", blocks_to_markdown(content))
             else:
-                zf.writestr(f"pages/{page_id}.md", content)
+                zf.writestr(f"pages/{node_id}.md", content)
 
             if not slim:
-                # Every revision (append-only history).
-                for rev in page.revisions:
+                for rev in node.revisions:
                     rev_id = str(rev.id)
                     if rev.content_format == "json":
-                        zf.writestr(f"revisions/{page_id}/{rev_id}.json", rev.content)
+                        zf.writestr(f"revisions/{node_id}/{rev_id}.json", rev.content)
                         zf.writestr(
-                            f"revisions/{page_id}/{rev_id}.md",
+                            f"revisions/{node_id}/{rev_id}.md",
                             blocks_to_markdown(rev.content),
                         )
                     else:
-                        zf.writestr(f"revisions/{page_id}/{rev_id}.md", rev.content)
+                        zf.writestr(f"revisions/{node_id}/{rev_id}.md", rev.content)
 
-        # Attachments — verify hash before including.
         all_attachments: list[Attachment] = []
-        for page in pages:
-            all_attachments.extend(page.attachments)
+        for node in page_nodes:
+            all_attachments.extend(node.attachments)
 
         for att in all_attachments:
             att_id = str(att.id)
@@ -429,7 +414,7 @@ def export_workspace(
             attachment_records.append(
                 {
                     "id": att_id,
-                    "page_id": str(att.page_id),
+                    "node_id": str(att.node_id),
                     "filename": att.filename,
                     "hash": att.hash,
                     "size_bytes": att.size_bytes,
@@ -437,9 +422,11 @@ def export_workspace(
                 }
             )
 
-        zf.writestr("links.json", json.dumps(_build_links(pages, page_id_set), indent=2))
+        zf.writestr("links.json", json.dumps(_build_links(page_nodes, node_id_set), indent=2))
 
-        manifest = _build_manifest(workspace, pages, attachment_records, export_timestamp)
+        manifest = _build_manifest(
+            workspace, all_nodes, page_nodes, attachment_records, export_timestamp
+        )
         if slim:
             manifest["slim"] = True
             manifest["revisions"] = []

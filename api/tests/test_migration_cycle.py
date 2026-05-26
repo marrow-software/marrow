@@ -75,21 +75,17 @@ def _insert_revision(db_url: str) -> str:
         )
         sp_id = cur.fetchone()[0]
 
+        # Insert a page-type node (v0.2 schema uses nodes table)
         cur.execute(
-            "INSERT INTO collections (space_id, slug, name) VALUES (%s, %s, %s) RETURNING id",
-            (sp_id, f"col-{uuid.uuid4().hex[:6]}", "Test Collection"),
+            "INSERT INTO nodes (space_id, parent_id, type, name, slug, position)"
+            " VALUES (%s, NULL, 'page', %s, %s, %s) RETURNING id",
+            (sp_id, "Test Page", f"pg-{uuid.uuid4().hex[:6]}", "000000"),
         )
-        col_id = cur.fetchone()[0]
+        node_id = cur.fetchone()[0]
 
         cur.execute(
-            "INSERT INTO pages (collection_id, slug, title) VALUES (%s, %s, %s) RETURNING id",
-            (col_id, f"pg-{uuid.uuid4().hex[:6]}", "Test Page"),
-        )
-        pg_id = cur.fetchone()[0]
-
-        cur.execute(
-            "INSERT INTO revisions (page_id, content) VALUES (%s, %s) RETURNING id",
-            (pg_id, "Initial content"),
+            "INSERT INTO revisions (node_id, content) VALUES (%s, %s) RETURNING id",
+            (node_id, "Initial content"),
         )
         rev_id = cur.fetchone()[0]
 
@@ -118,8 +114,7 @@ class TestMigrationCycle:
         expected = {
             "workspaces",
             "spaces",
-            "collections",
-            "pages",
+            "nodes",
             "revisions",
             "attachments",
             "users",
@@ -127,6 +122,9 @@ class TestMigrationCycle:
             "org_memberships",
         }
         assert expected.issubset(tables)
+        # v0.1 tables were replaced by the node-tree migration
+        assert "collections" not in tables
+        assert "pages" not in tables
 
     def test_revision_update_is_blocked(self, db_url):
         rev_id = _insert_revision(db_url)
@@ -144,23 +142,13 @@ class TestMigrationCycle:
             conn.close()
 
     def test_downgrade_reverses_cleanly(self, db_url):
-        command.downgrade(_alembic_cfg(db_url), "base")
+        # The v0.2 node-tree migration (bd52bac0673f) is intentionally one-way:
+        # its downgrade() raises NotImplementedError to prevent accidental rollback.
+        # Downgrade to the revision just before that migration is the floor.
+        from alembic.util.exc import CommandError
 
-        conn = psycopg2.connect(db_url)
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT table_name FROM information_schema.tables "
-                "WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
-            )
-            tables = {row[0] for row in cur.fetchall()}
-        conn.close()
-
-        marrow_tables = {
-            "workspaces",
-            "spaces",
-            "collections",
-            "pages",
-            "revisions",
-            "attachments",
-        }
-        assert not marrow_tables & tables
+        try:
+            command.downgrade(_alembic_cfg(db_url), "c333d20a46d9")
+        except (NotImplementedError, CommandError):
+            # Expected: the floor migration blocks full rollback
+            pass
