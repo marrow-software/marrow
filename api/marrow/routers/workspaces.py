@@ -18,6 +18,7 @@ from ..dependencies import AuthContext, get_db, get_search_backend, verify_auth
 from ..models import Node, OrgMembership, OrgRole, Space, Workspace
 from ..rbac import require_workspace_role
 from ..schemas import (
+    NodeRead,
     NodeTreeItem,
     SearchResponse,
     SearchResultItem,
@@ -199,6 +200,41 @@ def get_workspace_tree(
             )
             for s in spaces
         ],
+    )
+
+
+@router.get("/{workspace_id}/trash", response_model=list[NodeRead])
+def list_workspace_trash(
+    workspace_id: UUID,
+    db: Session = Depends(get_db),
+    _: AuthContext = Depends(require_workspace_role(OrgRole.VIEWER)),
+):
+    """List top-level trashed nodes — those whose nearest non-trashed ancestor
+    is the space (either a root node, or a node whose parent is still live)."""
+    space_ids = [
+        sid
+        for (sid,) in db.execute(
+            select(Space.id).where(Space.workspace_id == workspace_id)
+        ).all()
+    ]
+    if not space_ids:
+        return []
+
+    # Trashed node is "top-level" iff parent_id is NULL or parent.deleted_at IS NULL.
+    parent = Node.__table__.alias("parent")
+    return (
+        db.execute(
+            select(Node)
+            .outerjoin(parent, parent.c.id == Node.parent_id)
+            .where(
+                Node.space_id.in_(space_ids),
+                Node.deleted_at.is_not(None),
+                (Node.parent_id.is_(None)) | (parent.c.deleted_at.is_(None)),
+            )
+            .order_by(Node.deleted_at.desc())
+        )
+        .scalars()
+        .all()
     )
 
 

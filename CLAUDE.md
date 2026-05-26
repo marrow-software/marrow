@@ -98,9 +98,10 @@ cd api && alembic revision --autogenerate -m "description"
 cd api && alembic upgrade head
 cd api && alembic downgrade -1
 
-# CLI (export/restore)
+# CLI (export/restore/trash)
 cd api && marrow export --workspace <slug> --output <path>
 cd api && marrow restore <bundle.zip>
+cd api && marrow purge-trash --older-than-days 30   # hard-delete old trashed nodes (cron'able)
 
 # Frontend
 cd web && npm run dev
@@ -274,6 +275,9 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | POST | /api/workspaces/restore | Restore a workspace from an uploaded export bundle zip | — |
 | GET/POST | /api/workspaces/{id}/spaces/ | List / create spaces | viewer/editor |
 | GET/DELETE | /api/workspaces/{id}/spaces/{sid} | Get / delete space | viewer/owner |
+| GET | /api/workspaces/{id}/trash | List top-level trashed nodes | viewer |
+| POST | /api/nodes/{id}/restore | Restore a trashed node + subtree (422 if parent still trashed) | editor |
+| DELETE | /api/nodes/{id}/purge | Hard-delete a trashed node and its subtree | owner |
 
 > **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
 >

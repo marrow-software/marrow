@@ -89,5 +89,58 @@ def restore(
         raise typer.Exit(1)
 
 
+@app.command("purge-trash")
+def purge_trash(
+    older_than_days: int = typer.Option(
+        30, "--older-than-days", help="Purge trashed nodes older than N days"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Report what would be deleted without changing anything"
+    ),
+    database_url: str | None = typer.Option(
+        None, "--database-url", envvar="DATABASE_URL", help="PostgreSQL connection URL"
+    ),
+) -> None:
+    """Hard-delete trashed nodes older than the threshold.
+
+    Safe to run repeatedly — only nodes with ``deleted_at < NOW() - INTERVAL``
+    are affected. Children are removed via the existing ON DELETE CASCADE FKs,
+    so only top-level trashed ancestors need to be deleted explicitly.
+    """
+    load_dotenv()
+
+    from sqlalchemy import delete, text
+
+    from .db import get_session
+    from .models import Node
+
+    with get_session(database_url) as session:
+        # Only delete top-level trashed nodes (parent is NULL or live); children
+        # cascade via FK. Otherwise we'd attempt to delete already-cascaded rows.
+        rows = session.execute(
+            text("""
+                SELECT n.id FROM nodes n
+                LEFT JOIN nodes p ON p.id = n.parent_id
+                WHERE n.deleted_at IS NOT NULL
+                  AND n.deleted_at < NOW() - make_interval(days => :days)
+                  AND (n.parent_id IS NULL OR p.deleted_at IS NULL)
+            """),
+            {"days": older_than_days},
+        ).fetchall()
+        ids = [r[0] for r in rows]
+
+        if dry_run:
+            typer.echo(f"Would purge {len(ids)} top-level trashed node(s).")
+            return
+
+        if not ids:
+            typer.echo("No trashed nodes to purge.")
+            return
+
+        session.execute(delete(Node).where(Node.id.in_(ids)))
+        session.commit()
+        typer.echo(f"Purged {len(ids)} trashed node(s) (cascaded to descendants).")
+
+
 if __name__ == "__main__":
     app()
