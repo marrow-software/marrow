@@ -11,11 +11,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_search_backend, verify_auth
-from ..models import Node, OrgMembership, OrgRole, Space, Workspace
+from ..models import Node, OrgRole, Space, Workspace
 from ..rbac import require_workspace_role
 from ..schemas import (
     NodeRead,
@@ -23,7 +22,6 @@ from ..schemas import (
     SearchResponse,
     SearchResultItem,
     SpaceTreeItem,
-    WorkspaceCreate,
     WorkspaceRead,
     WorkspaceTree,
 )
@@ -80,38 +78,10 @@ def list_workspaces(
     )
 
 
-@router.post("", response_model=WorkspaceRead, status_code=201)
-def create_workspace(
-    body: WorkspaceCreate,
-    db: Session = Depends(get_db),
-    auth: AuthContext = Depends(verify_auth),
-):
-    org_id = body.org_id
-
-    # For session users without explicit org_id, use their first org
-    if org_id is None and auth.user_id is not None:
-        membership = db.execute(
-            select(OrgMembership)
-            .where(OrgMembership.user_id == auth.user_id)
-            .order_by(OrgMembership.created_at)
-        ).scalar_one_or_none()
-        if membership is None:
-            raise HTTPException(403, "You must belong to an organization to create a workspace")
-        org_id = membership.org_id
-
-    # For API key/anonymous, org_id is required
-    if org_id is None:
-        raise HTTPException(422, "org_id is required for API key or anonymous access")
-
-    ws = Workspace(org_id=org_id, slug=body.slug, name=body.name)
-    db.add(ws)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        raise HTTPException(status_code=409, detail=f"Workspace slug '{body.slug}' already exists")
-    db.refresh(ws)
-    return ws
+@router.post("", status_code=410)
+def create_workspace_deprecated():
+    """Deprecated: use POST /api/orgs/{org_id}/workspaces instead."""
+    raise HTTPException(410, "This endpoint has been removed. Use POST /api/orgs/{org_id}/workspaces instead.")
 
 
 @router.post("/restore", response_model=WorkspaceRead, status_code=201)

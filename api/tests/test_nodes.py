@@ -747,3 +747,76 @@ class TestListSpaceRootNodes:
         finally:
             db.rollback()
             client.cookies.clear()
+
+
+class TestCreateWorkspaceInOrg:
+    def test_editor_can_create_workspace(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "editor-ws@test.com")
+            org = Organization(slug=f"org-{uuid.uuid4().hex[:6]}", name="Test Org")
+            db.add(org)
+            db.flush()
+            _add_membership(db, org, user, OrgRole.EDITOR)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.post(
+                f"/api/orgs/{org.id}/workspaces",
+                json={"slug": "new-ws", "name": "New Workspace"},
+            )
+            assert res.status_code == 201, res.text
+            data = res.json()
+            assert data["slug"] == "new-ws"
+            assert data["org_id"] == str(org.id)
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_viewer_cannot_create_workspace(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "viewer-ws@test.com")
+            org = Organization(slug=f"org-{uuid.uuid4().hex[:6]}", name="Test Org")
+            db.add(org)
+            db.flush()
+            _add_membership(db, org, user, OrgRole.VIEWER)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.post(
+                f"/api/orgs/{org.id}/workspaces",
+                json={"slug": "viewer-ws", "name": "Viewer Workspace"},
+            )
+            assert res.status_code == 403
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_old_create_workspace_route_returns_410(self, client):
+        res = client.post("/api/workspaces", json={"slug": "old", "name": "Old"})
+        assert res.status_code == 410
+
+    def test_slug_conflict_returns_409(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "owner-ws@test.com")
+            org = Organization(slug=f"org-{uuid.uuid4().hex[:6]}", name="Test Org")
+            db.add(org)
+            db.flush()
+            _add_membership(db, org, user, OrgRole.OWNER)
+            db.commit()
+
+            _auth_cookie(client, user)
+            client.post(f"/api/orgs/{org.id}/workspaces", json={"slug": "dupe", "name": "First"})
+            res = client.post(f"/api/orgs/{org.id}/workspaces", json={"slug": "dupe", "name": "Second"})
+            assert res.status_code == 409
+        finally:
+            db.rollback()
+            client.cookies.clear()
