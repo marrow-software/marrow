@@ -21,7 +21,7 @@ from ..auth import (
     make_session_cookie_params,
 )
 from ..dependencies import get_db
-from ..models import Organization, OrgMembership, OrgRole, User
+from ..models import Organization, OrgMembership, OrgRole, User, Workspace
 from ..schemas import AuthStatus, UserRead
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -31,12 +31,22 @@ def _unique_org_slug(db: Session, base: str) -> str:
     """Generate a unique org slug from a base string, appending a suffix on collision."""
     slug = re.sub(r"[^a-z0-9-]", "-", base.lower()).strip("-")[:50] or "org"
     candidate = slug
-    attempt = 0
-    while db.query(Organization).filter(Organization.slug == candidate).first() is not None:
-        attempt += 1
-        suffix = uuid.uuid4().hex[:4]
-        candidate = f"{slug}-{suffix}"
-    return candidate
+    for attempt in range(1, 20):
+        if db.query(Organization).filter(Organization.slug == candidate).first() is None:
+            return candidate
+        candidate = f"{slug}-{attempt:02x}{uuid.uuid4().hex[:2]}"
+    raise RuntimeError(f"Could not generate a unique org slug from base '{base}' after 20 attempts")
+
+
+def _unique_workspace_slug(db: Session, base: str) -> str:
+    """Generate a unique workspace slug from a base string, appending a suffix on collision."""
+    slug = re.sub(r"[^a-z0-9-]", "-", base.lower()).strip("-")[:50] or "workspace"
+    candidate = slug
+    for attempt in range(1, 20):
+        if db.query(Workspace).filter(Workspace.slug == candidate).first() is None:
+            return candidate
+        candidate = f"{slug}-{attempt:02x}{uuid.uuid4().hex[:2]}"
+    raise RuntimeError(f"Could not generate a unique workspace slug from base '{base}' after 20 attempts")
 
 
 @router.get("/login")
@@ -103,6 +113,7 @@ async def callback(request: Request):
         )
         for membership in pending:
             membership.user_id = user.id
+        db.flush()  # flush claimed memberships so has_memberships query sees them
 
         # Auto-create personal org if user has no memberships
         has_memberships = (
@@ -111,10 +122,10 @@ async def callback(request: Request):
 
         if not has_memberships:
             slug_base = email.split("@")[0] if email else "user"
-            slug = _unique_org_slug(db, slug_base)
+            org_slug = _unique_org_slug(db, slug_base)
             personal_org = Organization(
-                name=f"{name}'s Space",
-                slug=slug,
+                name=f"{name}'s Org",
+                slug=org_slug,
             )
             db.add(personal_org)
             db.flush()
@@ -124,6 +135,14 @@ async def callback(request: Request):
                     user_id=user.id,
                     email=user.email,
                     role=OrgRole.OWNER.value,
+                )
+            )
+            ws_slug = _unique_workspace_slug(db, slug_base)
+            db.add(
+                Workspace(
+                    org_id=personal_org.id,
+                    slug=ws_slug,
+                    name="Default",
                 )
             )
 

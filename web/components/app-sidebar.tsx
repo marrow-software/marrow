@@ -25,6 +25,7 @@ interface Props {
   user?: User | null;
   panel: RailPanel;
   memberCount: number | null;
+  showOrgSettings: boolean;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
@@ -182,7 +183,15 @@ function SpaceSection({
   );
 }
 
-function WorkspaceHeader({ tree, memberCount }: { tree: WorkspaceTree; memberCount: number | null }) {
+function WorkspaceHeader({
+  tree,
+  memberCount,
+  showOrgSettings,
+}: {
+  tree: WorkspaceTree;
+  memberCount: number | null;
+  showOrgSettings: boolean;
+}) {
   return (
     <div className="flex items-center gap-2 border-b border-sidebar-border px-3.5 py-3 group">
       <div className="min-w-0 flex-1">
@@ -193,13 +202,15 @@ function WorkspaceHeader({ tree, memberCount }: { tree: WorkspaceTree; memberCou
       </div>
       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
         <ExportDialog workspaceId={tree.id} workspaceName={tree.name} />
-        <a
-          href={`/orgs/${tree.org_id}/settings`}
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Organization settings"
-        >
-          <Settings className="h-3.5 w-3.5" />
-        </a>
+        {showOrgSettings && (
+          <a
+            href={`/orgs/${tree.org_id}/settings`}
+            className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="Organization settings"
+          >
+            <Settings className="h-3.5 w-3.5" />
+          </a>
+        )}
       </div>
       <button
         type="button"
@@ -278,7 +289,7 @@ function PagesPanel({
   );
 }
 
-export function AppSidebar({ tree, panel, memberCount, searchInputRef }: Props) {
+export function AppSidebar({ tree, panel, memberCount, showOrgSettings, searchInputRef }: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -288,7 +299,7 @@ export function AppSidebar({ tree, panel, memberCount, searchInputRef }: Props) 
 
   return (
     <aside className="flex h-full w-[272px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <WorkspaceHeader tree={tree} memberCount={memberCount} />
+      <WorkspaceHeader tree={tree} memberCount={memberCount} showOrgSettings={showOrgSettings} />
 
       {panel === "pages" && <PagesPanel tree={tree} activePath={pathname} refresh={refresh} />}
       {panel === "search" && <SearchPanel workspaceId={tree.id} inputRef={searchInputRef} />}
