@@ -150,8 +150,7 @@ marrow/
 │   │       ├── organizations.py      # Org CRUD, member management (invite, role, remove)
 │   │       ├── workspaces.py
 │   │       └── spaces.py
-│   │       # Node CRUD/tree routes land in #124 (2.0b); old collection/page routers
-│   │       # were removed by the v0.2 schema migration (#123).
+│   │       └── nodes.py             # Node CRUD, children, revisions, attachments
 │   ├── tests/
 │   │   ├── test_fractional_index.py  # Unit tests for fractional_index helpers
 │   │   ├── test_models_smoke.py
@@ -179,7 +178,7 @@ marrow/
 │   │       └── pages/[pageId]/
 │   │           └── page.tsx          # Page editor
 │   ├── components/
-│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → Collections → Pages + search
+│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → mixed folder/page node tree + search
 │   │   ├── search-dialog.tsx         # Cmd+K search dialog
 │   │   ├── export-dialog.tsx         # Export workspace dialog (full / slim, size estimate)
 │   │   ├── restore-dialog.tsx        # Restore workspace from bundle dialog (drag-and-drop upload)
@@ -283,10 +282,19 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET | /api/workspaces/{id}/trash | List top-level trashed nodes | viewer |
 | POST | /api/nodes/{id}/restore | Restore a trashed node + subtree (422 if parent still trashed) | editor |
 | DELETE | /api/nodes/{id}/purge | Hard-delete a trashed node and its subtree | owner |
+| GET/POST | /api/spaces/{sid}/nodes | List space-root nodes / create node (folder or page) | viewer/editor |
+| GET | /api/nodes/{nid} | Get node (with current revision content for pages) | viewer |
+| PATCH | /api/nodes/{nid} | Update node (name, slug, parent, position, content for pages) | editor |
+| DELETE | /api/nodes/{nid} | Soft-delete node (sets `deleted_at`; subtree cascades) | editor |
+| GET | /api/nodes/{nid}/children | List children of a folder node | viewer |
+| GET | /api/nodes/{nid}/revisions | List revisions for a page node | viewer |
+| GET | /api/nodes/{nid}/revisions/{rid} | Get a specific revision | viewer |
+| GET/POST | /api/nodes/{nid}/attachments | List / upload attachments on a page node | viewer/editor |
+| GET | /api/nodes/{nid}/attachments/{aid}/file | Download attachment binary | viewer |
 
-> **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
+> **v0.1 → v0.2 schema collapse:** the old `collections` and `pages` tables were folded into a single self-referential `nodes` tree (type ∈ {folder, page}). Routes that used to live under `/api/collections/...` or `/api/pages/...` are gone — use the `/api/nodes/...` and `/api/spaces/{sid}/nodes` routes above.
 >
-> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
+> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`.
 
 ### Storage Adapter Interface
 
@@ -303,12 +311,12 @@ class StorageAdapter(ABC):
 ```text
 marrow-export-{workspace-slug}-{timestamp}.zip          # full
 marrow-export-{workspace-slug}-slim-{timestamp}.zip     # slim
-├── manifest.json        # workspace + org metadata, all entity IDs, schema version (v3)
+├── manifest.json        # workspace + org metadata, full node tree, schema version (v4)
 ├── pages/
-│   ├── {page-id}.md     # human-readable Markdown (all pages)
-│   └── {page-id}.json   # canonical BlockNote JSON (JSON-format pages only)
+│   ├── {node-id}.md     # human-readable Markdown (page-typed nodes)
+│   └── {node-id}.json   # canonical BlockNote JSON (JSON-format pages only)
 ├── revisions/
-│   └── {page-id}/
+│   └── {node-id}/
 │       ├── {revision-id}.md     # Markdown revisions (legacy) or human-readable export
 │       └── {revision-id}.json   # BlockNote JSON revisions (canonical)
 ├── assets/
@@ -316,10 +324,11 @@ marrow-export-{workspace-slug}-slim-{timestamp}.zip     # slim
 └── links.json           # internal links, broken links, orphaned pages
 ```
 
-v1/v2 bundles had only `.md` files. v3 adds `.json` as canonical for JSON-format revisions.
-Restore supports v1, v2, and v3 bundles.
+**Schema versions**: v1/v2 were Markdown-only. v3 added `.json` as canonical. v4 (Marrow 0.2) carries the `nodes` tree (folders + pages, with `parent_id`, `position`, `deleted_at`) instead of the old `collections`+`pages` shape. Restore supports v1–v4 — older bundles are auto-upgraded onto the node tree on read.
 
 **Slim bundles** omit the `revisions/` directory entirely and set `"slim": true` + `"revisions": []` in `manifest.json`. Restore recreates one revision per page from `pages/` content. CLI: `marrow export --slim`; API: `?slim=true`.
+
+**Trash**: soft-deleted nodes are excluded from exports by default. Pass `marrow export --include-trash` (or `?include_trash=true`) to include them; the manifest records `"include_trash": bool` so restore replays each node's `deleted_at`.
 
 ### Authentication
 
@@ -331,7 +340,7 @@ Marrow supports three authentication methods, checked in priority order:
 
 **OIDC flow**: The backend is the OIDC Relying Party. `GET /api/auth/login` redirects to the IdP. `GET /api/auth/callback` exchanges the code, upserts the user in the `users` table, claims any pending org memberships matching the user's email, auto-creates a personal org if the user has no memberships, and sets an httpOnly session cookie. The `COOKIE_DOMAIN` env var controls the cookie domain (set to `localhost` for dev so the cookie is shared between `:3000` and `:8000`).
 
-**RBAC**: Org membership with roles (owner/editor/viewer) enforced on all data routes. Role is resolved by following the resource chain (page → collection → space → workspace → org → membership). Dependency factories in `rbac.py` handle resolution for each resource level.
+**RBAC**: Org membership with roles (owner/editor/viewer) enforced on all data routes. Role is resolved by following the resource chain (node → space → workspace → org → membership). Dependency factories in `rbac.py` handle resolution for each resource level.
 
 **Key files**: `auth.py` (config, JWT helpers), `dependencies.py` (`verify_auth` + `AuthContext`), `rbac.py` (role enforcement dependencies), `routers/auth.py` (login/callback/me/logout), `routers/organizations.py` (org CRUD + member management).
 
@@ -341,7 +350,7 @@ Marrow supports three authentication methods, checked in priority order:
 - **Auto-save**: `PageEditor` debounces saves 2 seconds after last keystroke; shows Saving… / Saved / Error status
 - **Content format**: new saves store BlockNote JSON (`content_format='json'`); legacy Markdown revisions are loaded via `tryParseMarkdownToBlocks` for backward compat
 - **Editor features**: code blocks (Shiki syntax highlighting), tables (`TableHandlesController`), `@` member mentions (custom inline-content spec carrying `userId` + `displayName`, fed by `listOrgMembers`), `/page` slash item that opens a page picker and inserts a WikiLink (`searchWorkspace`)
-- **Sidebar create flows**: hover-to-reveal `+` buttons open `CreateDialog` with slug auto-generation via `slugify()`
+- **Sidebar create flows**: each row in the mixed folder/page node tree exposes inline `+ folder` / `+ page` actions; new nodes are inserted at the end of their parent's children list using `position` (a TEXT fractional index — sort lexicographically, never numerically). Slugs auto-generate via `slugify()`.
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 
@@ -371,10 +380,8 @@ Tests in `api/tests/` are **integration tests** — they hit a real database. A 
 ## What's Not Built Yet
 
 - Meilisearch upgrade for fuzzy/typo-tolerant search (PostgreSQL FTS is implemented)
-- S3-compatible storage adapter
-- Rich text / TipTap editor (currently plain Markdown textarea)
-- User permissions and workspace-level access control (OIDC auth is implemented but no per-user data scoping)
+- Workspace-level / per-node access control (OIDC + org RBAC are implemented; finer-grained ACLs are not)
 - Audit log / audit_events table
 - Task management and integrations
-- Deployment docs (Docker image, K8s, systemd)
-- Page templates, collaborative editing, offline sync
+- K8s and systemd deployment guides (Docker Compose is documented)
+- Page templates
