@@ -139,6 +139,7 @@ marrow/
 │   │   ├── rbac.py                   # Role-based access control dependency factories
 │   │   ├── models.py                 # SQLAlchemy ORM models (incl. User)
 │   │   ├── schemas.py                # Pydantic request/response schemas (incl. AuthStatus)
+│   │   ├── fractional_index.py       # Fractional index helpers: between(a,b), after(a)
 │   │   ├── search.py                 # SearchBackend ABC + PostgresSearchBackend
 │   │   ├── storage.py                # StorageAdapter ABC + LocalFilesystemAdapter
 │   │   ├── export.py                 # Export workspace → zip bundle
@@ -152,6 +153,7 @@ marrow/
 │   │       # Node CRUD/tree routes land in #124 (2.0b); old collection/page routers
 │   │       # were removed by the v0.2 schema migration (#123).
 │   ├── tests/
+│   │   ├── test_fractional_index.py  # Unit tests for fractional_index helpers
 │   │   ├── test_models_smoke.py
 │   │   ├── test_migration_cycle.py
 │   │   ├── test_auth.py              # Auth dependency, JWT, and auth router tests
@@ -186,6 +188,7 @@ marrow/
 │   ├── lib/
 │   │   ├── api.ts                    # apiFetch helper + all API client functions
 │   │   ├── types.ts                  # TypeScript interfaces mirroring API schemas
+│   │   ├── fractional-index.ts       # Wrappers around fractional-indexing npm package
 │   │   └── utils.ts
 │   └── hooks/
 │
