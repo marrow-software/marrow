@@ -13,12 +13,12 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { InlineCreateRow } from "@/components/sidebar/inline-create-row";
-import { createCollection, createPage, createSpace, slugify } from "@/lib/api";
+import { createNode, createSpace, slugify } from "@/lib/api";
 import { SearchPanel } from "@/components/rail-panels/search-panel";
 import { StarredPanel } from "@/components/rail-panels/starred-panel";
 import { InboxPanel } from "@/components/rail-panels/inbox-panel";
 import type { RailPanel } from "@/components/app-rail";
-import type { CollectionTreeItem, SpaceTreeItem, User, WorkspaceTree } from "@/lib/types";
+import type { NodeTreeItem, SpaceTreeItem, User, WorkspaceTree } from "@/lib/types";
 
 interface Props {
   tree: WorkspaceTree;
@@ -29,79 +29,139 @@ interface Props {
   searchInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
-function CollectionSection({
-  col,
+function NodeRow({
+  node,
+  spaceId,
   workspaceId,
   activePath,
+  depth,
   onCreated,
 }: {
-  col: CollectionTreeItem;
+  node: NodeTreeItem;
+  spaceId: string;
   workspaceId: string;
   activePath: string;
+  depth: number;
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [creatingPage, setCreatingPage] = useState(false);
+  const [creatingFolder, setCreatingFolder] = useState(false);
   const router = useRouter();
 
-  function startCreate() {
+  const href = `/w/${workspaceId}/n/${node.id}/${node.slug}`;
+  const isActive = activePath.startsWith(`/w/${workspaceId}/n/${node.id}`);
+  const indent = { paddingLeft: `${depth * 0.75 + 0.5}rem` };
+
+  if (node.type === "page") {
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton render={<a href={href} />} isActive={isActive} size="sm" style={indent}>
+          {node.name}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  }
+
+  // Folder
+  function startCreatePage() {
     setOpen(true);
-    setCreating(true);
+    setCreatingPage(true);
+  }
+  function startCreateFolder() {
+    setOpen(true);
+    setCreatingFolder(true);
   }
 
   return (
-    <div className="ml-3">
-      <div className="flex items-center justify-between py-0.5 group">
+    <div>
+      <div
+        className="group flex items-center justify-between py-0.5"
+        style={indent}
+      >
         <button
           onClick={() => setOpen((o) => !o)}
-          className="flex flex-1 items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+          className="flex flex-1 items-center gap-1 truncate text-xs font-medium text-muted-foreground hover:text-foreground"
         >
           {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-          {col.name}
+          <a
+            href={href}
+            onClick={(e) => e.stopPropagation()}
+            className={`truncate ${isActive ? "text-foreground" : ""}`}
+          >
+            {node.name}
+          </a>
         </button>
-        <button
-          type="button"
-          onClick={startCreate}
-          className="hidden group-hover:flex items-center text-muted-foreground hover:text-foreground"
-          title="New page"
-          aria-label="New page"
-        >
-          <FilePlus className="h-3 w-3" />
-        </button>
+        <div className="hidden items-center gap-1 pr-2 group-hover:flex">
+          <button
+            type="button"
+            onClick={startCreateFolder}
+            className="text-muted-foreground hover:text-foreground"
+            title="New folder"
+            aria-label="New folder"
+          >
+            <FolderPlus className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={startCreatePage}
+            className="text-muted-foreground hover:text-foreground"
+            title="New page"
+            aria-label="New page"
+          >
+            <FilePlus className="h-3 w-3" />
+          </button>
+        </div>
       </div>
       {open && (
         <SidebarMenu>
-          {creating && (
+          {creatingFolder && (
             <InlineCreateRow
-              placeholder="Page title"
-              className="flex items-center gap-2 px-2 py-1"
-              icon={<FilePlus className="h-3 w-3 text-muted-foreground" />}
+              placeholder="Folder name"
+              className="flex items-center gap-2 py-1"
+              style={{ paddingLeft: `${(depth + 1) * 0.75 + 0.5}rem` }}
+              icon={<FolderPlus className="h-3 w-3 text-muted-foreground" />}
               onCommit={async (name) => {
-                const page = await createPage(col.id, slugify(name), name);
-                setCreating(false);
-                router.push(`/w/${workspaceId}/pages/${page.id}?new=1`);
+                await createNode(spaceId, "folder", name, { parent_id: node.id });
+                setCreatingFolder(false);
                 onCreated();
               }}
-              onCancel={() => setCreating(false)}
+              onCancel={() => setCreatingFolder(false)}
             />
           )}
-          {col.pages.map((page) => {
-            const href = `/w/${workspaceId}/pages/${page.id}`;
-            const isActive = activePath === href;
-            return (
-              <SidebarMenuItem key={page.id}>
-                <SidebarMenuButton
-                  render={<a href={href} />}
-                  isActive={isActive}
-                  size="sm"
-                >
-                  {page.title}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-          {!creating && col.pages.length === 0 && (
-            <p className="px-2 py-1 text-xs text-muted-foreground">No pages yet</p>
+          {creatingPage && (
+            <InlineCreateRow
+              placeholder="Page title"
+              className="flex items-center gap-2 py-1"
+              style={{ paddingLeft: `${(depth + 1) * 0.75 + 0.5}rem` }}
+              icon={<FilePlus className="h-3 w-3 text-muted-foreground" />}
+              onCommit={async (name) => {
+                const page = await createNode(spaceId, "page", name, { parent_id: node.id });
+                setCreatingPage(false);
+                router.push(`/w/${workspaceId}/n/${page.id}/${page.slug}?new=1`);
+                onCreated();
+              }}
+              onCancel={() => setCreatingPage(false)}
+            />
+          )}
+          {node.children.map((child) => (
+            <NodeRow
+              key={child.id}
+              node={child}
+              spaceId={spaceId}
+              workspaceId={workspaceId}
+              activePath={activePath}
+              depth={depth + 1}
+              onCreated={onCreated}
+            />
+          ))}
+          {!creatingPage && !creatingFolder && node.children.length === 0 && (
+            <p
+              className="py-1 text-xs text-muted-foreground"
+              style={{ paddingLeft: `${(depth + 1) * 0.75 + 0.5}rem` }}
+            >
+              Empty
+            </p>
           )}
         </SidebarMenu>
       )}
@@ -121,16 +181,13 @@ function SpaceSection({
   onCreated: () => void;
 }) {
   const [open, setOpen] = useState(true);
-  const [creating, setCreating] = useState(false);
-
-  function startCreate() {
-    setOpen(true);
-    setCreating(true);
-  }
+  const [creatingPage, setCreatingPage] = useState(false);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const router = useRouter();
 
   return (
     <SidebarGroup>
-      <div className="flex items-center justify-between group">
+      <div className="group flex items-center justify-between">
         <SidebarGroupLabel
           className="flex flex-1 cursor-pointer items-center gap-2"
           onClick={() => setOpen((o) => !o)}
@@ -140,42 +197,75 @@ function SpaceSection({
           </span>
           {space.name}
         </SidebarGroupLabel>
-        <button
-          type="button"
-          onClick={startCreate}
-          className="mr-2 hidden group-hover:flex items-center text-muted-foreground hover:text-foreground"
-          title="New collection"
-          aria-label="New collection"
-        >
-          <FolderPlus className="h-3.5 w-3.5" />
-        </button>
+        <div className="mr-2 hidden items-center gap-1 group-hover:flex">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setCreatingFolder(true);
+            }}
+            className="text-muted-foreground hover:text-foreground"
+            title="New folder"
+            aria-label="New folder"
+          >
+            <FolderPlus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setCreatingPage(true);
+            }}
+            className="text-muted-foreground hover:text-foreground"
+            title="New page"
+            aria-label="New page"
+          >
+            <FilePlus className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       {open && (
         <SidebarGroupContent>
-          {creating && (
+          {creatingFolder && (
             <InlineCreateRow
-              placeholder="Collection name"
+              placeholder="Folder name"
               className="ml-3 flex items-center gap-2 py-0.5"
               icon={<FolderPlus className="h-3 w-3 text-muted-foreground" />}
               onCommit={async (name) => {
-                await createCollection(space.id, slugify(name), name);
-                setCreating(false);
+                await createNode(space.id, "folder", name);
+                setCreatingFolder(false);
                 onCreated();
               }}
-              onCancel={() => setCreating(false)}
+              onCancel={() => setCreatingFolder(false)}
             />
           )}
-          {space.collections.map((col) => (
-            <CollectionSection
-              key={col.id}
-              col={col}
+          {creatingPage && (
+            <InlineCreateRow
+              placeholder="Page title"
+              className="ml-3 flex items-center gap-2 py-0.5"
+              icon={<FilePlus className="h-3 w-3 text-muted-foreground" />}
+              onCommit={async (name) => {
+                const page = await createNode(space.id, "page", name);
+                setCreatingPage(false);
+                router.push(`/w/${workspaceId}/n/${page.id}/${page.slug}?new=1`);
+                onCreated();
+              }}
+              onCancel={() => setCreatingPage(false)}
+            />
+          )}
+          {space.nodes.map((node) => (
+            <NodeRow
+              key={node.id}
+              node={node}
+              spaceId={space.id}
               workspaceId={workspaceId}
               activePath={activePath}
+              depth={0}
               onCreated={onCreated}
             />
           ))}
-          {!creating && space.collections.length === 0 && (
-            <p className="px-4 py-1 text-xs text-muted-foreground">No collections yet</p>
+          {!creatingPage && !creatingFolder && space.nodes.length === 0 && (
+            <p className="px-4 py-1 text-xs text-muted-foreground">No content yet</p>
           )}
         </SidebarGroupContent>
       )}

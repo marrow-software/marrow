@@ -73,15 +73,17 @@ def create_node(
 ):
     slug = body.slug or _slugify(body.name)
 
-    # Assign position after the current last sibling.
-    max_pos = db.scalar(
-        select(func.max(Node.position)).where(
-            Node.space_id == space_id,
-            Node.parent_id == body.parent_id,
-            Node.deleted_at.is_(None),
+    if body.position is not None:
+        position = body.position
+    else:
+        max_pos = db.scalar(
+            select(func.max(Node.position)).where(
+                Node.space_id == space_id,
+                Node.parent_id == body.parent_id,
+                Node.deleted_at.is_(None),
+            )
         )
-    )
-    position = fi_after(max_pos)
+        position = fi_after(max_pos)
 
     node = Node(
         space_id=space_id,

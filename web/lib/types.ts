@@ -32,28 +32,28 @@ export interface Space {
   created_at: string;
 }
 
-export interface Collection {
+export type NodeType = "folder" | "page";
+
+export interface Node {
   id: string;
   space_id: string;
-  slug: string;
+  parent_id: string | null;
+  type: NodeType;
   name: string;
-  created_at: string;
-}
-
-export interface Page {
-  id: string;
-  collection_id: string;
   slug: string;
-  title: string;
+  position: string;
+  description: string | null;
   current_revision_id: string | null;
+  deleted_at: string | null;
   created_at: string;
+  updated_at: string;
   content?: string | null;
-  content_format?: string; // 'markdown' | 'json'
+  content_format?: string | null; // 'markdown' | 'json'
 }
 
 export interface Revision {
   id: string;
-  page_id: string;
+  node_id: string;
   content_format: string; // 'markdown' | 'json'
   created_at: string;
   content?: string;
@@ -61,7 +61,7 @@ export interface Revision {
 
 export interface Attachment {
   id: string;
-  page_id: string;
+  node_id: string;
   filename: string;
   hash: string;
   size_bytes: number;
@@ -70,13 +70,12 @@ export interface Attachment {
 
 // Search
 export interface SearchResultItem {
-  page_id: string;
-  title: string;
+  node_id: string;
+  name: string;
   snippet: string;
-  collection_id: string;
   space_id: string;
   space_name: string;
-  collection_name: string;
+  node_path: string[];
   rank: number;
 }
 
@@ -86,26 +85,22 @@ export interface SearchResponse {
 }
 
 // Nested tree for sidebar rendering
-export interface PageTreeItem {
+export interface NodeTreeItem {
   id: string;
-  collection_id: string;
-  slug: string;
-  title: string;
-  current_revision_id: string | null;
-}
-
-export interface CollectionTreeItem {
-  id: string;
-  slug: string;
+  parent_id: string | null;
+  type: NodeType;
   name: string;
-  pages: PageTreeItem[];
+  slug: string;
+  position: string;
+  description: string | null;
+  children: NodeTreeItem[];
 }
 
 export interface SpaceTreeItem {
   id: string;
   slug: string;
   name: string;
-  collections: CollectionTreeItem[];
+  nodes: NodeTreeItem[];
 }
 
 export interface WorkspaceTree {

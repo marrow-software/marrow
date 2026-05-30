@@ -174,15 +174,16 @@ marrow/
 │   │   ├── workspaces/page.tsx       # Workspace list + creation
 │   │   └── w/[workspaceId]/
 │   │       ├── layout.tsx            # Workspace shell with sidebar + auth status
-│   │       ├── page.tsx              # Redirects to first space or empty state
-│   │       └── pages/[pageId]/
-│   │           └── page.tsx          # Page editor
+│   │       ├── page.tsx              # Welcome screen / empty state
+│   │       └── n/[nodeId]/[[...slug]]/
+│   │           └── page.tsx          # Node route — renders PageEditor (type='page') or FolderView (type='folder'). Slug suffix is optional and decorative.
 │   ├── components/
-│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → mixed folder/page node tree + search
+│   │   ├── app-sidebar.tsx           # Recursive node tree nav: Spaces → Folders/Pages + search
+│   │   ├── folder-view.tsx           # Folder landing page: breadcrumb + children list
 │   │   ├── search-dialog.tsx         # Cmd+K search dialog
 │   │   ├── export-dialog.tsx         # Export workspace dialog (full / slim, size estimate)
 │   │   ├── restore-dialog.tsx        # Restore workspace from bundle dialog (drag-and-drop upload)
-│   │   ├── page-editor.tsx           # Title + markdown textarea, auto-save, attachments, revisions
+│   │   ├── page-editor.tsx           # Title + BlockNote editor, auto-save, attachments, revisions
 │   │   └── ui/                       # Shadcn/Base UI components
 │   ├── lib/
 │   │   ├── api.ts                    # apiFetch helper + all API client functions
