@@ -16,6 +16,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from .links import rebuild_node_links
 from .models import Attachment, Node, Organization, Revision, Space, Workspace
 from .storage import StorageAdapter
 
@@ -148,6 +149,14 @@ def restore_workspace(
             _restore_v3_nodes(manifest, zf, session, storage, names, is_slim)
         else:
             _restore_v4_nodes(manifest, zf, session, storage, names, is_slim)
+
+        # Rebuild backlink index from links.json if present.
+        if "links.json" in names:
+            try:
+                links_data = json.loads(zf.read("links.json"))
+                rebuild_node_links(session, links_data.get("internal_links", []))
+            except (json.JSONDecodeError, KeyError):
+                logger.warning("Could not parse links.json; skipping backlink rebuild")
 
     return ws_meta["slug"]
 
@@ -319,37 +328,54 @@ def _restore_v4_nodes(
     is_slim: bool,
 ) -> None:
     """Restore Node rows directly from a v4 bundle manifest."""
-    node_current_revisions: dict[uuid.UUID, uuid.UUID] = {}
+    # --- Nodes (topological order: parents before children) ---
+    node_records = manifest.get("nodes", [])
+    inserted: set[str] = set()
+    remaining = list(node_records)
 
-    # --- Nodes (folders and pages) ---
-    for node_data in manifest.get("nodes", []):
-        node_id = uuid.UUID(node_data["id"])
-        node = Node(
-            id=node_id,
-            space_id=uuid.UUID(node_data["space_id"]),
-            parent_id=uuid.UUID(node_data["parent_id"]) if node_data.get("parent_id") else None,
-            type=node_data["type"],
-            name=node_data["name"],
-            slug=node_data["slug"],
-            position=node_data["position"],
-            created_at=_dt(node_data["created_at"]),
-        )
-        if node_data["type"] == "folder":
-            node.description = node_data.get("description")
-        # current_revision_id is set after revisions are inserted
-        session.add(node)
-        if node_data.get("current_revision_id"):
-            node_current_revisions[node_id] = uuid.UUID(node_data["current_revision_id"])
+    while remaining:
+        progress = False
+        next_remaining = []
+        for rec in remaining:
+            parent_id = rec.get("parent_id")
+            if parent_id is None or parent_id in inserted:
+                node = Node(
+                    id=uuid.UUID(rec["id"]),
+                    space_id=uuid.UUID(rec["space_id"]),
+                    parent_id=uuid.UUID(parent_id) if parent_id else None,
+                    type=rec["type"],
+                    name=rec["name"],
+                    slug=rec["slug"],
+                    position=rec["position"],
+                    description=rec.get("description"),
+                    current_revision_id=None,
+                )
+                if "deleted_at" in rec and rec["deleted_at"]:
+                    node.deleted_at = _dt(rec["deleted_at"])
+                session.add(node)
+                inserted.add(rec["id"])
+                progress = True
+            else:
+                next_remaining.append(rec)
+        if not progress:
+            unresolved_ids = [rec["id"] for rec in next_remaining]
+            raise ValueError(
+                f"Bundle has a cycle or missing parent reference in nodes: {unresolved_ids}"
+            )
+        remaining = next_remaining
     session.flush()
 
     # --- Revisions ---
+    node_current_revisions: dict[uuid.UUID, uuid.UUID] = {}
+    page_records = {rec["id"]: rec for rec in node_records if rec["type"] == "page"}
+
     if is_slim:
-        for node_data in manifest.get("nodes", []):
-            if node_data["type"] != "page":
-                continue
-            node_id = uuid.UUID(node_data["id"])
-            json_file = f"pages/{node_data['id']}.json"
-            md_file = f"pages/{node_data['id']}.md"
+        # Slim bundles omit revision history. Recreate one revision per page
+        # from the current node content stored in nodes/.
+        for node_id_str, rec in page_records.items():
+            node_id = uuid.UUID(node_id_str)
+            json_file = f"nodes/{node_id_str}.json"
+            md_file = f"nodes/{node_id_str}.md"
             if json_file in names:
                 content = zf.read(json_file).decode()
                 content_format = "json"
@@ -370,43 +396,49 @@ def _restore_v4_nodes(
             )
             node_current_revisions[node_id] = new_rev_id
     else:
-        for r in manifest.get("revisions", []):
+        for r in manifest["revisions"]:
             content_format = r.get("content_format", "markdown")
             node_id_str = r["node_id"]
-            rev_id = r["id"]
             if content_format == "json":
-                rev_file = f"revisions/{node_id_str}/{rev_id}.json"
+                rev_file = f"revisions/{node_id_str}/{r['id']}.json"
             else:
-                rev_file = f"revisions/{node_id_str}/{rev_id}.md"
+                rev_file = f"revisions/{node_id_str}/{r['id']}.md"
             if rev_file not in names:
                 raise ValueError(f"Bundle is missing revision file: {rev_file}")
             content = zf.read(rev_file).decode()
             session.add(
                 Revision(
-                    id=uuid.UUID(rev_id),
+                    id=uuid.UUID(r["id"]),
                     node_id=uuid.UUID(node_id_str),
                     content=content,
                     content_format=content_format,
                     created_at=_dt(r["created_at"]),
                 )
             )
+        # Wire current_revision_id from manifest
+        for rec in node_records:
+            if rec["type"] == "page" and rec.get("current_revision_id"):
+                node_current_revisions[uuid.UUID(rec["id"])] = uuid.UUID(rec["current_revision_id"])
     session.flush()
 
     # --- Wire up current_revision_id now that revisions exist ---
     for node_id, rev_id in node_current_revisions.items():
         node = session.get(Node, node_id)
-        if node is None:
-            raise ValueError(f"Cannot wire current_revision_id: node {node_id} not found")
-        node.current_revision_id = rev_id
+        if node is not None:
+            node.current_revision_id = rev_id
     session.flush()
 
     # --- Attachments ---
-    for att in manifest.get("attachments", []):
+    for att in manifest["attachments"]:
         att_id = att["id"]
+        if not att.get("node_id"):
+            logger.warning("Skipping attachment %s with missing node_id", att_id)
+            continue
         ext = Path(att["filename"]).suffix
         asset_file = f"assets/{att_id}{ext}"
         if asset_file not in names:
             raise ValueError(f"Bundle is missing asset file: {asset_file}")
+
         data = zf.read(asset_file)
         actual_hash = _sha256(data)
         if actual_hash != att["hash"]:
@@ -414,6 +446,7 @@ def _restore_v4_nodes(
                 f"Hash mismatch for attachment {att_id} ({att['filename']}): "
                 f"expected {att['hash']}, got {actual_hash}"
             )
+
         storage.write(att_id, att["filename"], data)
         session.add(
             Attachment(
