@@ -407,12 +407,12 @@ def test_export_restore_round_trip(db_url, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Round-trip test (v3 bundle → v4 restore)
+# v3 bundle handling
 # ---------------------------------------------------------------------------
 
 
-def test_export_restore_v3_bundle(db_url, tmp_path):
-    """Verify that a hand-crafted v3 bundle restores correctly as nodes."""
+def test_restore_v3_bundle_raises_unsupported(db_url, tmp_path):
+    """v3 bundles (legacy Page/Collection model) are not supported — restore raises ValueError."""
     import zipfile as _zipfile
     from datetime import datetime, timezone
 
@@ -422,72 +422,22 @@ def test_export_restore_v3_bundle(db_url, tmp_path):
     ws_id = uuid.uuid4()
     org_id = uuid.uuid4()
     space_id = uuid.uuid4()
-    col_id = uuid.uuid4()
-    page_id = uuid.uuid4()
-    rev_id = uuid.uuid4()
 
     manifest = {
         "schema_version": "3",
         "export_timestamp": now,
-        "organization": {
-            "id": str(org_id),
-            "slug": "v3-test-org",
-            "name": "V3 Test Org",
-            "created_at": now,
-        },
-        "workspace": {
-            "id": str(ws_id),
-            "org_id": str(org_id),
-            "slug": "v3-test-ws",
-            "name": "V3 Test Workspace",
-            "created_at": now,
-        },
-        "spaces": [
-            {
-                "id": str(space_id),
-                "workspace_id": str(ws_id),
-                "slug": "main",
-                "name": "Main",
-                "created_at": now,
-            }
-        ],
-        "collections": [
-            {
-                "id": str(col_id),
-                "space_id": str(space_id),
-                "slug": "docs",
-                "name": "Documentation",
-                "created_at": now,
-            }
-        ],
-        "pages": [
-            {
-                "id": str(page_id),
-                "collection_id": str(col_id),
-                "slug": "intro",
-                "title": "Introduction",
-                "current_revision_id": str(rev_id),
-                "created_at": now,
-            }
-        ],
-        "revisions": [
-            {
-                "id": str(rev_id),
-                "page_id": str(page_id),
-                "content_format": "markdown",
-                "created_at": now,
-            }
-        ],
+        "organization": {"id": str(org_id), "slug": "v3-org", "name": "V3 Org", "created_at": now},
+        "workspace": {"id": str(ws_id), "org_id": str(org_id), "slug": "v3-ws", "name": "V3 WS", "created_at": now},
+        "spaces": [{"id": str(space_id), "workspace_id": str(ws_id), "slug": "main", "name": "Main", "created_at": now}],
+        "collections": [],
+        "pages": [],
+        "revisions": [],
         "attachments": [],
     }
 
     buf = __import__("io").BytesIO()
     with _zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("manifest.json", _json.dumps(manifest))
-        zf.writestr(f"revisions/{page_id}/{rev_id}.md", "# Introduction\nHello world.")
-        zf.writestr(f"pages/{page_id}.md", "# Introduction\nHello world.")
-        zf.writestr("links.json", _json.dumps({"internal_links": [], "broken_links": [], "orphaned_pages": []}))
-
     bundle_path = tmp_path / "v3-bundle.zip"
     bundle_path.write_bytes(buf.getvalue())
 
@@ -498,36 +448,7 @@ def test_export_restore_v3_bundle(db_url, tmp_path):
         def write(self, *a): pass
 
     with Session(engine) as session:
-        slug = restore_workspace(bundle_path, session, _FakeStorage())
-        session.commit()
-
-    assert slug == "v3-test-ws"
-
-    with Session(engine) as session:
-        ws = session.query(Workspace).filter_by(slug="v3-test-ws").one()
-        assert len(ws.spaces) == 1
-        space = ws.spaces[0]
-
-        # Collection → folder node
-        folder_nodes = [n for n in space.nodes if n.type == "folder"]
-        page_nodes_list = [n for n in space.nodes if n.type == "page"]
-        assert len(folder_nodes) == 1, "Collection should produce one folder node"
-        assert len(page_nodes_list) == 1, "Page should produce one page node"
-
-        folder_node = folder_nodes[0]
-        assert str(folder_node.id) == str(col_id), "Folder node should preserve collection UUID"
-        assert folder_node.slug == "docs"
-        assert folder_node.name == "Documentation"
-        assert folder_node.parent_id is None
-
-        page_node = page_nodes_list[0]
-        assert str(page_node.id) == str(page_id), "Page node should preserve page UUID"
-        assert page_node.slug == "intro"
-        assert page_node.name == "Introduction"
-        assert str(page_node.parent_id) == str(col_id), "Page should be parented to folder"
-
-        assert len(page_node.revisions) == 1
-        assert page_node.revisions[0].content == "# Introduction\nHello world."
-        assert str(page_node.current_revision_id) == str(rev_id)
+        with pytest.raises(ValueError, match="legacy Page/Collection model"):
+            restore_workspace(bundle_path, session, _FakeStorage())
 
     engine.dispose()
