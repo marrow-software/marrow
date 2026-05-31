@@ -1,109 +1,153 @@
 "use client";
 
 import Link from "next/link";
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
-import { GithubIcon, MarrowWordmark, MoonIcon, SunIcon } from "@/components/icons";
+import { useState } from "react";
+import { MarrowWordmark, MarrowGlyph, SunIcon, MoonIcon, MenuIcon } from "./icons";
+import { useTheme } from "./theme-provider";
 
-function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
-
-  if (!mounted) return <div className="w-8 h-8" />;
-
-  return (
-    <button
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-      className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
-      aria-label="Toggle theme"
-    >
-      {resolvedTheme === "dark" ? (
-        <SunIcon className="w-4 h-4" />
-      ) : (
-        <MoonIcon className="w-4 h-4" />
-      )}
-    </button>
-  );
-}
-
-const NAV_LINKS = [
-  { href: "/product", label: "Product" },
-  { href: "/docs", label: "Docs" },
-  { href: "https://github.com/spmcgraw/marrow", label: "GitHub", external: true },
+const navLinks = [
+  { href: "/", label: "Product" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "https://docs.marrow.so", label: "Docs" },
+  { href: "https://github.com/spmcgraw/marrow", label: "GitHub" },
 ];
 
-export function TopNav() {
+export function SiteNav() {
+  const { theme, toggle } = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
+
   return (
     <header
-      className="sticky top-0 z-40 border-b border-[var(--border)]"
-      style={{ backgroundColor: "var(--background)" }}
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 50,
+        borderBottom: "1px solid var(--color-border)",
+        backgroundColor: "var(--color-base)",
+      }}
     >
-      <div className="max-w-[1440px] mx-auto px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 no-underline">
-          <MarrowWordmark className="text-lg text-[var(--foreground)]" />
+      <div
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+          padding: "0 1.5rem",
+          height: "3.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Link href="/" style={{ display: "flex", alignItems: "center", gap: "0.5rem", textDecoration: "none" }}>
+          <MarrowGlyph size={28} />
+          <MarrowWordmark />
         </Link>
 
-        <nav className="flex items-center gap-1">
-          {NAV_LINKS.map((link) =>
-            link.external ? (
-              <a
-                key={link.href}
-                href={link.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors flex items-center gap-1.5"
-              >
-                {link.label === "GitHub" && <GithubIcon className="w-4 h-4" />}
-                {link.label}
-              </a>
-            ) : (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="px-3 py-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors no-underline"
-              >
-                {link.label}
-              </Link>
-            )
-          )}
-          <div className="w-px h-4 bg-[var(--border)] mx-1" />
-          <ThemeToggle />
+        <nav style={{ display: "flex", alignItems: "center", gap: "1.75rem" }}>
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              style={{
+                fontSize: "0.875rem",
+                color: "var(--color-text-secondary)",
+                textDecoration: "none",
+                transition: "color 0.15s",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-text-primary)")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-secondary)")}
+            >
+              {link.label}
+            </Link>
+          ))}
+
+          <button
+            onClick={toggle}
+            aria-label="Toggle theme"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "2rem",
+              height: "2rem",
+              borderRadius: "0.375rem",
+              border: "1px solid var(--color-border)",
+              background: "transparent",
+              cursor: "pointer",
+              color: "var(--color-text-secondary)",
+            }}
+          >
+            {theme === "dark" ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+          </button>
+
+          <Link
+            href="https://github.com/spmcgraw/marrow"
+            style={{
+              fontSize: "0.875rem",
+              fontWeight: 500,
+              padding: "0.4rem 0.875rem",
+              borderRadius: "0.375rem",
+              backgroundColor: "var(--color-accent)",
+              color: theme === "dark" ? "#111318" : "#ffffff",
+              textDecoration: "none",
+            }}
+          >
+            Get started
+          </Link>
         </nav>
       </div>
     </header>
   );
 }
 
-export function Footer() {
+export function SiteFooter() {
   return (
-    <footer className="border-t border-[var(--border)] mt-24">
-      <div className="max-w-[1440px] mx-auto px-6 py-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-        <div className="flex flex-col gap-1">
-          <MarrowWordmark className="text-base text-[var(--foreground)]" />
-          <p className="text-sm text-[var(--muted-foreground)]">
-            Your knowledge, owned outright.
-          </p>
+    <footer
+      style={{
+        borderTop: "1px solid var(--color-border)",
+        backgroundColor: "var(--color-base)",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+          padding: "2.5rem 1.5rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "1rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <MarrowGlyph size={20} />
+          <MarrowWordmark />
         </div>
 
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--muted-foreground)]">
-          <Link href="/product" className="hover:text-[var(--foreground)] transition-colors no-underline">
-            Product
-          </Link>
-          <Link href="/docs" className="hover:text-[var(--foreground)] transition-colors no-underline">
-            Docs
-          </Link>
-          <a
-            href="https://github.com/spmcgraw/marrow"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-[var(--foreground)] transition-colors"
-          >
-            GitHub
-          </a>
-          <span className="text-[var(--muted-foreground)]">Apache 2.0</span>
+        <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap" }}>
+          {[
+            { href: "/pricing", label: "Pricing" },
+            { href: "https://docs.marrow.so", label: "Docs" },
+            { href: "https://github.com/spmcgraw/marrow", label: "GitHub" },
+            { href: "https://github.com/spmcgraw/marrow/blob/main/LICENSE", label: "Apache 2.0" },
+          ].map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              style={{
+                fontSize: "0.8125rem",
+                color: "var(--color-text-secondary)",
+                textDecoration: "none",
+              }}
+            >
+              {link.label}
+            </Link>
+          ))}
         </div>
+
+        <p style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)" }}>
+          © {new Date().getFullYear()} Marrow
+        </p>
       </div>
     </footer>
   );
