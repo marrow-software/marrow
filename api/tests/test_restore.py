@@ -154,7 +154,7 @@ def _make_bundle(
             zf.writestr("manifest.json", json.dumps(manifest))
         if not omit_revision_file:
             zf.writestr(f"revisions/{page_id}/{rev_id}.md", "# Page\nContent.")
-        zf.writestr(f"pages/{page_id}.md", "# Page\nContent.")
+        zf.writestr(f"nodes/{page_id}.md", "# Page\nContent.")
         zf.writestr(
             "links.json",
             json.dumps(
@@ -480,85 +480,12 @@ def test_restore_not_a_zip_raises(session, storage, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_restore_v3_bundle_creates_workspace(session, storage, tmp_path):
-    bundle_bytes, manifest = _make_v3_bundle(ws_slug="v3-creates-ws")
-    path = _write_bundle(tmp_path, bundle_bytes, name="v3-creates.zip")
+def test_restore_v3_bundle_raises_unsupported(session, storage, tmp_path):
+    """v3 bundles are not supported in this release — restore raises a clear ValueError."""
+    bundle_bytes, _ = _make_v3_bundle(ws_slug="v3-unsupported-ws")
+    path = _write_bundle(tmp_path, bundle_bytes, name="v3-unsupported.zip")
 
-    slug = restore_workspace(path, session, storage)
-
-    assert slug == "v3-creates-ws"
-    ws = session.query(Workspace).filter_by(slug="v3-creates-ws").first()
-    assert ws is not None
-    assert str(ws.id) == manifest["workspace"]["id"]
-
-
-def test_restore_v3_bundle_synthesizes_nodes(session, storage, tmp_path):
-    """v3 collections → folder nodes; v3 pages → page nodes."""
-    bundle_bytes, manifest = _make_v3_bundle(ws_slug="v3-nodes-ws")
-    path = _write_bundle(tmp_path, bundle_bytes, name="v3-nodes.zip")
-
-    restore_workspace(path, session, storage)
-
-    ws = session.query(Workspace).filter_by(slug="v3-nodes-ws").first()
-    space = ws.spaces[0]
-
-    folder_nodes = [n for n in space.nodes if n.type == "folder"]
-    page_nodes_list = [n for n in space.nodes if n.type == "page"]
-    assert len(folder_nodes) == 1
-    assert len(page_nodes_list) == 1
-
-    col_rec = manifest["collections"][0]
-    page_rec = manifest["pages"][0]
-
-    # Collection UUID is preserved as the folder node UUID
-    assert str(folder_nodes[0].id) == col_rec["id"]
-    assert folder_nodes[0].slug == col_rec["slug"]
-    assert folder_nodes[0].parent_id is None
-
-    # Page UUID is preserved as the page node UUID
-    assert str(page_nodes_list[0].id) == page_rec["id"]
-    assert page_nodes_list[0].slug == page_rec["slug"]
-    # Page is parented to the folder (was collection)
-    assert str(page_nodes_list[0].parent_id) == col_rec["id"]
-
-    # Revision content preserved
-    assert len(page_nodes_list[0].revisions) == 1
-    assert page_nodes_list[0].revisions[0].content == "# Page\nContent."
-    assert str(page_nodes_list[0].current_revision_id) == manifest["revisions"][0]["id"]
-
-
-def test_restore_v3_bundle_with_attachment(session, storage, tmp_path):
-    att_data = b"v3 attachment bytes"
-    bundle_bytes, manifest = _make_v3_bundle(
-        ws_slug="v3-att-ws", with_attachment=True, attachment_data=att_data
-    )
-    path = _write_bundle(tmp_path, bundle_bytes, name="v3-att.zip")
-
-    restore_workspace(path, session, storage)
-
-    att_meta = manifest["attachments"][0]
-    att = session.get(Attachment, uuid.UUID(att_meta["id"]))
-    assert att is not None
-    assert att.hash == att_meta["hash"]
-    assert att.size_bytes == len(att_data)
-    assert storage.has(att_meta["id"], "file.txt")
-
-
-def test_restore_v3_bundle_hash_mismatch_raises(session, storage, tmp_path):
-    bundle_bytes, _ = _make_v3_bundle(
-        ws_slug="v3-hash-ws", with_attachment=True, corrupt_attachment=True
-    )
-    path = _write_bundle(tmp_path, bundle_bytes, name="v3-hash.zip")
-
-    with pytest.raises(RuntimeError, match="Hash mismatch"):
-        restore_workspace(path, session, storage)
-
-
-def test_restore_v3_missing_revision_file_raises(session, storage, tmp_path):
-    bundle_bytes, _ = _make_v3_bundle(ws_slug="v3-missing-rev-ws", omit_revision_file=True)
-    path = _write_bundle(tmp_path, bundle_bytes, name="v3-missing-rev.zip")
-
-    with pytest.raises(ValueError, match="missing revision file"):
+    with pytest.raises(ValueError, match="legacy Page/Collection model"):
         restore_workspace(path, session, storage)
 
 
@@ -635,7 +562,7 @@ def test_slim_bundle_is_restorable(session, tmp_path):
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("manifest.json", json.dumps(manifest))
-        zf.writestr(f"pages/{page_id}.md", "# Page\nCurrent content.")
+        zf.writestr(f"nodes/{page_id}.md", "# Page\nCurrent content.")
         zf.writestr(
             "links.json",
             json.dumps({"internal_links": [], "broken_links": [], "orphaned_nodes": []}),

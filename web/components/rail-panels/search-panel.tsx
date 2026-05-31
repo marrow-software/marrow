@@ -59,6 +59,10 @@ export function SearchPanel({ workspaceId, inputRef: externalRef }: Props) {
   const trimmed = query.trim();
   const visibleResults = trimmed ? results : [];
 
+  function navigateTo(r: SearchResultItem) {
+    router.push(`/w/${workspaceId}/n/${r.node_id}`);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -68,7 +72,7 @@ export function SearchPanel({ workspaceId, inputRef: externalRef }: Props) {
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter" && results[activeIndex]) {
       e.preventDefault();
-      router.push(`/w/${workspaceId}/pages/${results[activeIndex].page_id}`);
+      navigateTo(results[activeIndex]);
     }
   }
 
@@ -96,17 +100,17 @@ export function SearchPanel({ workspaceId, inputRef: externalRef }: Props) {
         )}
         {visibleResults.map((r, i) => (
           <button
-            key={r.page_id}
+            key={r.node_id}
             type="button"
-            onClick={() => router.push(`/w/${workspaceId}/pages/${r.page_id}`)}
+            onClick={() => navigateTo(r)}
             onMouseEnter={() => setActiveIndex(i)}
             className={`rounded-md border border-border px-3 py-2 text-left transition-colors ${
               i === activeIndex ? "bg-accent" : "bg-background hover:bg-accent/60"
             }`}
           >
-            <div className="text-sm font-medium text-foreground">{r.title}</div>
+            <div className="text-sm font-medium text-foreground">{r.name}</div>
             <div className="mt-1 font-mono text-[11px] text-muted-foreground">
-              {r.space_name} / {r.collection_name}
+              {[r.space_name, ...r.node_path].join(" / ")}
             </div>
             <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
               <HighlightedSnippet text={r.snippet} />

@@ -69,15 +69,15 @@ import {
   listAttachments,
   listOrgMembers,
   searchWorkspace,
-  updatePage,
+  updateNode,
   uploadAttachment,
 } from "@/lib/api";
-import type { Attachment, OrgMembership, Page, SearchResultItem } from "@/lib/types";
+import type { Attachment, Node, OrgMembership, SearchResultItem } from "@/lib/types";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface Props {
-  initialPage: Page;
+  initialPage: Node;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ const schema = BlockNoteSchema.create({
 // ---------------------------------------------------------------------------
 
 export function PageEditor({ initialPage }: Props) {
-  const [title, setTitle] = useState(initialPage.title);
+  const [title, setTitle] = useState(initialPage.name);
   const [status, setStatus] = useState<SaveStatus>("idle");
   const { resolvedTheme } = useTheme();
 
@@ -147,7 +147,7 @@ export function PageEditor({ initialPage }: Props) {
 
   // Refs for save logic — avoids stale closures in debounce callbacks
   const titleRef = useRef(title);
-  const savedTitleRef = useRef(initialPage.title);
+  const savedTitleRef = useRef(initialPage.name);
   const savedContentRef = useRef(initialPage.content ?? "");
   // pendingContentRef holds the current JSON string to save
   const pendingContentRef = useRef(initialPage.content ?? "");
@@ -205,8 +205,8 @@ export function PageEditor({ initialPage }: Props) {
 
     setStatus("saving");
     try {
-      await updatePage(initialPage.id, {
-        title: newTitle,
+      await updateNode(initialPage.id, {
+        name: newTitle,
         content: newContent,
         content_format: "json",
       });
@@ -353,7 +353,7 @@ export function PageEditor({ initialPage }: Props) {
   const insertPageLink = useCallback(
     (result: SearchResultItem) => {
       if (!workspaceId) return;
-      editor.createLink(`/w/${workspaceId}/pages/${result.page_id}`, result.title);
+      editor.createLink(`/w/${workspaceId}/n/${result.node_id}`, result.name);
       setPickerOpen(false);
       setPickerQuery("");
       setPickerResults([]);
@@ -388,7 +388,7 @@ export function PageEditor({ initialPage }: Props) {
   return (
     <div className="relative flex h-full flex-col">
       <EditorHeader
-        collectionId={initialPage.collection_id}
+        nodeId={initialPage.id}
         pageTitle={title || "Untitled"}
         saveLabel={statusLabel}
         onOpenDrawer={handleOpenDrawer}
@@ -404,7 +404,7 @@ export function PageEditor({ initialPage }: Props) {
 
       {/* Attachments — retained while Phase A omits an Attachments menu entry */}
       <div className="flex items-center border-b border-border px-6 py-1.5">
-        <AttachmentSheet pageId={initialPage.id} collectionId={initialPage.collection_id} />
+        <AttachmentSheet nodeId={initialPage.id} />
       </div>
 
       {/* Title */}
@@ -504,7 +504,7 @@ export function PageEditor({ initialPage }: Props) {
             )}
             <ul className="flex flex-col gap-1">
               {pickerResults.map((r, i) => (
-                <li key={r.page_id}>
+                <li key={r.node_id}>
                   <button
                     type="button"
                     onClick={() => insertPageLink(r)}
@@ -513,9 +513,9 @@ export function PageEditor({ initialPage }: Props) {
                       i === pickerActiveIndex ? "bg-accent" : "hover:bg-accent/60"
                     }`}
                   >
-                    <div className="text-sm font-medium text-foreground">{r.title}</div>
+                    <div className="text-sm font-medium text-foreground">{r.name}</div>
                     <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                      {r.space_name} / {r.collection_name}
+                      {[r.space_name, ...r.node_path].join(" / ")}
                     </div>
                   </button>
                 </li>
@@ -532,7 +532,7 @@ export function PageEditor({ initialPage }: Props) {
       {sideDrawer && (
         <SideDrawer
           which={sideDrawer}
-          pageId={initialPage.id}
+          nodeId={initialPage.id}
           onClose={() => setSideDrawer(null)}
           onRestore={handleRestore}
         />
@@ -547,20 +547,14 @@ export function PageEditor({ initialPage }: Props) {
 // Attachment panel
 // ---------------------------------------------------------------------------
 
-function AttachmentSheet({
-  pageId,
-  collectionId,
-}: {
-  pageId: string;
-  collectionId: string;
-}) {
+function AttachmentSheet({ nodeId }: { nodeId: string }) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     try {
-      const atts = await listAttachments(collectionId, pageId);
+      const atts = await listAttachments(nodeId);
       setAttachments(atts);
     } catch {
       toast.error("Failed to load attachments");
@@ -572,7 +566,7 @@ function AttachmentSheet({
     if (!file) return;
     setUploading(true);
     try {
-      await uploadAttachment(collectionId, pageId, file);
+      await uploadAttachment(nodeId, file);
       await load();
       toast.success(`${file.name} uploaded`);
     } catch (err) {
@@ -609,7 +603,7 @@ function AttachmentSheet({
                 </p>
               </div>
               <a
-                href={attachmentFileUrl(collectionId, pageId, att.id)}
+                href={attachmentFileUrl(nodeId, att.id)}
                 className="text-xs text-blue-600 hover:underline"
                 download={att.filename}
               >

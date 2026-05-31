@@ -61,6 +61,13 @@ STORAGE_PATH=./storage       # resolves relative to api/ directory
 API_KEY=                     # optional; if set, enforces X-API-Key header on all routes
 CORS_ORIGINS=http://localhost:3000
 
+# Cloudflare R2 storage (optional — set STORAGE_BACKEND=r2 to use R2 instead of local disk)
+# STORAGE_BACKEND=r2
+# R2_ACCOUNT_ID=             # your Cloudflare account ID
+# R2_ACCESS_KEY_ID=
+# R2_SECRET_ACCESS_KEY=
+# R2_BUCKET=
+
 # OIDC Authentication (optional — omit OIDC_ISSUER to disable)
 # OIDC_ISSUER=https://accounts.google.com
 # OIDC_CLIENT_ID=
@@ -177,11 +184,12 @@ marrow/
 │   │   ├── workspaces/page.tsx       # Workspace list + creation
 │   │   └── w/[workspaceId]/
 │   │       ├── layout.tsx            # Workspace shell with sidebar + auth status
-│   │       ├── page.tsx              # Redirects to first space or empty state
-│   │       └── pages/[pageId]/
-│   │           └── page.tsx          # Page editor
+│   │       ├── page.tsx              # Welcome screen / empty state
+│   │       └── n/[nodeId]/[[...slug]]/
+│   │           └── page.tsx          # Node route — renders PageEditor (type='page') or FolderView (type='folder'). Slug suffix is optional and decorative.
 │   ├── components/
-│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → Collections → Pages + search
+│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → recursive nodes (folders/pages), drag-and-drop, inline create
+│   │   ├── folder-view.tsx           # Folder landing page: breadcrumb + children list
 │   │   ├── search-dialog.tsx         # Cmd+K search dialog
 │   │   ├── export-dialog.tsx         # Export workspace dialog (full / slim, size estimate)
 │   │   ├── restore-dialog.tsx        # Restore workspace from bundle dialog (drag-and-drop upload)
@@ -303,7 +311,7 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 >
 > **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
 >
-> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
+> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`.
 
 ### Storage Adapter Interface
 
@@ -320,12 +328,12 @@ class StorageAdapter(ABC):
 ```text
 marrow-export-{workspace-slug}-{timestamp}.zip          # full
 marrow-export-{workspace-slug}-slim-{timestamp}.zip     # slim
-├── manifest.json        # workspace + org metadata, all entity IDs, schema version (v3)
+├── manifest.json        # workspace + org metadata, full node tree, schema version (v4)
 ├── pages/
-│   ├── {page-id}.md     # human-readable Markdown (all pages)
-│   └── {page-id}.json   # canonical BlockNote JSON (JSON-format pages only)
+│   ├── {node-id}.md     # human-readable Markdown (page-typed nodes)
+│   └── {node-id}.json   # canonical BlockNote JSON (JSON-format pages only)
 ├── revisions/
-│   └── {page-id}/
+│   └── {node-id}/
 │       ├── {revision-id}.md     # Markdown revisions (legacy) or human-readable export
 │       └── {revision-id}.json   # BlockNote JSON revisions (canonical)
 ├── assets/
@@ -333,10 +341,11 @@ marrow-export-{workspace-slug}-slim-{timestamp}.zip     # slim
 └── links.json           # internal links, broken links, orphaned pages
 ```
 
-v1/v2 bundles had only `.md` files. v3 adds `.json` as canonical for JSON-format revisions.
-Restore supports v1, v2, and v3 bundles.
+**Schema versions**: v1/v2 were Markdown-only. v3 added `.json` as canonical. v4 (Marrow 0.2) carries the `nodes` tree (folders + pages, with `parent_id`, `position`, `deleted_at`) instead of the old `collections`+`pages` shape. Restore supports v1–v4 — older bundles are auto-upgraded onto the node tree on read.
 
 **Slim bundles** omit the `revisions/` directory entirely and set `"slim": true` + `"revisions": []` in `manifest.json`. Restore recreates one revision per page from `pages/` content. CLI: `marrow export --slim`; API: `?slim=true`.
+
+**Trash**: soft-deleted nodes are excluded from exports by default. Pass `marrow export --include-trash` (or `?include_trash=true`) to include them; the manifest records `"include_trash": bool` so restore replays each node's `deleted_at`.
 
 ### Authentication
 
@@ -348,7 +357,7 @@ Marrow supports three authentication methods, checked in priority order:
 
 **OIDC flow**: The backend is the OIDC Relying Party. `GET /api/auth/login` redirects to the IdP. `GET /api/auth/callback` exchanges the code, upserts the user in the `users` table, claims any pending org memberships matching the user's email, auto-creates a personal org if the user has no memberships, and sets an httpOnly session cookie. The `COOKIE_DOMAIN` env var controls the cookie domain (set to `localhost` for dev so the cookie is shared between `:3000` and `:8000`).
 
-**RBAC**: Org membership with roles (owner/editor/viewer) enforced on all data routes. Role is resolved by following the resource chain (page → collection → space → workspace → org → membership). Dependency factories in `rbac.py` handle resolution for each resource level.
+**RBAC**: Org membership with roles (owner/editor/viewer) enforced on all data routes. Role is resolved by following the resource chain (node → space → workspace → org → membership). Dependency factories in `rbac.py` handle resolution for each resource level.
 
 **Key files**: `auth.py` (config, JWT helpers), `dependencies.py` (`verify_auth` + `AuthContext`), `rbac.py` (role enforcement dependencies), `routers/auth.py` (login/callback/me/logout), `routers/organizations.py` (org CRUD + member management).
 
@@ -358,7 +367,8 @@ Marrow supports three authentication methods, checked in priority order:
 - **Auto-save**: `PageEditor` debounces saves 2 seconds after last keystroke; shows Saving… / Saved / Error status
 - **Content format**: new saves store BlockNote JSON (`content_format='json'`); legacy Markdown revisions are loaded via `tryParseMarkdownToBlocks` for backward compat
 - **Editor features**: code blocks (Shiki syntax highlighting), tables (`TableHandlesController`), `@` member mentions (custom inline-content spec carrying `userId` + `displayName`, fed by `listOrgMembers`), `/page` slash item that opens a page picker and inserts a WikiLink (`searchWorkspace`)
-- **Sidebar create flows**: hover-to-reveal `+` buttons open `CreateDialog` with slug auto-generation via `slugify()`
+- **Sidebar create flows**: hover-to-reveal `+` buttons (FilePlus / FolderPlus) on each folder and space header create new nodes via `createNode()` with `parent_id` set; slug auto-generated via `slugify()`. Tree open/closed state persists in `localStorage` keyed by `marrow.tree.open.<userId>.<workspaceId>`.
+- **Sidebar drag-and-drop**: `@dnd-kit/core` drives reparenting and reordering of folders/pages. New positions are computed via `fractional-indexing.generateKeyBetween()` and PATCHed to `/api/nodes/{id}` with `parent_id` + `position`. Cross-workspace drops and descendant-cycle drops are rejected with a `sonner` toast. Server is the source of truth — failures rollback via `router.refresh()`.
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 
@@ -388,10 +398,8 @@ Tests in `api/tests/` are **integration tests** — they hit a real database. A 
 ## What's Not Built Yet
 
 - Meilisearch upgrade for fuzzy/typo-tolerant search (PostgreSQL FTS is implemented)
-- S3-compatible storage adapter
-- Rich text / TipTap editor (currently plain Markdown textarea)
-- User permissions and workspace-level access control (OIDC auth is implemented but no per-user data scoping)
+- Workspace-level / per-node access control (OIDC + org RBAC are implemented; finer-grained ACLs are not)
 - Audit log / audit_events table
 - Task management and integrations
-- Deployment docs (Docker image, K8s, systemd)
-- Page templates, collaborative editing, offline sync
+- K8s and systemd deployment guides (Docker Compose is documented)
+- Page templates

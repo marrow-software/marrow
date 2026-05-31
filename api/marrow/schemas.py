@@ -58,6 +58,7 @@ class NodeCreate(BaseModel):
     name: str
     slug: str | None = None
     parent_id: UUID | None = None
+    position: str | None = None
     description: str | None = None
     content: str | None = None
     content_format: Literal["markdown", "json"] = "markdown"
@@ -116,6 +117,7 @@ class SpaceTreeItem(_ReadBase):
 
 class WorkspaceTree(_ReadBase):
     id: UUID
+    org_id: UUID
     slug: str
     name: str
     spaces: list[SpaceTreeItem] = []

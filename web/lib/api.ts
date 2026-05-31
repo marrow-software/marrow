@@ -9,10 +9,10 @@ import { getApiKey, getApiUrl, getInternalApiUrl } from "./runtime-config";
 import type {
   Attachment,
   AuthStatus,
-  Collection,
+  Node,
+  NodeType,
   Organization,
   OrgMembership,
-  Page,
   Revision,
   SearchResponse,
   ShareLink,
@@ -158,88 +158,99 @@ export function createSpace(workspaceId: string, slug: string, name: string): Pr
 }
 
 // ---------------------------------------------------------------------------
-// Collections
+// Nodes
 // ---------------------------------------------------------------------------
 
-export function createCollection(spaceId: string, slug: string, name: string): Promise<Collection> {
-  return apiFetch(`/api/spaces/${spaceId}/collections`, {
+export function createNode(
+  spaceId: string,
+  body: {
+    type: NodeType;
+    name: string;
+    slug?: string;
+    parent_id?: string | null;
+    description?: string | null;
+    content?: string;
+    content_format?: "markdown" | "json";
+    position?: string;
+  }
+): Promise<Node> {
+  return apiFetch(`/api/spaces/${spaceId}/nodes`, {
     method: "POST",
-    body: JSON.stringify({ slug, name }),
+    body: JSON.stringify(body),
   });
 }
 
-// ---------------------------------------------------------------------------
-// Pages
-// ---------------------------------------------------------------------------
-
-export function createPage(
-  collectionId: string,
-  slug: string,
-  title: string,
-  content = "",
-  content_format = "markdown"
-): Promise<Page> {
-  return apiFetch(`/api/collections/${collectionId}/pages`, {
-    method: "POST",
-    body: JSON.stringify({ slug, title, content, content_format }),
-  });
+export function getNode(nodeId: string): Promise<Node> {
+  return apiFetch(`/api/nodes/${nodeId}`);
 }
 
-export function getPage(pageId: string): Promise<Page> {
-  return apiFetch(`/api/pages/${pageId}`);
-}
-
-export function updatePage(
-  pageId: string,
-  patch: { title?: string; content?: string; content_format?: string }
-): Promise<Page> {
-  return apiFetch(`/api/pages/${pageId}`, {
+export function updateNode(
+  nodeId: string,
+  patch: {
+    name?: string;
+    slug?: string;
+    description?: string | null;
+    content?: string;
+    content_format?: "markdown" | "json";
+    position?: string;
+    parent_id?: string | null;
+  }
+): Promise<Node> {
+  return apiFetch(`/api/nodes/${nodeId}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
 }
 
-export function deletePage(collectionId: string, pageId: string): Promise<void> {
-  return apiFetch(`/api/collections/${collectionId}/pages/${pageId}`, {
-    method: "DELETE",
-  });
+export function deleteNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}`, { method: "DELETE" });
+}
+
+export function moveNode(
+  nodeId: string,
+  newParentId: string | null,
+  position: string
+): Promise<Node> {
+  return updateNode(nodeId, { parent_id: newParentId, position });
+}
+
+export function listNodeChildren(nodeId: string): Promise<Node[]> {
+  return apiFetch(`/api/nodes/${nodeId}/children`);
 }
 
 // ---------------------------------------------------------------------------
 // Revisions
 // ---------------------------------------------------------------------------
 
-export function listRevisions(pageId: string): Promise<Revision[]> {
-  return apiFetch(`/api/pages/${pageId}/revisions`);
+export function listRevisions(nodeId: string): Promise<Revision[]> {
+  return apiFetch(`/api/nodes/${nodeId}/revisions`);
 }
 
-export function getRevision(pageId: string, revisionId: string): Promise<Revision> {
-  return apiFetch(`/api/pages/${pageId}/revisions/${revisionId}`);
+export function getRevision(nodeId: string, revisionId: string): Promise<Revision> {
+  return apiFetch(`/api/nodes/${nodeId}/revisions/${revisionId}`);
 }
 
 // ---------------------------------------------------------------------------
 // Attachments
 // ---------------------------------------------------------------------------
 
-export function listAttachments(collectionId: string, pageId: string): Promise<Attachment[]> {
-  return apiFetch(`/api/collections/${collectionId}/pages/${pageId}/attachments`);
+export function listAttachments(nodeId: string): Promise<Attachment[]> {
+  return apiFetch(`/api/nodes/${nodeId}/attachments`);
 }
 
-export async function uploadAttachment(
-  collectionId: string,
-  pageId: string,
-  file: File
-): Promise<Attachment> {
+export async function uploadAttachment(nodeId: string, file: File): Promise<Attachment> {
   const form = new FormData();
   form.append("file", file);
 
   const apiKey = getApiKey();
   const headers: Record<string, string> = apiKey ? { "X-API-Key": apiKey } : {};
 
-  const res = await fetch(
-    `${baseUrl()}/api/collections/${collectionId}/pages/${pageId}/attachments`,
-    { method: "POST", body: form, headers, credentials: "include" }
-  );
+  const res = await fetch(`${baseUrl()}/api/nodes/${nodeId}/attachments`, {
+    method: "POST",
+    body: form,
+    headers,
+    credentials: "include",
+  });
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
@@ -248,13 +259,9 @@ export async function uploadAttachment(
   return res.json();
 }
 
-export function attachmentFileUrl(collectionId: string, pageId: string, attachmentId: string): string {
-  return `${baseUrl()}/api/collections/${collectionId}/pages/${pageId}/attachments/${attachmentId}/file`;
+export function attachmentFileUrl(nodeId: string, attachmentId: string): string {
+  return `${baseUrl()}/api/nodes/${nodeId}/attachments/${attachmentId}/file`;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Auth
