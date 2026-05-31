@@ -162,6 +162,24 @@ export interface EffectivePropertiesResponse {
   properties: EffectiveProperty[];
 }
 
+// Home / For You
+export interface RecentNodeItem {
+  node_id: string;
+  name: string;
+  space_id: string;
+  space_name: string;
+  node_path: string[]; // ancestor folder names, root -> leaf
+  updated_at: string;
+}
+
+export interface WorkspaceHome {
+  workspace_id: string;
+  workspace_name: string;
+  space_count: number;
+  page_count: number;
+  recent: RecentNodeItem[];
+}
+
 // Auth
 export interface User {
   id: string;

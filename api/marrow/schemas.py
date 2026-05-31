@@ -165,6 +165,29 @@ class WorkspaceTree(_ReadBase):
 
 
 # ---------------------------------------------------------------------------
+# Home / For You
+# ---------------------------------------------------------------------------
+
+
+class RecentNodeItem(_ReadBase):
+    node_id: UUID
+    name: str
+    space_id: UUID
+    space_name: str
+    # Ancestor folder names, root -> leaf (empty when page sits at space root).
+    node_path: list[str]
+    updated_at: datetime
+
+
+class WorkspaceHome(_ReadBase):
+    workspace_id: UUID
+    workspace_name: str
+    space_count: int
+    page_count: int
+    recent: list[RecentNodeItem] = []
+
+
+# ---------------------------------------------------------------------------
 # Revision
 # ---------------------------------------------------------------------------
 

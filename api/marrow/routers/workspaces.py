@@ -10,27 +10,58 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_search_backend, verify_auth
-from ..models import Node, OrgRole, Space, Workspace
+from ..models import Node, OrgMembership, OrgRole, Space, Workspace
 from ..rbac import require_workspace_role
 from ..schemas import (
-    NodeRead,
     NodeTreeItem,
+    RecentNodeItem,
     SearchResponse,
     SearchResultItem,
     SpaceTreeItem,
+    WorkspaceCreate,
+    WorkspaceHome,
     WorkspaceRead,
     WorkspaceTree,
 )
-from ..search import SearchBackend
+from ..search import _ANCESTOR_PATH_CTE, SearchBackend
 from ..storage import LocalFilesystemAdapter
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 
 _MAX_BUNDLE_BYTES = 500 * 1024 * 1024  # 500 MB
+
+# Order by latest revision rather than nodes.updated_at — revisions are
+# append-only so MAX(created_at) is a reliable recency signal.
+_HOME_RECENT_SQL = text(
+    """
+    SELECT
+        n.id AS node_id,
+        n.name,
+        s.id AS space_id,
+        s.name AS space_name,
+        COALESCE(
+            ("""
+    + _ANCESTOR_PATH_CTE
+    + """),
+            ARRAY[]::text[]
+        ) AS node_path,
+        COALESCE(MAX(r.created_at), n.created_at) AS updated_at
+    FROM nodes n
+    JOIN spaces s ON s.id = n.space_id
+    LEFT JOIN revisions r ON r.node_id = n.id
+    WHERE s.workspace_id = :workspace_id
+      AND n.type = 'page'
+      AND n.deleted_at IS NULL
+    GROUP BY n.id, n.name, s.id, s.name, n.parent_id, n.created_at
+    ORDER BY updated_at DESC
+    LIMIT :limit
+    """
+)
 
 
 def _build_node_tree(nodes: list[Node]) -> list[NodeTreeItem]:
@@ -78,10 +109,38 @@ def list_workspaces(
     )
 
 
-@router.post("", status_code=410)
-def create_workspace_deprecated():
-    """Deprecated: use POST /api/orgs/{org_id}/workspaces instead."""
-    raise HTTPException(410, "This endpoint has been removed. Use POST /api/orgs/{org_id}/workspaces instead.")
+@router.post("", response_model=WorkspaceRead, status_code=201)
+def create_workspace(
+    body: WorkspaceCreate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(verify_auth),
+):
+    org_id = body.org_id
+
+    # For session users without explicit org_id, use their first org
+    if org_id is None and auth.user_id is not None:
+        membership = db.execute(
+            select(OrgMembership)
+            .where(OrgMembership.user_id == auth.user_id)
+            .order_by(OrgMembership.created_at)
+        ).scalar_one_or_none()
+        if membership is None:
+            raise HTTPException(403, "You must belong to an organization to create a workspace")
+        org_id = membership.org_id
+
+    # For API key/anonymous, org_id is required
+    if org_id is None:
+        raise HTTPException(422, "org_id is required for API key or anonymous access")
+
+    ws = Workspace(org_id=org_id, slug=body.slug, name=body.name)
+    db.add(ws)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=f"Workspace slug '{body.slug}' already exists")
+    db.refresh(ws)
+    return ws
 
 
 @router.post("/restore", response_model=WorkspaceRead, status_code=201)
@@ -174,38 +233,58 @@ def get_workspace_tree(
     )
 
 
-@router.get("/{workspace_id}/trash", response_model=list[NodeRead])
-def list_workspace_trash(
+@router.get("/{workspace_id}/home", response_model=WorkspaceHome)
+def get_workspace_home(
     workspace_id: UUID,
+    limit: int = 12,
     db: Session = Depends(get_db),
     _: AuthContext = Depends(require_workspace_role(OrgRole.VIEWER)),
-):
-    """List top-level trashed nodes — those whose nearest non-trashed ancestor
-    is the space (either a root node, or a node whose parent is still live)."""
-    space_ids = [
-        sid
-        for (sid,) in db.execute(
-            select(Space.id).where(Space.workspace_id == workspace_id)
-        ).all()
-    ]
-    if not space_ids:
-        return []
+) -> WorkspaceHome:
+    """Data backing the Home / For You landing page.
 
-    # Trashed node is "top-level" iff parent_id is NULL or parent.deleted_at IS NULL.
-    parent = Node.__table__.alias("parent")
-    return (
-        db.execute(
-            select(Node)
-            .outerjoin(parent, parent.c.id == Node.parent_id)
-            .where(
-                Node.space_id.in_(space_ids),
-                Node.deleted_at.is_not(None),
-                (Node.parent_id.is_(None)) | (parent.c.deleted_at.is_(None)),
-            )
-            .order_by(Node.deleted_at.desc())
+    Returns lightweight workspace stats plus the most recently edited pages
+    (ordered by the node's own ``updated_at``, which bumps on every save).
+    The frontend uses ``space_count``/``page_count`` to choose between the
+    populated layout and the brand-new-workspace empty state.
+    """
+    ws = db.get(Workspace, workspace_id)
+    if ws is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    limit = max(1, min(limit, 50))
+
+    space_count = db.execute(
+        select(func.count(Space.id)).where(Space.workspace_id == workspace_id)
+    ).scalar_one()
+
+    page_count = db.execute(
+        select(func.count(Node.id))
+        .join(Space, Space.id == Node.space_id)
+        .where(
+            Space.workspace_id == workspace_id,
+            Node.type == "page",
+            Node.deleted_at.is_(None),
         )
-        .scalars()
-        .all()
+    ).scalar_one()
+
+    rows = db.execute(_HOME_RECENT_SQL, {"workspace_id": workspace_id, "limit": limit}).fetchall()
+
+    return WorkspaceHome(
+        workspace_id=ws.id,
+        workspace_name=ws.name,
+        space_count=space_count,
+        page_count=page_count,
+        recent=[
+            RecentNodeItem(
+                node_id=row.node_id,
+                name=row.name,
+                space_id=row.space_id,
+                space_name=row.space_name,
+                node_path=list(row.node_path) if row.node_path else [],
+                updated_at=row.updated_at,
+            )
+            for row in rows
+        ],
     )
 
 
