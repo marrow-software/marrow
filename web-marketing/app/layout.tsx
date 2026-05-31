@@ -13,15 +13,14 @@ const fraunces = localFont({
 
 export const metadata: Metadata = {
   title: "Marrow — Your knowledge, owned outright.",
-  description:
-    "A self-hosted, open-source knowledge base built to last. Own your data completely.",
+  description: "Self-hosted, open-source knowledge base with a restore guarantee.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${fraunces.variable} antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <ThemeProvider defaultTheme="dark">
           {children}
         </ThemeProvider>
       </body>
