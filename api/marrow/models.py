@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -378,4 +378,67 @@ class UserStar(Base):
         UniqueConstraint("user_id", "node_id", name="uq_user_stars_user_node"),
         ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+    )
+
+
+class NotificationKind(str, enum.Enum):
+    MENTION = "mention"
+    COMMENT_REPLY = "comment_reply"
+    SHARE_REQUEST = "share_request"
+    WATCH_EVENT = "watch_event"
+
+
+class Notification(Base):
+    """User-scoped activity feed item surfaced in the Inbox rail panel.
+
+    Not part of any export bundle — notifications are personal and
+    workspace-independent, so they are deliberately excluded from the
+    restore guarantee.
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        CheckConstraint(
+            "kind IN ('mention', 'comment_reply', 'share_request', 'watch_event')",
+            name="notifications_kind_valid",
+        ),
+    )
+
+
+class NodeWatch(Base):
+    """A user's subscription to change notifications for a node.
+
+    Watching a folder fans out notifications on changes to any descendant
+    page node (resolved at notification time, not stored). User-scoped and
+    workspace-independent — never part of an export bundle.
+    """
+
+    __tablename__ = "node_watches"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        UniqueConstraint("user_id", "node_id", name="uq_node_watches_user_node"),
     )

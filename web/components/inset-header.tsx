@@ -100,6 +100,7 @@ export function EditorHeader({
       </button>
 
       <PageMenu
+        nodeId={collectionId}
         open={menuOpen}
         onOpenChange={setMenuOpen}
         starred={starred}

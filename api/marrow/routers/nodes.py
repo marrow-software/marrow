@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from ..dependencies import AuthContext, get_db, get_storage, verify_auth
 from ..fractional_index import after as fi_after
 from ..links import reconcile_node_links
-from ..models import Attachment, Node, NodeLink, OrgRole, Revision, Space, UserStar, Workspace
+from ..models import Attachment, Node, NodeLink, NodeWatch, OrgRole, Revision, Space, UserStar, Workspace
 from ..rbac import _check_membership, require_node_role, require_space_role
 from ..schemas import (
     AttachmentRead,
@@ -22,7 +22,9 @@ from ..schemas import (
     NodeReadWithContent,
     NodeUpdate,
     RevisionRead,
+    WatchStatus,
 )
+from ..watches import fan_out_watch_event
 
 router = APIRouter(tags=["nodes"])
 
@@ -187,6 +189,7 @@ def update_node(
     if body.description is not None and node.type == "folder":
         node.description = body.description
 
+    saved_revision = False
     if body.content is not None and node.type == "page":
         rev = Revision(
             node_id=node.id,
@@ -197,8 +200,20 @@ def update_node(
         db.flush()
         node.current_revision_id = rev.id
         reconcile_node_links(db, node.id, body.content, body.content_format or "markdown")
+        saved_revision = True
 
     node.updated_at = datetime.now(timezone.utc)
+
+    if saved_revision:
+        # Notify watchers best-effort — must not block or fail the save.
+        # Use a savepoint so any partial notification rows are rolled back on
+        # failure rather than being committed by the db.commit() below.
+        sp = db.begin_nested()
+        try:
+            fan_out_watch_event(db, node=node, actor_user_id=auth.user_id, event="save")
+            sp.commit()
+        except Exception:
+            sp.rollback()
 
     try:
         db.commit()
@@ -464,3 +479,63 @@ def download_attachment(
         raise HTTPException(404, "Attachment not found")
     data = storage.read(str(attachment.id), attachment.filename)
     return Response(content=data, media_type="application/octet-stream")
+
+
+def _require_user(auth: AuthContext) -> UUID:
+    """Watches are user-scoped — API-key/anonymous callers have no identity."""
+    if auth.user_id is None:
+        raise HTTPException(401, "User authentication required to watch nodes")
+    return auth.user_id
+
+
+@router.get("/api/nodes/{node_id}/watching", response_model=WatchStatus)
+def get_watch_status(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    user_id = _require_user(auth)
+    _node_or_404(node_id, db)
+    watch = db.execute(
+        select(NodeWatch).where(
+            NodeWatch.node_id == node_id, NodeWatch.user_id == user_id
+        )
+    ).scalar_one_or_none()
+    return WatchStatus(watching=watch is not None)
+
+
+@router.post("/api/nodes/{node_id}/watch", response_model=WatchStatus, status_code=201)
+def watch_node(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    user_id = _require_user(auth)
+    _node_or_404(node_id, db)
+    existing = db.execute(
+        select(NodeWatch).where(
+            NodeWatch.node_id == node_id, NodeWatch.user_id == user_id
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        db.add(NodeWatch(node_id=node_id, user_id=user_id))
+        db.commit()
+    return WatchStatus(watching=True)
+
+
+@router.delete("/api/nodes/{node_id}/watch", status_code=204)
+def unwatch_node(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    user_id = _require_user(auth)
+    _node_or_404(node_id, db)
+    watch = db.execute(
+        select(NodeWatch).where(
+            NodeWatch.node_id == node_id, NodeWatch.user_id == user_id
+        )
+    ).scalar_one_or_none()
+    if watch is not None:
+        db.delete(watch)
+        db.commit()

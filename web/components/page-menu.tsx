@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
   Copy,
   Eye,
+  EyeOff,
   History,
   Link as LinkIcon,
   Star,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+
+import { getWatchStatus, unwatchNode, watchNode } from "@/lib/api";
 
 export type PageMenuDrawer = "backlinks" | "history";
 
@@ -56,6 +59,8 @@ interface Props {
   starred?: boolean;
   /** Invoked when the user clicks Star/Unstar. */
   onToggleStar?: () => void;
+  /** Node (page or folder) this menu acts on; enables the Watch toggle. */
+  nodeId?: string;
 }
 
 export function PageMenu({
@@ -65,8 +70,44 @@ export function PageMenu({
   trigger,
   starred = false,
   onToggleStar,
+  nodeId,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const [watching, setWatching] = useState<boolean | null>(null);
+  const [watchBusy, setWatchBusy] = useState(false);
+
+  // Load the current watch state each time the menu opens so the toggle
+  // reflects reality (it may have changed in another tab/session).
+  useEffect(() => {
+    if (!open || !nodeId) return;
+    let cancelled = false;
+    getWatchStatus(nodeId)
+      .then((s) => !cancelled && setWatching(s.watching))
+      .catch(() => !cancelled && setWatching(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, nodeId]);
+
+  async function toggleWatch() {
+    if (!nodeId || watchBusy) return;
+    setWatchBusy(true);
+    try {
+      if (watching) {
+        await unwatchNode(nodeId);
+        setWatching(false);
+        toast.success("Stopped watching");
+      } else {
+        await watchNode(nodeId);
+        setWatching(true);
+        toast.success("Watching — you'll be notified of changes");
+      }
+    } catch {
+      toast.error("Couldn't update watch status");
+    } finally {
+      setWatchBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -90,6 +131,25 @@ export function PageMenu({
           {ITEMS.map((item, i) => {
             if (item.kind === "divider") {
               return <div key={`div-${i}`} className="my-1 h-px bg-border" />;
+            }
+
+            if (item.kind === "action" && item.id === "watch") {
+              const WatchIcon = watching ? EyeOff : Eye;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="menuitem"
+                  disabled={!nodeId || watchBusy}
+                  onClick={toggleWatch}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+                >
+                  <WatchIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="flex-1">
+                    {watching ? "Unwatch" : "Watch"}
+                  </span>
+                </button>
+              );
             }
 
             const isStar = item.kind === "action" && item.id === "star";

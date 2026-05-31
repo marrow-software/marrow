@@ -20,6 +20,7 @@ import type {
   ShareLink,
   Space,
   StarredNode,
+  WatchStatus,
   Workspace,
   WorkspaceTree,
 } from "./types";
@@ -381,6 +382,20 @@ export function revokeShareLink(linkId: string): Promise<void> {
 /** Public, no-account URL a viewer opens to read shared content. */
 export function sharedLinkUrl(token: string): string {
   return `${getApiUrl()}/shared/${token}`;
+}
+
+// Node watches (#104) — subscribe to change notifications for a page or folder.
+
+export function getWatchStatus(nodeId: string): Promise<WatchStatus> {
+  return apiFetch(`/api/nodes/${nodeId}/watching`);
+}
+
+export function watchNode(nodeId: string): Promise<WatchStatus> {
+  return apiFetch(`/api/nodes/${nodeId}/watch`, { method: "POST" });
+}
+
+export function unwatchNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/watch`, { method: "DELETE" });
 }
 
 /** Convert a display name to a URL-safe slug. */

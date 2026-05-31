@@ -305,3 +305,9 @@ class AuthStatus(BaseModel):
     user: UserRead | None = None
     method: str
     oidc_enabled: bool
+
+
+class WatchStatus(BaseModel):
+    """Whether the current user is watching a given node."""
+
+    watching: bool
