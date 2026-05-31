@@ -472,21 +472,29 @@ class SwarmCoordinator:
                 print("[swarm] Kill switch — stopping reviews.")
                 break
 
-            print(f"\n  Reviewing PR #{pr['number']}: {pr['title'][:60]}")
             log_path = LOGS_DIR / f"review-{pr['number']}.log"
+            if log_path.exists():
+                print(f"  · PR #{pr['number']} already reviewed — skipping (delete log to re-review)")
+                continue
+
+            print(f"\n  Reviewing PR #{pr['number']}: {pr['title'][:60]}")
 
             with open(log_path, "w") as log_fh:
-                proc = subprocess.run(
-                    ["claude", "-p", f"/review {pr['number']}",
-                     "--dangerously-skip-permissions",
-                     "--model", SONNET,
-                     "--no-session-persistence"],
-                    cwd=self.repo_root,
-                    stdout=log_fh, stderr=log_fh,
-                    timeout=600,
-                )
+                try:
+                    proc = subprocess.run(
+                        ["claude", "-p", f"/review {pr['number']}",
+                         "--dangerously-skip-permissions",
+                         "--model", SONNET,
+                         "--no-session-persistence"],
+                        cwd=self.repo_root,
+                        stdout=log_fh, stderr=log_fh,
+                        timeout=1800,
+                    )
+                    status = "✓" if proc.returncode == 0 else "✗"
+                except subprocess.TimeoutExpired:
+                    status = "⏱ timeout"
+                    log_path.unlink(missing_ok=True)  # remove log so it can be retried
 
-            status = "✓" if proc.returncode == 0 else "✗"
             print(f"  {status} PR #{pr['number']} reviewed — log: {log_path}")
 
     def cleanup_all(self, results: list[AgentResult]) -> None:
@@ -609,14 +617,26 @@ INSTRUCTIONS — follow these steps in order:
    The current schema is: organizations → workspaces → spaces → nodes
    (self-referential tree; type ∈ {{folder, page}}). There are no "collections".
 
-3. Explore at least 3 related source files to understand existing patterns before
-   writing any code. Match the style of surrounding code exactly.
+3. Before writing any code, read these cross-cutting modules in full — they
+   define patterns that your code must follow and failure modes you must avoid:
+     - api/marrow/auth.py           — auth context, session JWT, anonymous mode
+     - api/marrow/dependencies.py   — verify_auth, AuthContext, how auth is injected
+     - api/marrow/rbac.py           — role enforcement; note that space/workspace CAN
+                                      be None in some code paths — always guard
+     - api/marrow/db.py             — session management, transaction patterns
+     - api/marrow/export.py         — export bundle format (read even if not touching)
+     - api/marrow/restore.py        — restore logic (read even if not touching)
+   Then read at least 3 additional files directly related to your feature area.
+   Match the style and patterns of the surrounding code exactly.
 
 4. Implement all required changes.
    - When writing marketing copy, only describe features that *actually exist* in
      the codebase. Never invent features (e.g. offline sync, AI, collaboration).
    - If the issue is a parent epic with no direct implementable scope of its own,
      write a brief explanation to stdout and stop — do not fabricate changes.
+   - Null-guard every ORM object lookup before accessing attributes. If a space,
+     workspace, or node lookup returns None, raise HTTPException(404), not AttributeError.
+   - Never use `git add -A` or `git add .` — stage only the files you intentionally changed.
 
 5. If your changes include an Alembic database migration:
    a. Run `cd api && alembic revision --autogenerate -m "<short description>"` to
@@ -625,24 +645,39 @@ INSTRUCTIONS — follow these steps in order:
    b. Review the generated file in api/alembic/versions/ for correctness.
    c. Run `cd api && alembic upgrade head` to verify it applies cleanly.
 
-6. If your changes touch api/marrow/export.py, ALWAYS check api/marrow/restore.py
-   for the symmetric update and apply it. Export and restore must stay in sync —
-   this is a non-negotiable project constraint (the "restore guarantee").
+6. RESTORE GUARANTEE CHECK — mandatory for every PR, not just ones that touch
+   export/restore directly:
+   a. Read api/marrow/export.py and api/marrow/restore.py.
+   b. Ask: "Does my change add a new DB column, table, relationship, or bundle
+      field?" If yes, the export must write it and restore must read it back.
+   c. Ask: "Does my change add any new code path in restore that can raise an
+      unhandled exception?" If yes, add a guard and raise a clean ValueError.
+   d. Export and restore must be symmetric — this is the project's non-negotiable
+      architectural constraint. A failing restore is a critical bug.
 
 7. Run the full test suite and fix any failures before committing:
        cd api && python -m pytest -x -q 2>&1 | tail -30
 
-8. Stage only source files — NEVER use `git add -A` or `git add .`:
+8. Smoke-test your feature end-to-end before committing:
+   - If you added or changed an API route: run `uvicorn main:app --port 8001` in
+     the background (cd api first), then curl the new endpoint and verify the
+     response shape. Kill uvicorn after.
+   - If you added frontend UI: verify the component renders and the API call
+     actually fires (check network tab or server logs). Do not rely on "it looks
+     right" — confirm the wiring is real.
+   - If you added a UI feature that writes data: confirm the write reaches the DB.
+
+9. Stage only source files — NEVER use `git add -A` or `git add .`:
        git add api/marrow/ api/tests/ api/alembic/ web/app/ web/components/ web/lib/ web/hooks/ docs/ CLAUDE.md
    Never stage build artifacts: dist/, .next/, node_modules/, *.pyc, *.egg-info/,
    next-env.d.ts, tsconfig.tsbuildinfo, or anything matched by .gitignore.
    Then commit:
        git commit -m "feat: implement #{footprint.number} — {footprint.title[:60]}"
 
-9. Update CLAUDE.md if your changes add new routes, schema changes, new env vars,
-   new components, or architectural decisions that future agents need to know.
+10. Update CLAUDE.md if your changes add new routes, schema changes, new env vars,
+    new components, or architectural decisions that future agents need to know.
 
-10. Open a pull request targeting v0.2 (NOT main):
+11. Open a pull request targeting v0.2 (NOT main):
         gh pr create \\
           --base v0.2 \\
           --title "feat: #{footprint.number} {footprint.title}" \\

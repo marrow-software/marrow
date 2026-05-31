@@ -28,6 +28,7 @@ import type {
   StarredNode,
   WatchStatus,
   Workspace,
+  WorkspaceHome,
   WorkspaceTree,
 } from "./types";
 
@@ -89,16 +90,8 @@ export function listWorkspaces(): Promise<Workspace[]> {
   return apiFetch("/api/workspaces");
 }
 
-/** @deprecated Use createWorkspaceInOrg instead. */
 export function createWorkspace(slug: string, name: string): Promise<Workspace> {
   return apiFetch("/api/workspaces", {
-    method: "POST",
-    body: JSON.stringify({ slug, name }),
-  });
-}
-
-export function createWorkspaceInOrg(orgId: string, slug: string, name: string): Promise<Workspace> {
-  return apiFetch(`/api/orgs/${orgId}/workspaces`, {
     method: "POST",
     body: JSON.stringify({ slug, name }),
   });
@@ -110,6 +103,10 @@ export function getWorkspace(id: string): Promise<Workspace> {
 
 export function getWorkspaceTree(id: string): Promise<WorkspaceTree> {
   return apiFetch(`/api/workspaces/${id}/tree`);
+}
+
+export function getWorkspaceHome(id: string): Promise<WorkspaceHome> {
+  return apiFetch(`/api/workspaces/${id}/home`);
 }
 
 export function getExportSizeEstimate(

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { WorkspaceShell } from "@/components/workspace-shell";
-import { getAuthStatus, getWorkspaceTree, listOrgMembers, listOrgs, listWorkspaces } from "@/lib/api";
+import { getAuthStatus, getWorkspaceTree, listOrgMembers } from "@/lib/api";
 
 interface Props {
   children: React.ReactNode;

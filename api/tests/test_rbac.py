@@ -8,10 +8,11 @@ from fastapi.testclient import TestClient
 
 from marrow.auth import COOKIE_NAME, create_session_jwt, reset_oidc_config
 from marrow.models import (
-    Node,
+    Collection,
     Organization,
     OrgMembership,
     OrgRole,
+    Page,
     Revision,
     Space,
     User,
@@ -51,7 +52,7 @@ def _make_user(session, email: str, name: str = "Test User") -> User:
 
 
 def _make_org_with_workspace(session) -> tuple:
-    """Create an org with a workspace containing a full node hierarchy."""
+    """Create an org with a workspace containing a full hierarchy."""
     org = Organization(slug=f"org-{uuid.uuid4().hex[:6]}", name="Test Org")
     session.add(org)
     session.flush()
@@ -64,36 +65,21 @@ def _make_org_with_workspace(session) -> tuple:
     session.add(space)
     session.flush()
 
-    folder = Node(
-        space_id=space.id,
-        parent_id=None,
-        type="folder",
-        name="Docs",
-        slug="docs",
-        position="000000",
-    )
-    session.add(folder)
+    col = Collection(space_id=space.id, slug="docs", name="Docs")
+    session.add(col)
     session.flush()
 
-    page = Node(
-        space_id=space.id,
-        parent_id=folder.id,
-        type="page",
-        name="Test Page",
-        slug="test-page",
-        position="000000",
-        current_revision_id=None,
-    )
+    page = Page(collection_id=col.id, slug="test-page", title="Test Page")
     session.add(page)
     session.flush()
 
-    rev = Revision(node_id=page.id, content="# Test", content_format="markdown")
+    rev = Revision(page_id=page.id, content="# Test")
     session.add(rev)
     session.flush()
     page.current_revision_id = rev.id
     session.flush()
 
-    return org, ws, space, folder, page
+    return org, ws, space, col, page
 
 
 def _add_membership(session, org, user, role: OrgRole) -> OrgMembership:
@@ -259,5 +245,42 @@ class TestEditorRole:
             db.rollback()
             client.cookies.clear()
 
-    # Node CRUD routes (create/update page nodes) land in #124 (2.0b).
-    # Tests for those endpoints will be added once the routes exist.
+    def test_viewer_cannot_create_page(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "viewer-page@test.com")
+            org, ws, space, col, _ = _make_org_with_workspace(db)
+            _add_membership(db, org, user, OrgRole.VIEWER)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.post(
+                f"/api/collections/{col.id}/pages",
+                json={"slug": "new-page", "title": "New Page", "content": "# Hello"},
+            )
+            assert res.status_code == 403
+        finally:
+            db.rollback()
+            client.cookies.clear()
+
+    def test_editor_can_update_page(self, client):
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            user = _make_user(db, "editor-page@test.com")
+            org, ws, space, col, page = _make_org_with_workspace(db)
+            _add_membership(db, org, user, OrgRole.EDITOR)
+            db.commit()
+
+            _auth_cookie(client, user)
+            res = client.patch(
+                f"/api/pages/{page.id}",
+                json={"content": "# Updated"},
+            )
+            assert res.status_code == 200
+        finally:
+            db.rollback()
+            client.cookies.clear()

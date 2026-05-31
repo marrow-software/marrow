@@ -1,7 +1,6 @@
 """FastAPI application factory."""
 
 import os
-from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,41 +32,7 @@ _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 
 _secret_key = os.getenv("SECRET_KEY", "changeme")
 
-
-def _ensure_default_org_and_workspace() -> None:
-    """Create a 'Default' org and workspace if none exist (API_KEY-only mode)."""
-    from sqlalchemy.exc import IntegrityError
-    from sqlalchemy.orm import Session
-
-    from .dependencies import _engine
-    from .models import Organization, Workspace
-    from .routers.auth import _unique_org_slug, _unique_workspace_slug
-
-    with Session(_engine) as db:
-        if db.query(Organization).first() is not None:
-            return
-        org_slug = _unique_org_slug(db, "default")
-        org = Organization(slug=org_slug, name="Default")
-        db.add(org)
-        db.flush()
-        ws_slug = _unique_workspace_slug(db, "default")
-        db.add(Workspace(org_id=org.id, slug=ws_slug, name="Default"))
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()  # another process won the race — that's fine
-
-
-@asynccontextmanager
-async def lifespan(app_instance: FastAPI):
-    # In API_KEY-only mode (no OIDC), lazily provision the Default org+workspace
-    # so operators don't need to call the API before using the web UI.
-    if _api_key_set and not _oidc_enabled:
-        _ensure_default_org_and_workspace()
-    yield
-
-
-app = FastAPI(title="Marrow API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Marrow API", version="0.1.0")
 
 # SessionMiddleware is required by authlib for OAuth state management.
 app.add_middleware(SessionMiddleware, secret_key=_secret_key)
