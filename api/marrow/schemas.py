@@ -192,6 +192,52 @@ class AttachmentRead(_ReadBase):
 
 
 # ---------------------------------------------------------------------------
+# Node properties
+# ---------------------------------------------------------------------------
+
+PropertyValueType = Literal["text", "number", "date", "select", "multi-select", "checkbox"]
+
+
+class PropertySchemaUpsert(BaseModel):
+    """Define or update a property in a folder's schema."""
+
+    value_type: PropertyValueType
+    options: list[str] | None = None
+
+
+class PropertySchemaRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    key: str
+    value_type: PropertyValueType
+    options: list[str] | None = None
+
+
+class PropertyValueUpsert(BaseModel):
+    """Set a property value on a page node."""
+
+    value: str | None = None
+    value_type: PropertyValueType
+
+
+class EffectiveProperty(BaseModel):
+    """A property as seen on a page: its type/options (possibly inherited from
+    an ancestor folder schema) plus the page's own value when set."""
+
+    key: str
+    value_type: PropertyValueType
+    options: list[str] | None = None
+    value: str | None = None
+    inherited: bool = False
+    defined_on: UUID | None = None
+
+
+class EffectivePropertiesResponse(BaseModel):
+    node_id: UUID
+    properties: list[EffectiveProperty]
+
+
+# ---------------------------------------------------------------------------
 # Search
 # ---------------------------------------------------------------------------
 

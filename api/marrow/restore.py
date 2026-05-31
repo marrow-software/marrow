@@ -17,7 +17,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from .links import rebuild_node_links
-from .models import Attachment, Node, Organization, Revision, Space, Workspace
+from .models import Attachment, Node, NodeProperty, Organization, Revision, Space, Workspace
 from .storage import StorageAdapter
 
 logger = logging.getLogger(__name__)
@@ -471,6 +471,27 @@ def _restore_v4_nodes(
                 hash=att["hash"],
                 size_bytes=att["size_bytes"],
                 created_at=_dt(att["created_at"]),
+            )
+        )
+    session.flush()
+
+    # --- Node properties (v4 bundles only) ---
+    for prop in manifest.get("node_properties", []):
+        node_id = uuid.UUID(prop["node_id"])
+        if session.get(Node, node_id) is None:
+            raise ValueError(
+                f"node_properties entry references unknown node_id '{node_id}'"
+            )
+        session.add(
+            NodeProperty(
+                id=uuid.UUID(prop["id"]),
+                node_id=node_id,
+                key=prop["key"],
+                value=prop.get("value"),
+                value_type=prop["value_type"],
+                options=prop.get("options"),
+                created_at=_dt(prop["created_at"]),
+                updated_at=_dt(prop["updated_at"]),
             )
         )
     session.flush()

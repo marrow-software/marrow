@@ -233,6 +233,43 @@ class Attachment(Base):
     node: Mapped["Node"] = relationship(back_populates="attachments")
 
 
+class NodeProperty(Base):
+    """Typed key-value metadata attached to a node.
+
+    Folder nodes declare schema definitions (key + value_type + options).
+    Page nodes store actual values for those keys. Inheritance is resolved
+    at read time by walking ancestor folders.
+    """
+
+    __tablename__ = "node_properties"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    value_type: Mapped[str] = mapped_column(Text, nullable=False)
+    options: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        UniqueConstraint("node_id", "key", name="uq_node_properties_node_key"),
+        CheckConstraint(
+            "value_type IN ('text', 'number', 'date', 'select', 'multi-select', 'checkbox')",
+            name="node_properties_value_type_valid",
+        ),
+    )
+
+    node: Mapped["Node"] = relationship(back_populates="properties")
+
+
 class ShareLink(Base):
     """A view-only public link to a node (folder or page).
 

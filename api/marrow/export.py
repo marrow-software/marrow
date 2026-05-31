@@ -29,7 +29,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from .models import Node, Workspace
+from .models import Attachment, Node, NodeProperty, Workspace
 from .storage import StorageAdapter
 
 SCHEMA_VERSION = "4"
@@ -238,12 +238,30 @@ def _build_links(nodes: list[Node], node_id_set: set[str]) -> dict:
     }
 
 
+def serialize_node_properties(properties: list[NodeProperty]) -> list[dict]:
+    return [
+        {
+            "id": str(p.id),
+            "node_id": str(p.node_id),
+            "key": p.key,
+            "value": p.value,
+            "value_type": p.value_type,
+            "options": p.options,
+            "created_at": p.created_at.isoformat(),
+            "updated_at": p.updated_at.isoformat(),
+        }
+        for p in properties
+    ]
+
+
 def _build_manifest(
     workspace: Workspace,
     nodes: list[Node],
     attachment_records: list[dict],
     export_timestamp: str,
     include_trash: bool = False,
+    *,
+    node_properties: list[dict] | None = None,
 ) -> dict:
     spaces = workspace.spaces
     page_nodes = [n for n in nodes if n.type == "page"]
@@ -311,6 +329,7 @@ def _build_manifest(
         "nodes": node_records,
         "revisions": revision_records,
         "attachments": attachment_records,
+        "node_properties": node_properties or [],
     }
 
 
@@ -455,8 +474,16 @@ def export_workspace(
 
         zf.writestr("links.json", json.dumps(_build_links(nodes, node_id_set), indent=2))
 
+        node_id_list = [n.id for n in all_nodes]
+        prop_rows = (
+            session.query(NodeProperty)
+            .filter(NodeProperty.node_id.in_(node_id_list))
+            .all()
+        ) if node_id_list else []
+
         manifest = _build_manifest(
-            workspace, nodes, attachment_records, export_timestamp, include_trash=include_trash
+            workspace, nodes, attachment_records, export_timestamp, include_trash=include_trash,
+            node_properties=serialize_node_properties(prop_rows) if prop_rows else None,
         )
         if slim:
             manifest["slim"] = True

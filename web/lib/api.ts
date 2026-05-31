@@ -11,12 +11,16 @@ import type {
   AuthStatus,
   Backlink,
   Comment,
+  EffectiveProperty,
+  EffectivePropertiesResponse,
   Node,
   NodeType,
   Notification,
   NotificationList,
   Organization,
   OrgMembership,
+  PropertySchema,
+  PropertyValueType,
   Revision,
   SearchResponse,
   ShareLink,
@@ -412,6 +416,68 @@ export function markNotificationRead(id: string): Promise<Notification> {
 
 export async function markAllNotificationsRead(): Promise<void> {
   await apiFetch("/api/users/me/notifications/read-all", { method: "POST" });
+
+// ---------------------------------------------------------------------------
+// Node properties
+// ---------------------------------------------------------------------------
+// Node properties
+// ---------------------------------------------------------------------------
+
+/** Effective properties for a node (inherited folder schemas + own values). */
+export function getNodeProperties(
+  nodeId: string
+): Promise<EffectivePropertiesResponse> {
+  return apiFetch(`/api/nodes/${nodeId}/properties`);
+}
+
+/** Set (or clear) a property value on a page node. */
+export function setNodeProperty(
+  nodeId: string,
+  key: string,
+  value: string | null,
+  valueType: PropertyValueType
+): Promise<EffectiveProperty> {
+  return apiFetch(`/api/nodes/${nodeId}/properties/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body: JSON.stringify({ value, value_type: valueType }),
+  });
+}
+
+export function deleteNodeProperty(nodeId: string, key: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/properties/${encodeURIComponent(key)}`, {
+    method: "DELETE",
+  });
+}
+
+/** List a folder's property schema definitions. */
+export function getPropertySchema(nodeId: string): Promise<PropertySchema[]> {
+  return apiFetch(`/api/nodes/${nodeId}/property-schema`);
+}
+
+/** Define or update a property in a folder's schema. */
+export function upsertPropertySchema(
+  nodeId: string,
+  key: string,
+  valueType: PropertyValueType,
+  options: string[] | null
+): Promise<PropertySchema> {
+  return apiFetch(
+    `/api/nodes/${nodeId}/property-schema/${encodeURIComponent(key)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ value_type: valueType, options }),
+    }
+  );
+}
+
+export function deletePropertySchema(
+  nodeId: string,
+  key: string
+): Promise<void> {
+  return apiFetch(
+    `/api/nodes/${nodeId}/property-schema/${encodeURIComponent(key)}`,
+    { method: "DELETE" }
+  );
 }
 
 /** Convert a display name to a URL-safe slug. */
