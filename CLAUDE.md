@@ -24,6 +24,8 @@ Current status: **v0.1 MVP** — core hierarchy, append-only revisions, export/r
 - **Auth**: OIDC authentication (any IdP) with API key fallback — see `api/marrow/auth.py`
 - **Search**: PostgreSQL full-text search; Meilisearch/OpenSearch later
 - **Frontend**: Next.js 16 (React 19), located in `web/` (app) and `web-marketing/` (public marketing site — Landing/Product/Pricing, shared chrome)
+- **Frontend (product app)**: Next.js 16 (React 19), located in `web/` — serves `app.marrow.so`
+- **Frontend (marketing site)**: Next.js 16, located in `web-marketing/` — serves `marrow.so` + `www.marrow.so` via Cloudflare Pages
 - **Storage**: Pluggable adapter interface — local filesystem is the only current implementation
 - **CLI**: Typer (`marrow export` / `marrow restore`)
 
@@ -110,11 +112,17 @@ cd api && marrow export --workspace <slug> --output <path>
 cd api && marrow restore <bundle.zip>
 cd api && marrow purge-trash --older-than-days 30   # hard-delete old trashed nodes (cron'able)
 
-# Frontend
+# Product frontend (web/)
 cd web && npm run dev
 cd web && npm run build
 cd web && npm run lint
 cd web && npm test
+
+# Marketing site (web-marketing/) — runs on port 3001 in dev
+cd web-marketing && npm run dev
+cd web-marketing && npm run build
+cd web-marketing && npm run lint
+cd web-marketing && npm run pages:build   # Cloudflare Pages adapter build
 ```
 
 ---
@@ -218,6 +226,20 @@ marrow/
 │   │   └── utils.ts
 │   └── hooks/
 │
+├── web-marketing/                    # Next.js marketing site (marrow.so + www)
+│   ├── wrangler.toml                 # Cloudflare Pages config (project: marrow-marketing)
+│   ├── next.config.ts                # Standard Next.js config (Docker / local)
+│   ├── next.config.pages.ts          # Cloudflare Pages build config (next-on-pages)
+│   ├── app/
+│   │   ├── layout.tsx                # Root layout + metadata
+│   │   ├── page.tsx                  # Homepage (Nav + Hero + Features + Footer)
+│   │   └── globals.css               # Design tokens + Google Fonts import
+│   └── components/
+│       ├── nav.tsx                   # Top nav with GitHub + Docs + "Open app" links
+│       ├── hero.tsx                  # Above-the-fold hero section
+│       ├── features.tsx              # Feature grid (only existing features)
+│       └── footer.tsx                # Footer with links
+│
 ├── docs/                             # Astro Starlight docs site (user-facing)
 │   ├── astro.config.mjs              # Sidebar nav + site metadata
 │   ├── package.json
@@ -235,6 +257,7 @@ marrow/
 ├── .env.prod.example                 # Prod env vars (root, used by compose)
 ├── .github/workflows/
 │   ├── ci.yml                        # PR + push: api lint+test, web build, docs build
+│   ├── marketing.yml                 # web-marketing/ path-filtered CI + Cloudflare Pages deploy
 │   ├── release.yml                   # main + tags: build/push GHCR, deploy to Cloudflare
 │   └── codeql.yml                    # Weekly CodeQL analysis
 ├── CLAUDE.md                         # This file
