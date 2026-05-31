@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_storage, verify_auth
 from ..fractional_index import after as fi_after
-from ..models import Attachment, Node, OrgRole, Revision, Space, Workspace
+from ..links import reconcile_node_links
+from ..models import Attachment, Node, NodeLink, OrgRole, Revision, Space, Workspace
 from ..rbac import _check_membership, require_node_role, require_space_role
 from ..schemas import (
     AttachmentRead,
@@ -112,6 +113,7 @@ def create_node(
         db.flush()
         node.current_revision_id = rev.id
         db.flush()
+        reconcile_node_links(db, node.id, content, body.content_format)
 
     db.commit()
     db.refresh(node)
@@ -194,6 +196,7 @@ def update_node(
         db.add(rev)
         db.flush()
         node.current_revision_id = rev.id
+        reconcile_node_links(db, node.id, body.content, body.content_format or "markdown")
 
     node.updated_at = datetime.now(timezone.utc)
 
@@ -302,6 +305,26 @@ def list_children(
             select(Node)
             .where(Node.parent_id == node_id, Node.deleted_at.is_(None))
             .order_by(Node.position, Node.created_at)
+        )
+        .scalars()
+        .all()
+    )
+
+
+@router.get("/api/nodes/{node_id}/backlinks", response_model=list[NodeRead])
+def list_backlinks(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    """Nodes that link to this node. Trashed source nodes are excluded."""
+    _node_or_404(node_id, db)
+    return (
+        db.execute(
+            select(Node)
+            .join(NodeLink, NodeLink.source_node_id == Node.id)
+            .where(NodeLink.target_node_id == node_id, Node.deleted_at.is_(None))
+            .order_by(Node.name, Node.created_at)
         )
         .scalars()
         .all()

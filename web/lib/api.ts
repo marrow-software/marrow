@@ -9,6 +9,7 @@ import { getApiKey, getApiUrl, getInternalApiUrl } from "./runtime-config";
 import type {
   Attachment,
   AuthStatus,
+  Backlink,
   Node,
   NodeType,
   Organization,
@@ -228,6 +229,14 @@ export function listRevisions(nodeId: string): Promise<Revision[]> {
 
 export function getRevision(nodeId: string, revisionId: string): Promise<Revision> {
   return apiFetch(`/api/nodes/${nodeId}/revisions/${revisionId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Backlinks
+// ---------------------------------------------------------------------------
+
+export function getBacklinks(nodeId: string): Promise<Backlink[]> {
+  return apiFetch(`/api/nodes/${nodeId}/backlinks`);
 }
 
 // ---------------------------------------------------------------------------
