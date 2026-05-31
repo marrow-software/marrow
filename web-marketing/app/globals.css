@@ -1,28 +1,8 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:is([data-theme="dark"] *));
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=Inter:wght@400;500;600&display=swap");
 
-@theme inline {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-heading: var(--font-fraunces), ui-serif, Georgia, serif;
-}
-
-/* Light mode (default) */
 :root {
-  --color-base: #dde3ee;
-  --color-surface: #eaeff7;
-  --color-surface-elevated: #f4f6fb;
-  --color-border: #c8d0e0;
-  --color-text-primary: #1e293b;
-  --color-text-secondary: #64748b;
-  --color-text-muted: #94a3b8;
-  --color-accent: #9a3412;
-  --color-cream: #f5ecd9;
-  --color-bone: #ece3d0;
-}
-
-/* Dark mode */
-[data-theme="dark"] {
   --color-base: #111318;
   --color-surface: #1a1d27;
   --color-surface-elevated: #222636;
@@ -35,11 +15,12 @@
   --color-bone: #ece3d0;
 }
 
-@layer base {
-  body {
-    background-color: var(--color-base);
-    color: var(--color-text-primary);
-    font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-  }
+body {
+  background-color: var(--color-base);
+  color: var(--color-text-primary);
+  font-family: "Inter", sans-serif;
+}
+
+h1, h2, h3, h4 {
+  font-family: "Fraunces", serif;
 }
