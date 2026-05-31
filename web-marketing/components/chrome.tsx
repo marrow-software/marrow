@@ -1,152 +1,110 @@
-import * as React from "react";
+"use client";
+
 import Link from "next/link";
-import { Wordmark } from "./wordmark";
-import { IconGithub } from "./icons";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
+import { GithubIcon, MarrowWordmark, MoonIcon, SunIcon } from "@/components/icons";
+
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  if (!mounted) return <div className="w-8 h-8" />;
+
+  return (
+    <button
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      className="w-8 h-8 flex items-center justify-center rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--muted)] transition-colors"
+      aria-label="Toggle theme"
+    >
+      {resolvedTheme === "dark" ? (
+        <SunIcon className="w-4 h-4" />
+      ) : (
+        <MoonIcon className="w-4 h-4" />
+      )}
+    </button>
+  );
+}
 
 const NAV_LINKS = [
   { href: "/product", label: "Product" },
-  { href: "/pricing", label: "Pricing" },
   { href: "/docs", label: "Docs" },
-  { href: "/blog", label: "Blog" },
-];
-
-const FOOTER_PRODUCT = [
-  { href: "/product", label: "Product tour" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/changelog", label: "Changelog" },
-];
-
-const FOOTER_DEVELOPERS = [
-  { href: "/docs", label: "Documentation" },
-  { href: "/docs/install", label: "Self-host guide" },
-  {
-    href: "https://github.com/spmcgraw/marrow",
-    label: "GitHub",
-    external: true,
-  },
-];
-
-const FOOTER_COMPANY = [
-  { href: "/about", label: "About" },
-  { href: "/privacy", label: "Privacy" },
-  { href: "/terms", label: "Terms" },
+  { href: "https://github.com/spmcgraw/marrow", label: "GitHub", external: true },
 ];
 
 export function TopNav() {
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[color-mix(in_oklab,var(--background)_85%,transparent)] backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-        <Wordmark href="/" />
-        <nav className="hidden items-center gap-7 md:flex">
-          {NAV_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-            >
-              {link.label}
-            </Link>
-          ))}
+    <header
+      className="sticky top-0 z-40 border-b border-[var(--border)]"
+      style={{ backgroundColor: "var(--background)" }}
+    >
+      <div className="max-w-[1440px] mx-auto px-6 h-14 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2 no-underline">
+          <MarrowWordmark className="text-lg text-[var(--foreground)]" />
+        </Link>
+
+        <nav className="flex items-center gap-1">
+          {NAV_LINKS.map((link) =>
+            link.external ? (
+              <a
+                key={link.href}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors flex items-center gap-1.5"
+              >
+                {link.label === "GitHub" && <GithubIcon className="w-4 h-4" />}
+                {link.label}
+              </a>
+            ) : (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="px-3 py-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors no-underline"
+              >
+                {link.label}
+              </Link>
+            )
+          )}
+          <div className="w-px h-4 bg-[var(--border)] mx-1" />
+          <ThemeToggle />
         </nav>
-        <div className="flex items-center gap-2">
-          <Link
-            href="https://github.com/spmcgraw/marrow"
-            aria-label="Marrow on GitHub"
-            className="hidden h-9 w-9 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)] sm:inline-flex"
-          >
-            <IconGithub size={18} />
-          </Link>
-          <Link
-            href="https://app.marrow.so"
-            className="hidden h-9 items-center rounded-md px-3 text-sm text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] sm:inline-flex"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/docs/install"
-            className="inline-flex h-9 items-center rounded-md bg-[var(--primary)] px-3.5 text-sm font-medium text-[var(--primary-foreground)] transition-opacity hover:opacity-90"
-          >
-            Deploy On-prem
-          </Link>
-        </div>
       </div>
     </header>
   );
 }
 
-function FooterColumn({
-  heading,
-  links,
-}: {
-  heading: string;
-  links: { href: string; label: string; external?: boolean }[];
-}) {
-  return (
-    <div>
-      <h4
-        className="mb-3 text-xs font-medium uppercase tracking-[0.12em] text-[var(--muted-foreground)]"
-        style={{ fontFamily: "var(--font-mono)" }}
-      >
-        {heading}
-      </h4>
-      <ul className="space-y-2">
-        {links.map((link) => (
-          <li key={link.href}>
-            <Link
-              href={link.href}
-              className="text-sm text-[var(--foreground)]/80 transition-colors hover:text-[var(--foreground)]"
-              {...(link.external
-                ? { target: "_blank", rel: "noreferrer" }
-                : {})}
-            >
-              {link.label}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 export function Footer() {
   return (
-    <footer className="mt-24 border-t border-[var(--border)] bg-[var(--card)]">
-      <div className="mx-auto max-w-6xl px-6 py-14">
-        <div className="grid gap-12 md:grid-cols-[1.5fr_1fr_1fr_1fr]">
-          <div className="space-y-4">
-            <Wordmark />
-            <p className="max-w-xs text-sm text-[var(--muted-foreground)]">
-              A self-hosted, open-source knowledge base with an iron-clad
-              restore guarantee. Your knowledge, owned outright.
-            </p>
-          </div>
-          <FooterColumn heading="Product" links={FOOTER_PRODUCT} />
-          <FooterColumn heading="Developers" links={FOOTER_DEVELOPERS} />
-          <FooterColumn heading="Company" links={FOOTER_COMPANY} />
+    <footer className="border-t border-[var(--border)] mt-24">
+      <div className="max-w-[1440px] mx-auto px-6 py-12 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+        <div className="flex flex-col gap-1">
+          <MarrowWordmark className="text-base text-[var(--foreground)]" />
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Your knowledge, owned outright.
+          </p>
         </div>
-        <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-[var(--border)] pt-6 text-xs text-[var(--muted-foreground)] sm:flex-row sm:items-center">
-          <p style={{ fontFamily: "var(--font-mono)" }}>
-            © {new Date().getFullYear()} Marrow · Apache 2.0
-          </p>
-          <p style={{ fontFamily: "var(--font-mono)" }}>
-            Built on Postgres. No telemetry by default.
-          </p>
+
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[var(--muted-foreground)]">
+          <Link href="/product" className="hover:text-[var(--foreground)] transition-colors no-underline">
+            Product
+          </Link>
+          <Link href="/docs" className="hover:text-[var(--foreground)] transition-colors no-underline">
+            Docs
+          </Link>
+          <a
+            href="https://github.com/spmcgraw/marrow"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[var(--foreground)] transition-colors"
+          >
+            GitHub
+          </a>
+          <span className="text-[var(--muted-foreground)]">Apache 2.0</span>
         </div>
       </div>
     </footer>
-  );
-}
-
-/**
- * Page shell — wraps content with the shared top nav and footer.
- * Phase B pages (Landing / Product / Pricing) all render through this.
- */
-export function Chrome({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <TopNav />
-      <main className="flex-1">{children}</main>
-      <Footer />
-    </>
   );
 }
