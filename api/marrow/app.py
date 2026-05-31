@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .dependencies import verify_auth
-from .routers import auth, billing, comments, nodes, organizations, share_links, spaces, users, workspaces
+from .routers import auth, billing, comments, nodes, notifications, organizations, share_links, spaces, users, workspaces
 
 
 def _truthy(value: str | None) -> bool:
@@ -96,6 +96,7 @@ app.include_router(spaces.router, dependencies=_auth)
 app.include_router(nodes.router, dependencies=_auth)
 app.include_router(comments.router, dependencies=_auth)
 app.include_router(users.router, dependencies=_auth)
+app.include_router(notifications.router, dependencies=_auth)
 # Share-links router is registered WITHOUT the global auth dependency: the
 # public GET /shared/{token} view must be reachable without an account, while
 # the management routes carry their own require_node_role / require_share_link_role

@@ -14,6 +14,7 @@ from ..dependencies import AuthContext, get_db, get_storage, verify_auth
 from ..fractional_index import after as fi_after
 from ..links import reconcile_node_links
 from ..models import Attachment, Node, NodeLink, NodeWatch, OrgRole, Revision, Space, UserStar, Workspace
+from ..notifications import deliver_mention_notifications
 from ..rbac import _check_membership, require_node_role, require_space_role
 from ..schemas import (
     AttachmentRead,
@@ -117,6 +118,16 @@ def create_node(
         db.flush()
         reconcile_node_links(db, node.id, content, body.content_format)
 
+        deliver_mention_notifications(
+            db,
+            node=node,
+            new_content=content,
+            content_format=body.content_format,
+            previous_content=None,
+            previous_format=None,
+            actor_user_id=auth.user_id,
+        )
+
     db.commit()
     db.refresh(node)
     return node
@@ -191,6 +202,10 @@ def update_node(
 
     saved_revision = False
     if body.content is not None and node.type == "page":
+        prev_rev = node.current_revision
+        prev_content = prev_rev.content if prev_rev else None
+        prev_format = prev_rev.content_format if prev_rev else None
+
         rev = Revision(
             node_id=node.id,
             content=body.content,
@@ -201,6 +216,16 @@ def update_node(
         node.current_revision_id = rev.id
         reconcile_node_links(db, node.id, body.content, body.content_format or "markdown")
         saved_revision = True
+
+        deliver_mention_notifications(
+            db,
+            node=node,
+            new_content=body.content,
+            content_format=body.content_format or "markdown",
+            previous_content=prev_content,
+            previous_format=prev_format,
+            actor_user_id=auth.user_id,
+        )
 
     node.updated_at = datetime.now(timezone.utc)
 

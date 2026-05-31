@@ -13,6 +13,8 @@ import type {
   Comment,
   Node,
   NodeType,
+  Notification,
+  NotificationList,
   Organization,
   OrgMembership,
   Revision,
@@ -396,6 +398,20 @@ export function watchNode(nodeId: string): Promise<WatchStatus> {
 
 export function unwatchNode(nodeId: string): Promise<void> {
   return apiFetch(`/api/nodes/${nodeId}/watch`, { method: "DELETE" });
+}
+
+// --- Notifications (Inbox) ---
+
+export function listNotifications(): Promise<NotificationList> {
+  return apiFetch("/api/users/me/notifications");
+}
+
+export function markNotificationRead(id: string): Promise<Notification> {
+  return apiFetch(`/api/notifications/${id}`, { method: "PATCH" });
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await apiFetch("/api/users/me/notifications/read-all", { method: "POST" });
 }
 
 /** Convert a display name to a URL-safe slug. */

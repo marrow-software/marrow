@@ -170,3 +170,23 @@ export interface Comment {
 export interface WatchStatus {
   watching: boolean;
 }
+
+// Notifications (Inbox)
+export type NotificationKind =
+  | "mention"
+  | "comment_reply"
+  | "share_request"
+  | "watch_event";
+
+export interface Notification {
+  id: string;
+  kind: NotificationKind;
+  payload: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationList {
+  notifications: Notification[];
+  unread_count: number;
+}

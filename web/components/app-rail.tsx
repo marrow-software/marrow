@@ -16,6 +16,7 @@ interface Props {
   sidebarOpen: boolean;
   onSidebarToggle: () => void;
   user?: User | null;
+  inboxUnread?: number;
 }
 
 const TABS: Array<{ id: RailPanel; label: string; Icon: typeof FolderClosed }> = [
@@ -39,6 +40,7 @@ export function AppRail({
   sidebarOpen,
   onSidebarToggle,
   user,
+  inboxUnread = 0,
 }: Props) {
   return (
     <div className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar py-3.5">
@@ -52,6 +54,7 @@ export function AppRail({
 
       {TABS.map(({ id, label, Icon }) => {
         const active = panel === id && sidebarOpen;
+        const badge = id === "inbox" && inboxUnread > 0;
         return (
           <button
             key={id}
@@ -64,17 +67,22 @@ export function AppRail({
                 if (!sidebarOpen) onSidebarToggle();
               }
             }}
-            title={label}
-            aria-label={label}
+            title={badge ? `${label} (${inboxUnread} unread)` : label}
+            aria-label={badge ? `${label}, ${inboxUnread} unread` : label}
             aria-pressed={active}
             className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+              "relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
               active
                 ? "bg-primary/15 text-primary"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
             <Icon className="h-4 w-4" />
+            {badge && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-none text-primary-foreground">
+                {inboxUnread > 9 ? "9+" : inboxUnread}
+              </span>
+            )}
           </button>
         );
       })}

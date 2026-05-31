@@ -311,3 +311,21 @@ class WatchStatus(BaseModel):
     """Whether the current user is watching a given node."""
 
     watching: bool
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+
+class NotificationRead(_ReadBase):
+    id: UUID
+    kind: Literal["mention", "comment_reply", "share_request", "watch_event"]
+    payload: dict
+    read_at: datetime | None
+    created_at: datetime
+
+
+class NotificationList(BaseModel):
+    notifications: list[NotificationRead]
+    unread_count: int
