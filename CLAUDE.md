@@ -140,6 +140,7 @@ marrow/
 │   │       ├── fdf65c08ffa8_add_node_fts_triggers_and_gin_index.py
 │   │       ├── c58f38d0a5aa_add_billing_columns_to_organizations.py
 │   │       └── e3f7a92b1d05_add_members_can_create_spaces_to_orgs.py
+│   │       └── 3ee68ab5ba33_add_node_views_table.py
 │   ├── marrow/                       # Main package
 │   │   ├── app.py                    # FastAPI app factory, CORS + session middleware
 │   │   ├── auth.py                   # OIDC config, session JWT helpers, cookie params
@@ -164,6 +165,8 @@ marrow/
 │   │       ├── comments.py            # Page-level comments: CRUD, resolve, replies (#101)
 │   │       ├── users.py               # GET /api/users/me/starred (#102)
 │   │       └── properties.py          # Node property schemas + values (#42)
+│   │       ├── nodes.py              # Node CRUD, revisions, attachments (#124)
+│   │       └── views.py             # Node views CRUD (table/board/list, #44)
 │   │       # Node CRUD/tree routes land in #124 (2.0b); old collection/page routers
 │   │       # were removed by the v0.2 schema migration (#123).
 │   ├── tests/
@@ -268,6 +271,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | node_links | id, source_node_id (FK cascade), target_node_id (FK cascade), unique (source, target) — backlink index, reconciled on every page save |
 | comments | id, node_id (FK cascade, page-only — app-enforced), author_user_id (FK SET NULL, nullable), parent_comment_id (self-FK cascade, nullable for replies), body (TEXT), resolved_at (nullable), created_at, updated_at |
 | node_properties | id, node_id (FK cascade), key, value (nullable), value_type, options (JSON list — select types), updated_at; unique (node_id, key); value_type ∈ {text, number, date, select, multi-select, checkbox} |
+| node_views | id, folder_node_id (FK cascade → nodes), name, view_type ('table'\|'board'\|'list'), position (TEXT), config (JSONB: sorts/filters/group_by/visible_properties) |
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
 | share_links | id, node_id (FK cascade), token (unique), created_by (FK users, SET NULL), expires_at (nullable), created_at |
 | user_stars | id, user_id (FK cascade), node_id (FK cascade), created_at — unique on (user_id, node_id); per-user, **never exported** |
@@ -335,6 +339,19 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | PUT/DELETE | /api/nodes/{id}/property-schema/{key} | Define/update / remove a folder schema property | editor |
 | GET | /api/nodes/{id}/properties | Effective properties for a page (inherited + own) | viewer |
 | PUT/DELETE | /api/nodes/{id}/properties/{key} | Set / clear a page's property value | editor |
+| GET/POST | /api/nodes/{node_id}/views | List / create views on a folder node | viewer/editor |
+| GET | /api/views/{view_id} | Get a single view | viewer |
+| PATCH/DELETE | /api/views/{view_id} | Update / delete a view | editor |
+
+> **Node views (#44, 2.5):** A folder node can have any number of saved
+> `node_views` (table / board / list). `config` is JSONB holding `sorts`,
+> `filters`, `group_by` (board columns), and `visible_properties` (table
+> columns). Views render the folder's descendant *page* nodes using their
+> properties (#42). Views are presentation-only — CRUD never touches nodes.
+> `rbac.require_view_role` resolves view → folder node → org for role checks.
+> Frontend: `lib/api.ts` `*NodeView` helpers + `components/folder-views.tsx`
+> (presentational switcher; wiring into the node-aware sidebar lands with the
+> frontend node rewrite). Export of view definitions lands with bundle v4 (#132).
 
 > **Share links (#40):** `share_links` grant view-only public access to a node.
 > `GET /shared/{token}` requires no account: a page returns its current

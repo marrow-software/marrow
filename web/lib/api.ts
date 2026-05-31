@@ -15,6 +15,8 @@ import type {
   EffectivePropertiesResponse,
   Node,
   NodeType,
+  NodeView,
+  NodeViewConfig,
   Notification,
   NotificationList,
   Organization,
@@ -26,6 +28,7 @@ import type {
   ShareLink,
   Space,
   StarredNode,
+  ViewType,
   WatchStatus,
   Workspace,
   WorkspaceHome,
@@ -169,6 +172,43 @@ export function createSpace(workspaceId: string, slug: string, name: string): Pr
 }
 
 // ---------------------------------------------------------------------------
+// Node views (table / board / list over a folder of page nodes)
+// ---------------------------------------------------------------------------
+
+export function listNodeViews(folderNodeId: string): Promise<NodeView[]> {
+  return apiFetch(`/api/nodes/${folderNodeId}/views`);
+}
+
+export function createNodeView(
+  folderNodeId: string,
+  name: string,
+  viewType: ViewType = "list",
+  config?: Partial<NodeViewConfig>,
+): Promise<NodeView> {
+  return apiFetch(`/api/nodes/${folderNodeId}/views`, {
+    method: "POST",
+    body: JSON.stringify({ name, view_type: viewType, ...(config ? { config } : {}) }),
+  });
+}
+
+export function updateNodeView(
+  viewId: string,
+  patch: Partial<Pick<NodeView, "name" | "view_type" | "position">> & {
+    config?: Partial<NodeViewConfig>;
+  },
+): Promise<NodeView> {
+  return apiFetch(`/api/views/${viewId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteNodeView(viewId: string): Promise<void> {
+  return apiFetch(`/api/views/${viewId}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------------------
+// Collections
 // Nodes
 // ---------------------------------------------------------------------------
 

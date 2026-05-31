@@ -259,6 +259,60 @@ class EffectivePropertiesResponse(BaseModel):
     node_id: UUID
     properties: list[EffectiveProperty]
 
+# Node views (table / board / list over a folder of page nodes)
+# ---------------------------------------------------------------------------
+
+
+class ViewSort(BaseModel):
+    property: str
+    direction: Literal["asc", "desc"] = "asc"
+
+
+class ViewFilter(BaseModel):
+    property: str
+    operator: Literal["eq", "neq", "contains", "is_empty", "is_not_empty"] = "eq"
+    value: str | None = None
+
+
+class NodeViewConfig(BaseModel):
+    """Opaque-ish render directives shared by all three view types.
+
+    - ``sorts`` / ``filters`` apply to every view type.
+    - ``group_by`` names the (select) property whose distinct values become
+      board columns; ignored by table/list.
+    - ``visible_properties`` orders/limits columns in table view; an empty
+      list means "show all".
+    """
+
+    sorts: list[ViewSort] = []
+    filters: list[ViewFilter] = []
+    group_by: str | None = None
+    visible_properties: list[str] = []
+
+
+class NodeViewCreate(BaseModel):
+    name: str
+    view_type: Literal["table", "board", "list"] = "list"
+    config: NodeViewConfig = NodeViewConfig()
+
+
+class NodeViewUpdate(BaseModel):
+    name: str | None = None
+    view_type: Literal["table", "board", "list"] | None = None
+    position: str | None = None
+    config: NodeViewConfig | None = None
+
+
+class NodeViewRead(_ReadBase):
+    id: UUID
+    folder_node_id: UUID
+    name: str
+    view_type: Literal["table", "board", "list"]
+    position: str
+    config: NodeViewConfig
+    created_at: datetime
+    updated_at: datetime
+
 
 # ---------------------------------------------------------------------------
 # Search
