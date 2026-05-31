@@ -180,6 +180,39 @@ export interface WorkspaceHome {
   recent: RecentNodeItem[];
 }
 
+
+// Node views (table / board / list over a folder of page nodes)
+export type ViewType = "table" | "board" | "list";
+
+export interface ViewSort {
+  property: string;
+  direction: "asc" | "desc";
+}
+
+export interface ViewFilter {
+  property: string;
+  operator: "eq" | "neq" | "contains" | "is_empty" | "is_not_empty";
+  value?: string | null;
+}
+
+export interface NodeViewConfig {
+  sorts: ViewSort[];
+  filters: ViewFilter[];
+  group_by: string | null;
+  visible_properties: string[];
+}
+
+export interface NodeView {
+  id: string;
+  folder_node_id: string;
+  name: string;
+  view_type: ViewType;
+  position: string;
+  config: NodeViewConfig;
+  created_at: string;
+  updated_at: string;
+}
+
 // Auth
 export interface User {
   id: string;

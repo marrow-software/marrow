@@ -275,6 +275,44 @@ class NodeProperty(Base):
     node: Mapped["Node"] = relationship(back_populates="properties")
 
 
+class NodeView(Base):
+    """A configurable view (table / board / list) over a folder of page nodes.
+
+    Notion-database-style: a folder node can have any number of saved views
+    that render its descendant *page* nodes as rows or cards using their
+    properties. ``config`` is an opaque JSONB blob holding sort / filter /
+    group-by directives plus view-type-specific options; its shape is
+    interpreted by the frontend (see ``schemas.NodeViewConfig``).
+    """
+
+    __tablename__ = "node_views"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    folder_node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    view_type: Mapped[str] = mapped_column(Text, nullable=False)
+    position: Mapped[str] = mapped_column(Text, nullable=False, server_default="a0")
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["folder_node_id"], ["nodes.id"], ondelete="CASCADE"),
+        CheckConstraint(
+            "view_type IN ('table', 'board', 'list')",
+            name="node_views_view_type_valid",
+        ),
+    )
+
+    folder_node: Mapped["Node"] = relationship(back_populates="views")
+
+
 class ShareLink(Base):
     """A view-only public link to a node (folder or page).
 

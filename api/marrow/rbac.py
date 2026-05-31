@@ -15,6 +15,7 @@ from .dependencies import AuthContext, get_db, verify_auth
 from .models import (
     Comment,
     Node,
+    NodeView,
     OrgMembership,
     OrgRole,
     ShareLink,
@@ -171,6 +172,28 @@ def require_comment_role(min_role: OrgRole):
             raise HTTPException(404, "Comment not found")
         space = db.get(Space, node.space_id)
         workspace = db.get(Workspace, space.workspace_id)
+
+
+def require_view_role(min_role: OrgRole):
+    """Dependency factory: resolve view_id → folder node → ... → org, enforce role."""
+
+    def _dep(
+        view_id: uuid.UUID,
+        db: Session = Depends(get_db),
+        auth: AuthContext = Depends(verify_auth),
+    ) -> AuthContext:
+        view = db.get(NodeView, view_id)
+        if view is None:
+            raise HTTPException(404, "View not found")
+        node = db.get(Node, view.folder_node_id)
+        if node is None or node.deleted_at is not None:
+            raise HTTPException(404, "View not found")
+        space = db.get(Space, node.space_id)
+        if space is None:
+            raise HTTPException(404, "Space not found")
+        workspace = db.get(Workspace, space.workspace_id)
+        if workspace is None:
+            raise HTTPException(404, "Workspace not found")
         _check_membership(db, workspace.org_id, auth, min_role)
         return auth
 
