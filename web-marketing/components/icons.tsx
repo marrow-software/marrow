@@ -85,3 +85,51 @@ export const IconLayers = makeIcon(
     <path d="m3 13 9 5 9-5" />
   </>,
 );
+
+export const IconShield = makeIcon(
+  <>
+    <path d="M12 3 5 6v6c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z" />
+    <path d="m9 12 2 2 4-4" />
+  </>,
+);
+
+export const IconHistory = makeIcon(
+  <>
+    <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+    <path d="M3 4v4h4" />
+    <path d="M12 8v4l3 2" />
+  </>,
+);
+
+export const IconFileText = makeIcon(
+  <>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" />
+    <path d="M14 3v5h5" />
+    <path d="M9 13h6" />
+    <path d="M9 17h6" />
+  </>,
+);
+
+export const IconSearch = makeIcon(
+  <>
+    <circle cx="11" cy="11" r="7" />
+    <path d="m20 20-3.5-3.5" />
+  </>,
+);
+
+export const IconDatabase = makeIcon(
+  <>
+    <ellipse cx="12" cy="5" rx="8" ry="3" />
+    <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+    <path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+  </>,
+);
+
+export const IconUsers = makeIcon(
+  <>
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M3 20a6 6 0 0 1 12 0" />
+    <path d="M16 5.5a3.5 3.5 0 0 1 0 6.9" />
+    <path d="M18 14a6 6 0 0 1 3 5.2" />
+  </>,
+);
