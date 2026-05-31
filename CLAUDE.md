@@ -23,7 +23,7 @@ Current status: **v0.1 MVP** — core hierarchy, append-only revisions, export/r
 - **Migrations**: Alembic
 - **Auth**: OIDC authentication (any IdP) with API key fallback — see `api/marrow/auth.py`
 - **Search**: PostgreSQL full-text search; Meilisearch/OpenSearch later
-- **Frontend**: Next.js 16 (React 19), located in `web/`
+- **Frontend**: Next.js 16 (React 19), located in `web/` (app) and `web-marketing/` (public marketing site — Landing/Product/Pricing, shared chrome)
 - **Storage**: Pluggable adapter interface — local filesystem is the only current implementation
 - **CLI**: Typer (`marrow export` / `marrow restore`)
 
