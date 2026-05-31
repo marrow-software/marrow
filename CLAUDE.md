@@ -158,7 +158,8 @@ marrow/
 │   │       ├── workspaces.py
 │   │       ├── spaces.py
 │   │       ├── nodes.py               # Node CRUD, revisions, attachments (#124)
-│   │       └── share_links.py         # View-only sharing links + public /shared/{token} (#40)
+│   │       ├── share_links.py         # View-only sharing links + public /shared/{token} (#40)
+│   │       └── comments.py            # Page-level comments: CRUD, resolve, replies (#101)
 │   │       # Node CRUD/tree routes land in #124 (2.0b); old collection/page routers
 │   │       # were removed by the v0.2 schema migration (#123).
 │   ├── tests/
@@ -254,6 +255,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | revisions | id, node_id (FK cascade — must reference type='page'), content (TEXT), content_format ('markdown'\|'json') — **immutable via PG trigger** |
 | attachments | id, node_id (FK cascade), filename, hash (SHA256), size_bytes |
 | node_links | id, source_node_id (FK cascade), target_node_id (FK cascade), unique (source, target) — backlink index, reconciled on every page save |
+| comments | id, node_id (FK cascade, page-only — app-enforced), author_user_id (FK SET NULL, nullable), parent_comment_id (self-FK cascade, nullable for replies), body (TEXT), resolved_at (nullable), created_at, updated_at |
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
 | share_links | id, node_id (FK cascade), token (unique), created_by (FK users, SET NULL), expires_at (nullable), created_at |
 
@@ -264,6 +266,8 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 **Revision immutability**: A PL/pgSQL trigger (`revisions_immutable()`) raises an exception on any `UPDATE` against the `revisions` table. This enforces the append-only constraint at the database level.
 
 **Deferred FK**: `nodes.current_revision_id → revisions.id` is a deferred constraint, allowing a node and its first revision to be created in a single transaction.
+
+**Comments**: Page-level only for v1; `node_id` must reference a `type='page'` node, enforced in `routers/comments.py` (the issue explicitly allowed check-or-app-level). One level of replies via `parent_comment_id` (nested replies are rejected with 400). Resolve = setting `resolved_at`. A future `block_id` column can be added additively for block-level comments without a breaking migration. RLS `tenant_isolation` is enabled on `comments` via the node-indirect tenant expression, identical to `revisions`/`attachments`. Comments are **not yet in the export bundle** — they ride along with the node-aware export/restore rewrite (bundle v4, #132/#133); until then `export.py`/`restore.py` remain pre-existing broken stubs for the v0.2 transition.
 
 ### API Routes Summary
 
@@ -299,6 +303,9 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET/POST | /api/nodes/{node_id}/share-links | List / create view-only share links | viewer/editor |
 | DELETE | /api/share-links/{link_id} | Revoke a share link | editor |
 | GET | /shared/{token} | **Unauthenticated** read-only view of a shared node (page content or folder subtree) | — |
+| GET/POST | /api/nodes/{nid}/comments | List / create page comments (optional `parent_comment_id` for replies) | viewer/editor |
+| PATCH | /api/comments/{cid} | Edit body and/or resolve/unresolve (`{"resolved": true\|false}`) | editor |
+| DELETE | /api/comments/{cid} | Delete a comment | editor + (author or org owner) |
 
 > **Share links (#40):** `share_links` grant view-only public access to a node.
 > `GET /shared/{token}` requires no account: a page returns its current
@@ -372,6 +379,7 @@ Marrow supports three authentication methods, checked in priority order:
 - **Editor features**: code blocks (Shiki syntax highlighting), tables (`TableHandlesController`), `@` member mentions (custom inline-content spec carrying `userId` + `displayName`, fed by `listOrgMembers`), `/page` slash item that opens a page picker and inserts a WikiLink (`searchWorkspace`)
 - **Sidebar create flows**: hover-to-reveal `+` buttons (FilePlus / FolderPlus) on each folder and space header create new nodes via `createNode()` with `parent_id` set; slug auto-generated via `slugify()`. Tree open/closed state persists in `localStorage` keyed by `marrow.tree.open.<userId>.<workspaceId>`.
 - **Sidebar drag-and-drop**: `@dnd-kit/core` drives reparenting and reordering of folders/pages. New positions are computed via `fractional-indexing.generateKeyBetween()` and PATCHed to `/api/nodes/{id}` with `parent_id` + `position`. Cross-workspace drops and descendant-cycle drops are rejected with a `sonner` toast. Server is the source of truth — failures rollback via `router.refresh()`.
+- **Comments**: `useComments(nodeId)` hook (`hooks/use-comments.ts`) owns thread state; `CommentsDrawer` renders threads/composer/resolve and `CommentBubbleFab` shows the unread badge. Unread = comments created after the viewer's last drawer visit, tracked client-side in `localStorage` (`marrow:comment-visit:<nodeId>`) — deliberately simple v1 heuristic, no backend visit table
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 

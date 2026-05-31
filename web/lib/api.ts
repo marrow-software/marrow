@@ -10,6 +10,7 @@ import type {
   Attachment,
   AuthStatus,
   Backlink,
+  Comment,
   Node,
   NodeType,
   Organization,
@@ -372,4 +373,40 @@ export function slugify(name: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+// ---------------------------------------------------------------------------
+// Comments (#101)
+// ---------------------------------------------------------------------------
+
+export function listComments(nodeId: string): Promise<Comment[]> {
+  return apiFetch(`/api/nodes/${nodeId}/comments`);
+}
+
+export function createComment(
+  nodeId: string,
+  body: string,
+  parentCommentId?: string
+): Promise<Comment> {
+  return apiFetch(`/api/nodes/${nodeId}/comments`, {
+    method: "POST",
+    body: JSON.stringify({
+      body,
+      parent_comment_id: parentCommentId ?? null,
+    }),
+  });
+}
+
+export function updateComment(
+  commentId: string,
+  patch: { body?: string; resolved?: boolean }
+): Promise<Comment> {
+  return apiFetch(`/api/comments/${commentId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteComment(commentId: string): Promise<void> {
+  return apiFetch(`/api/comments/${commentId}`, { method: "DELETE" });
 }
