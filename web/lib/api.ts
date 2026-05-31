@@ -160,23 +160,22 @@ export function createSpace(workspaceId: string, slug: string, name: string): Pr
 // Nodes
 // ---------------------------------------------------------------------------
 
-interface CreateNodeOptions {
-  parent_id?: string | null;
-  slug?: string;
-  description?: string | null;
-  content?: string;
-  content_format?: "markdown" | "json";
-}
-
 export function createNode(
   spaceId: string,
-  type: NodeType,
-  name: string,
-  options: CreateNodeOptions = {}
+  body: {
+    type: NodeType;
+    name: string;
+    slug?: string;
+    parent_id?: string | null;
+    description?: string | null;
+    content?: string;
+    content_format?: "markdown" | "json";
+    position?: string;
+  }
 ): Promise<Node> {
   return apiFetch(`/api/spaces/${spaceId}/nodes`, {
     method: "POST",
-    body: JSON.stringify({ type, name, ...options }),
+    body: JSON.stringify(body),
   });
 }
 
@@ -191,7 +190,7 @@ export function updateNode(
     slug?: string;
     description?: string | null;
     content?: string;
-    content_format?: string;
+    content_format?: "markdown" | "json";
     position?: string;
     parent_id?: string | null;
   }

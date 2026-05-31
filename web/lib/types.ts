@@ -48,15 +48,15 @@ export interface Node {
   created_at: string;
   updated_at: string;
   content?: string | null;
-  content_format?: string | null; // 'markdown' | 'json'
+  content_format?: "markdown" | "json" | null;
 }
 
 export interface Revision {
   id: string;
   node_id: string;
-  content_format: string; // 'markdown' | 'json'
+  content: string;
+  content_format: "markdown" | "json";
   created_at: string;
-  content?: string;
 }
 
 export interface Attachment {
@@ -84,7 +84,7 @@ export interface SearchResponse {
   results: SearchResultItem[];
 }
 
-// Nested tree for sidebar rendering
+// Nested tree for sidebar rendering (recursive node hierarchy)
 export interface NodeTreeItem {
   id: string;
   parent_id: string | null;

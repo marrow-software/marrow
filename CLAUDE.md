@@ -178,7 +178,7 @@ marrow/
 │   │       └── n/[nodeId]/[[...slug]]/
 │   │           └── page.tsx          # Node route — renders PageEditor (type='page') or FolderView (type='folder'). Slug suffix is optional and decorative.
 │   ├── components/
-│   │   ├── app-sidebar.tsx           # Recursive node tree nav: Spaces → Folders/Pages + search
+│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → recursive nodes (folders/pages), drag-and-drop, inline create
 │   │   ├── folder-view.tsx           # Folder landing page: breadcrumb + children list
 │   │   ├── search-dialog.tsx         # Cmd+K search dialog
 │   │   ├── export-dialog.tsx         # Export workspace dialog (full / slim, size estimate)
@@ -351,7 +351,8 @@ Marrow supports three authentication methods, checked in priority order:
 - **Auto-save**: `PageEditor` debounces saves 2 seconds after last keystroke; shows Saving… / Saved / Error status
 - **Content format**: new saves store BlockNote JSON (`content_format='json'`); legacy Markdown revisions are loaded via `tryParseMarkdownToBlocks` for backward compat
 - **Editor features**: code blocks (Shiki syntax highlighting), tables (`TableHandlesController`), `@` member mentions (custom inline-content spec carrying `userId` + `displayName`, fed by `listOrgMembers`), `/page` slash item that opens a page picker and inserts a WikiLink (`searchWorkspace`)
-- **Sidebar create flows**: each row in the mixed folder/page node tree exposes inline `+ folder` / `+ page` actions; new nodes are inserted at the end of their parent's children list using `position` (a TEXT fractional index — sort lexicographically, never numerically). Slugs auto-generate via `slugify()`.
+- **Sidebar create flows**: hover-to-reveal `+` buttons (FilePlus / FolderPlus) on each folder and space header create new nodes via `createNode()` with `parent_id` set; slug auto-generated via `slugify()`. Tree open/closed state persists in `localStorage` keyed by `marrow.tree.open.<userId>.<workspaceId>`.
+- **Sidebar drag-and-drop**: `@dnd-kit/core` drives reparenting and reordering of folders/pages. New positions are computed via `fractional-indexing.generateKeyBetween()` and PATCHed to `/api/nodes/{id}` with `parent_id` + `position`. Cross-workspace drops and descendant-cycle drops are rejected with a `sonner` toast. Server is the source of truth — failures rollback via `router.refresh()`.
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 
