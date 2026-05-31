@@ -108,6 +108,35 @@ class NodeTreeItem(_ReadBase):
 NodeTreeItem.model_rebuild()
 
 
+# ---------------------------------------------------------------------------
+# Comment
+# ---------------------------------------------------------------------------
+
+
+class CommentCreate(BaseModel):
+    body: str
+    parent_comment_id: UUID | None = None
+
+
+class CommentUpdate(BaseModel):
+    """All fields optional — used for editing the body and/or resolve toggle."""
+
+    body: str | None = None
+    resolved: bool | None = None
+
+
+class CommentRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    author_user_id: UUID | None
+    author_name: str | None = None
+    parent_comment_id: UUID | None
+    body: str
+    resolved_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class SpaceTreeItem(_ReadBase):
     id: UUID
     slug: str

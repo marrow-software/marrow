@@ -288,6 +288,53 @@ class NodeLink(Base):
     )
 
 
+class Comment(Base):
+    """Page-level discussion threads.
+
+    ``node_id`` must reference a type='page' node — enforced at the application
+    layer (see routers/comments.py), mirroring the issue's "check or app-level"
+    allowance. ``parent_comment_id`` is a self-FK enabling one level of replies.
+    ``block_id`` is intentionally absent for now; block-level comments are out of
+    scope but the schema (nullable, additive) leaves room for it.
+    """
+
+    __tablename__ = "comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    author_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    parent_comment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["author_user_id"], ["users.id"], ondelete="SET NULL"),
+        ForeignKeyConstraint(["parent_comment_id"], ["comments.id"], ondelete="CASCADE"),
+    )
+
+    node: Mapped["Node"] = relationship()
+    author: Mapped["User | None"] = relationship()
+    replies: Mapped[list["Comment"]] = relationship(
+        back_populates="parent",
+        foreign_keys="[Comment.parent_comment_id]",
+        passive_deletes=True,
+    )
+    parent: Mapped["Comment | None"] = relationship(
+        back_populates="replies",
+        remote_side="Comment.id",
+        foreign_keys="[Comment.parent_comment_id]",
+    )
+
+
 class User(Base):
     __tablename__ = "users"
 

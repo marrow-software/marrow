@@ -143,3 +143,16 @@ export interface ShareLink {
   expires_at: string | null;
   created_at: string;
 }
+
+// Comments (page-level discussion; #101)
+export interface Comment {
+  id: string;
+  node_id: string;
+  author_user_id: string | null;
+  author_name: string | null;
+  parent_comment_id: string | null;
+  body: string;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}

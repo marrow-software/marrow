@@ -64,6 +64,7 @@ import { ShareDialog } from "@/components/share-dialog";
 import { SideDrawer, type SideDrawerKind } from "@/components/side-drawer";
 import { CommentsDrawer } from "@/components/comments-drawer";
 import { CommentBubbleFab } from "@/components/comment-bubble-fab";
+import { useComments } from "@/hooks/use-comments";
 import {
   attachmentFileUrl,
   listAttachments,
@@ -377,6 +378,13 @@ export function PageEditor({ initialPage }: Props) {
 
   const [sideDrawer, setSideDrawer] = useState<SideDrawerKind | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const commentsCtl = useComments(initialPage.id);
+
+  function openComments() {
+    setSideDrawer(null);
+    setCommentsOpen(true);
+    commentsCtl.markVisited();
+  }
 
   function handleOpenDrawer(which: SideDrawerKind) {
     setCommentsOpen(false);
@@ -526,7 +534,7 @@ export function PageEditor({ initialPage }: Props) {
       </Dialog>
 
       {!commentsOpen && (
-        <CommentBubbleFab onClick={() => { setSideDrawer(null); setCommentsOpen(true); }} />
+        <CommentBubbleFab onClick={openComments} unread={commentsCtl.unreadCount} />
       )}
 
       {sideDrawer && (
@@ -539,7 +547,17 @@ export function PageEditor({ initialPage }: Props) {
         />
       )}
 
-      {commentsOpen && <CommentsDrawer onClose={() => setCommentsOpen(false)} />}
+      {commentsOpen && (
+        <CommentsDrawer
+          onClose={() => setCommentsOpen(false)}
+          comments={commentsCtl.comments}
+          loading={commentsCtl.loading}
+          error={commentsCtl.error}
+          post={commentsCtl.post}
+          setResolved={commentsCtl.setResolved}
+          remove={commentsCtl.remove}
+        />
+      )}
     </div>
   );
 }
