@@ -761,7 +761,7 @@ export function AppSidebar({ tree, user, panel, memberCount, showOrgSettings, se
         <PagesPanel tree={tree} activePath={pathname} refresh={refresh} user={user} />
       )}
       {panel === "search" && <SearchPanel workspaceId={tree.id} inputRef={searchInputRef} />}
-      {panel === "starred" && <StarredPanel />}
+      {panel === "starred" && <StarredPanel workspaceId={tree.id} />}
       {panel === "inbox" && <InboxPanel />}
     </aside>
   );

@@ -52,9 +52,20 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   onOpenDrawer: (which: PageMenuDrawer) => void;
   trigger: React.ReactNode;
+  /** Current star state for this node — toggles the Star/Unstar item. */
+  starred?: boolean;
+  /** Invoked when the user clicks Star/Unstar. */
+  onToggleStar?: () => void;
 }
 
-export function PageMenu({ open, onOpenChange, onOpenDrawer, trigger }: Props) {
+export function PageMenu({
+  open,
+  onOpenChange,
+  onOpenDrawer,
+  trigger,
+  starred = false,
+  onToggleStar,
+}: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -81,8 +92,10 @@ export function PageMenu({ open, onOpenChange, onOpenDrawer, trigger }: Props) {
               return <div key={`div-${i}`} className="my-1 h-px bg-border" />;
             }
 
+            const isStar = item.kind === "action" && item.id === "star";
             const Icon = item.icon;
             const destructive = item.kind === "action" && item.destructive;
+            const label = isStar ? (starred ? "Unstar" : "Star") : item.label;
 
             return (
               <button
@@ -92,8 +105,11 @@ export function PageMenu({ open, onOpenChange, onOpenDrawer, trigger }: Props) {
                 onClick={() => {
                   if (item.kind === "drawer") {
                     onOpenDrawer(item.id);
+                  } else if (isStar && onToggleStar) {
+                    onToggleStar();
+                    onOpenChange(false);
                   } else {
-                    toast.info(`${item.label} — coming soon`);
+                    toast.info(`${label} — coming soon`);
                     onOpenChange(false);
                   }
                 }}
@@ -103,10 +119,14 @@ export function PageMenu({ open, onOpenChange, onOpenDrawer, trigger }: Props) {
               >
                 <Icon
                   className={`h-3.5 w-3.5 shrink-0 ${
-                    destructive ? "text-destructive" : "text-muted-foreground"
+                    isStar && starred
+                      ? "fill-current text-primary"
+                      : destructive
+                        ? "text-destructive"
+                        : "text-muted-foreground"
                   }`}
                 />
-                <span className="flex-1">{item.label}</span>
+                <span className="flex-1">{label}</span>
                 {item.meta && (
                   <span className="font-mono text-[10px] text-muted-foreground">
                     {item.meta}

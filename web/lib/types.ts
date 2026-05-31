@@ -60,6 +60,16 @@ export interface Backlink {
   slug: string;
 }
 
+export interface StarredNode {
+  id: string;
+  space_id: string;
+  parent_id: string | null;
+  type: "folder" | "page";
+  name: string;
+  slug: string;
+  starred_at: string;
+}
+
 export interface Revision {
   id: string;
   node_id: string;

@@ -157,9 +157,10 @@ marrow/
 │   │       ├── organizations.py      # Org CRUD, member management (invite, role, remove)
 │   │       ├── workspaces.py
 │   │       ├── spaces.py
-│   │       ├── nodes.py               # Node CRUD, revisions, attachments (#124)
+│   │       ├── nodes.py               # Node CRUD, revisions, attachments, star/unstar (#124, #102)
 │   │       ├── share_links.py         # View-only sharing links + public /shared/{token} (#40)
-│   │       └── comments.py            # Page-level comments: CRUD, resolve, replies (#101)
+│   │       ├── comments.py            # Page-level comments: CRUD, resolve, replies (#101)
+│   │       └── users.py               # GET /api/users/me/starred (#102)
 │   │       # Node CRUD/tree routes land in #124 (2.0b); old collection/page routers
 │   │       # were removed by the v0.2 schema migration (#123).
 │   ├── tests/
@@ -258,6 +259,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | comments | id, node_id (FK cascade, page-only — app-enforced), author_user_id (FK SET NULL, nullable), parent_comment_id (self-FK cascade, nullable for replies), body (TEXT), resolved_at (nullable), created_at, updated_at |
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
 | share_links | id, node_id (FK cascade), token (unique), created_by (FK users, SET NULL), expires_at (nullable), created_at |
+| user_stars | id, user_id (FK cascade), node_id (FK cascade), created_at — unique on (user_id, node_id); per-user, **never exported** |
 
 **Node shape constraint**: A CHECK constraint (`nodes_shape_by_type`) enforces that folder rows have `current_revision_id` and `search_vector` NULL, while page rows have `description` NULL. A second CHECK on `revisions` (`revisions_node_is_page`) ensures revisions only reference page-typed nodes.
 
@@ -306,6 +308,9 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET/POST | /api/nodes/{nid}/comments | List / create page comments (optional `parent_comment_id` for replies) | viewer/editor |
 | PATCH | /api/comments/{cid} | Edit body and/or resolve/unresolve (`{"resolved": true\|false}`) | editor |
 | DELETE | /api/comments/{cid} | Delete a comment | editor + (author or org owner) |
+| GET | /api/users/me/starred | List current user's starred nodes (trashed excluded) | session |
+| POST | /api/nodes/{nid}/star | Star a node (idempotent) | viewer |
+| DELETE | /api/nodes/{nid}/star | Unstar a node | viewer |
 
 > **Share links (#40):** `share_links` grant view-only public access to a node.
 > `GET /shared/{token}` requires no account: a page returns its current

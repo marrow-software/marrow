@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from ..dependencies import AuthContext, get_db, get_storage, verify_auth
 from ..fractional_index import after as fi_after
 from ..links import reconcile_node_links
-from ..models import Attachment, Node, NodeLink, OrgRole, Revision, Space, Workspace
+from ..models import Attachment, Node, NodeLink, OrgRole, Revision, Space, UserStar, Workspace
 from ..rbac import _check_membership, require_node_role, require_space_role
 from ..schemas import (
     AttachmentRead,
@@ -291,6 +291,49 @@ def purge_node(
 
     db.delete(node)
     db.commit()
+
+
+@router.post("/api/nodes/{node_id}/star", status_code=204)
+def star_node(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    if auth.user_id is None:
+        raise HTTPException(400, "Starring requires an authenticated user")
+    _node_or_404(node_id, db)
+
+    exists = db.execute(
+        select(UserStar).where(
+            UserStar.user_id == auth.user_id, UserStar.node_id == node_id
+        )
+    ).scalar_one_or_none()
+    if exists is None:
+        db.add(UserStar(user_id=auth.user_id, node_id=node_id))
+        try:
+            db.commit()
+        except IntegrityError:
+            # Concurrent star — already exists, treat as success (idempotent).
+            db.rollback()
+
+
+@router.delete("/api/nodes/{node_id}/star", status_code=204)
+def unstar_node(
+    node_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_node_role(OrgRole.VIEWER)),
+):
+    if auth.user_id is None:
+        raise HTTPException(400, "Starring requires an authenticated user")
+
+    star = db.execute(
+        select(UserStar).where(
+            UserStar.user_id == auth.user_id, UserStar.node_id == node_id
+        )
+    ).scalar_one_or_none()
+    if star is not None:
+        db.delete(star)
+        db.commit()
 
 
 @router.get("/api/nodes/{node_id}/children", response_model=list[NodeRead])

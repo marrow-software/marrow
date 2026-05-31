@@ -84,6 +84,18 @@ class NodeReadWithContent(NodeRead):
     content_format: Literal["markdown", "json"] | None = None
 
 
+class StarredNodeRead(_ReadBase):
+    """A starred node, surfaced in the Starred rail panel."""
+
+    id: UUID
+    space_id: UUID
+    parent_id: UUID | None
+    type: Literal["folder", "page"]
+    name: str
+    slug: str
+    starred_at: datetime
+
+
 class NodeUpdate(BaseModel):
     name: str | None = None
     slug: str | None = None
