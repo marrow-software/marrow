@@ -50,6 +50,7 @@ interface Props {
   memberCount: number | null;
   showOrgSettings: boolean;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
+  onInboxUnreadChange?: (count: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -745,7 +746,7 @@ function PagesPanel({
   );
 }
 
-export function AppSidebar({ tree, user, panel, memberCount, showOrgSettings, searchInputRef }: Props) {
+export function AppSidebar({ tree, user, panel, memberCount, showOrgSettings, searchInputRef, onInboxUnreadChange }: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -762,7 +763,7 @@ export function AppSidebar({ tree, user, panel, memberCount, showOrgSettings, se
       )}
       {panel === "search" && <SearchPanel workspaceId={tree.id} inputRef={searchInputRef} />}
       {panel === "starred" && <StarredPanel workspaceId={tree.id} />}
-      {panel === "inbox" && <InboxPanel />}
+      {panel === "inbox" && <InboxPanel onUnreadChange={onInboxUnreadChange} />}
     </aside>
   );
 }

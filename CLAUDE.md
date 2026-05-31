@@ -260,7 +260,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
 | share_links | id, node_id (FK cascade), token (unique), created_by (FK users, SET NULL), expires_at (nullable), created_at |
 | user_stars | id, user_id (FK cascade), node_id (FK cascade), created_at — unique on (user_id, node_id); per-user, **never exported** |
-| notifications | id, user_id (FK cascade), kind, payload (JSONB), read_at, created_at — Inbox feed item; **not exported** |
+| notifications | id, user_id (FK cascade), kind (mention\|comment_reply\|share_request\|watch_event), payload (JSONB), read_at (nullable), created_at — user-scoped Inbox feed; **never exported** |
 | node_watches | id, user_id (FK cascade), node_id (FK cascade), unique on (user_id, node_id) — **not exported** |
 
 **Node shape constraint**: A CHECK constraint (`nodes_shape_by_type`) enforces that folder rows have `current_revision_id` and `search_vector` NULL, while page rows have `description` NULL. A second CHECK on `revisions` (`revisions_node_is_page`) ensures revisions only reference page-typed nodes.
@@ -316,6 +316,9 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET | /api/nodes/{nid}/watching | Whether the current user watches this node | viewer |
 | POST | /api/nodes/{nid}/watch | Watch a node (idempotent) | viewer |
 | DELETE | /api/nodes/{nid}/watch | Stop watching a node | viewer |
+| GET | /api/users/me/notifications?unread_only= | List own Inbox notifications + unread_count | session |
+| PATCH | /api/notifications/{nid} | Mark a notification read | session |
+| POST | /api/users/me/notifications/read-all | Mark all own notifications read | session |
 
 > **Share links (#40):** `share_links` grant view-only public access to a node.
 > `GET /shared/{token}` requires no account: a page returns its current
@@ -392,6 +395,7 @@ Marrow supports three authentication methods, checked in priority order:
 - **Sidebar create flows**: hover-to-reveal `+` buttons (FilePlus / FolderPlus) on each folder and space header create new nodes via `createNode()` with `parent_id` set; slug auto-generated via `slugify()`. Tree open/closed state persists in `localStorage` keyed by `marrow.tree.open.<userId>.<workspaceId>`.
 - **Sidebar drag-and-drop**: `@dnd-kit/core` drives reparenting and reordering of folders/pages. New positions are computed via `fractional-indexing.generateKeyBetween()` and PATCHed to `/api/nodes/{id}` with `parent_id` + `position`. Cross-workspace drops and descendant-cycle drops are rejected with a `sonner` toast. Server is the source of truth — failures rollback via `router.refresh()`.
 - **Comments**: `useComments(nodeId)` hook (`hooks/use-comments.ts`) owns thread state; `CommentsDrawer` renders threads/composer/resolve and `CommentBubbleFab` shows the unread badge. Unread = comments created after the viewer's last drawer visit, tracked client-side in `localStorage` (`marrow:comment-visit:<nodeId>`) — deliberately simple v1 heuristic, no backend visit table
+- **Inbox**: `rail-panels/inbox-panel.tsx` lists notifications with kind-specific icons/copy and an empty state; `WorkspaceShell` fetches the unread count on mount and `AppRail` renders an unread badge on the Inbox tab. Backend delivery lives in `api/marrow/notifications.py` — `@`-mention saves on page nodes notify newly-mentioned users (only mentions new vs. the prior revision; the actor is never self-notified). Notifications are user-scoped and deliberately excluded from export/restore.
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 
