@@ -160,6 +160,10 @@ export function searchWorkspace(workspaceId: string, query: string): Promise<Sea
 // Spaces
 // ---------------------------------------------------------------------------
 
+export function listSpaces(workspaceId: string): Promise<Space[]> {
+  return apiFetch(`/api/workspaces/${workspaceId}/spaces`);
+}
+
 export function createSpace(workspaceId: string, slug: string, name: string): Promise<Space> {
   return apiFetch(`/api/workspaces/${workspaceId}/spaces`, {
     method: "POST",
