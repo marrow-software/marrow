@@ -260,6 +260,8 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
 | share_links | id, node_id (FK cascade), token (unique), created_by (FK users, SET NULL), expires_at (nullable), created_at |
 | user_stars | id, user_id (FK cascade), node_id (FK cascade), created_at — unique on (user_id, node_id); per-user, **never exported** |
+| notifications | id, user_id (FK cascade), kind, payload (JSONB), read_at, created_at — Inbox feed item; **not exported** |
+| node_watches | id, user_id (FK cascade), node_id (FK cascade), unique on (user_id, node_id) — **not exported** |
 
 **Node shape constraint**: A CHECK constraint (`nodes_shape_by_type`) enforces that folder rows have `current_revision_id` and `search_vector` NULL, while page rows have `description` NULL. A second CHECK on `revisions` (`revisions_node_is_page`) ensures revisions only reference page-typed nodes.
 
@@ -311,6 +313,9 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET | /api/users/me/starred | List current user's starred nodes (trashed excluded) | session |
 | POST | /api/nodes/{nid}/star | Star a node (idempotent) | viewer |
 | DELETE | /api/nodes/{nid}/star | Unstar a node | viewer |
+| GET | /api/nodes/{nid}/watching | Whether the current user watches this node | viewer |
+| POST | /api/nodes/{nid}/watch | Watch a node (idempotent) | viewer |
+| DELETE | /api/nodes/{nid}/watch | Stop watching a node | viewer |
 
 > **Share links (#40):** `share_links` grant view-only public access to a node.
 > `GET /shared/{token}` requires no account: a page returns its current
@@ -323,6 +328,8 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 > #132/#133 rewrites land — share links should be added to the bundle there.
 >
 > **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
+>
+> **Watches & notifications (#103/#104):** `notifications` is a user-scoped Inbox feed; `create_notification()` in `marrow/notifications.py` is the single insertion point. `marrow/watches.py` fans out `watch_event` notifications: on a page save (`update_node` revision create), every watcher of the page **or any ancestor folder** is notified, excluding the acting user. Both tables are deliberately excluded from export/restore (user-scoped, workspace-independent) — the round-trip guarantee is unaffected.
 >
 > **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
 >
