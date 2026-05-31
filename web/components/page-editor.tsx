@@ -70,6 +70,8 @@ import {
   listAttachments,
   listOrgMembers,
   searchWorkspace,
+  starNode,
+  unstarNode,
   updateNode,
   uploadAttachment,
 } from "@/lib/api";
@@ -124,6 +126,7 @@ const schema = BlockNoteSchema.create({
 export function PageEditor({ initialPage }: Props) {
   const [title, setTitle] = useState(initialPage.name);
   const [status, setStatus] = useState<SaveStatus>("idle");
+  const [starred, setStarred] = useState(false);
   const { resolvedTheme } = useTheme();
 
   // Extract workspaceId from the URL for page mention search
@@ -393,6 +396,20 @@ export function PageEditor({ initialPage }: Props) {
 
   const [shareOpen, setShareOpen] = useState(false);
 
+  async function handleToggleStar() {
+    try {
+      if (starred) {
+        await unstarNode(initialPage.id);
+        setStarred(false);
+      } else {
+        await starNode(initialPage.id);
+        setStarred(true);
+      }
+    } catch (err) {
+      toast.error(`Failed to ${starred ? "unstar" : "star"} page: ${String(err)}`);
+    }
+  }
+
   return (
     <div className="relative flex h-full flex-col">
       <EditorHeader
@@ -401,6 +418,8 @@ export function PageEditor({ initialPage }: Props) {
         saveLabel={statusLabel}
         onOpenDrawer={handleOpenDrawer}
         onShare={() => setShareOpen(true)}
+        starred={starred}
+        onToggleStar={handleToggleStar}
       />
 
       <ShareDialog

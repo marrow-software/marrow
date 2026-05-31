@@ -19,6 +19,7 @@ import type {
   SearchResponse,
   ShareLink,
   Space,
+  StarredNode,
   Workspace,
   WorkspaceTree,
 } from "./types";
@@ -238,6 +239,22 @@ export function getRevision(nodeId: string, revisionId: string): Promise<Revisio
 
 export function getBacklinks(nodeId: string): Promise<Backlink[]> {
   return apiFetch(`/api/nodes/${nodeId}/backlinks`);
+}
+
+// ---------------------------------------------------------------------------
+// Starred nodes
+// ---------------------------------------------------------------------------
+
+export function listStarred(): Promise<StarredNode[]> {
+  return apiFetch("/api/users/me/starred");
+}
+
+export function starNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/star`, { method: "POST" });
+}
+
+export function unstarNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/star`, { method: "DELETE" });
 }
 
 // ---------------------------------------------------------------------------
