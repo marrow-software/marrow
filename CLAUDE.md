@@ -156,8 +156,11 @@ marrow/
 │   │       ├── auth.py               # OIDC login/callback/me/logout + personal org creation
 │   │       ├── organizations.py      # Org CRUD, member management (invite, role, remove)
 │   │       ├── workspaces.py
-│   │       └── spaces.py
-│   │       └── nodes.py             # Node CRUD, children, revisions, attachments
+│   │       ├── spaces.py
+│   │       ├── nodes.py               # Node CRUD, revisions, attachments (#124)
+│   │       └── share_links.py         # View-only sharing links + public /shared/{token} (#40)
+│   │       # Node CRUD/tree routes land in #124 (2.0b); old collection/page routers
+│   │       # were removed by the v0.2 schema migration (#123).
 │   ├── tests/
 │   │   ├── test_fractional_index.py  # Unit tests for fractional_index helpers
 │   │   ├── test_models_smoke.py
@@ -190,7 +193,8 @@ marrow/
 │   │   ├── search-dialog.tsx         # Cmd+K search dialog
 │   │   ├── export-dialog.tsx         # Export workspace dialog (full / slim, size estimate)
 │   │   ├── restore-dialog.tsx        # Restore workspace from bundle dialog (drag-and-drop upload)
-│   │   ├── page-editor.tsx           # Title + BlockNote editor, auto-save, attachments, revisions
+│   │   ├── share-dialog.tsx          # Create/list/revoke view-only share links for a node (#40)
+│   │   ├── page-editor.tsx           # Title + markdown textarea, auto-save, attachments, revisions
 │   │   └── ui/                       # Shadcn/Base UI components
 │   ├── lib/
 │   │   ├── api.ts                    # apiFetch helper + all API client functions
@@ -250,6 +254,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | revisions | id, node_id (FK cascade — must reference type='page'), content (TEXT), content_format ('markdown'\|'json') — **immutable via PG trigger** |
 | attachments | id, node_id (FK cascade), filename, hash (SHA256), size_bytes |
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
+| share_links | id, node_id (FK cascade), token (unique), created_by (FK users, SET NULL), expires_at (nullable), created_at |
 
 **Node shape constraint**: A CHECK constraint (`nodes_shape_by_type`) enforces that folder rows have `current_revision_id` and `search_vector` NULL, while page rows have `description` NULL. A second CHECK on `revisions` (`revisions_node_is_page`) ensures revisions only reference page-typed nodes.
 
@@ -290,17 +295,21 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET | /api/workspaces/{id}/trash | List top-level trashed nodes | viewer |
 | POST | /api/nodes/{id}/restore | Restore a trashed node + subtree (422 if parent still trashed) | editor |
 | DELETE | /api/nodes/{id}/purge | Hard-delete a trashed node and its subtree | owner |
-| GET/POST | /api/spaces/{sid}/nodes | List space-root nodes / create node (folder or page) | viewer/editor |
-| GET | /api/nodes/{nid} | Get node (with current revision content for pages) | viewer |
-| PATCH | /api/nodes/{nid} | Update node (name, slug, parent, position, content for pages) | editor |
-| DELETE | /api/nodes/{nid} | Soft-delete node (sets `deleted_at`; subtree cascades) | editor |
-| GET | /api/nodes/{nid}/children | List children of a folder node | viewer |
-| GET | /api/nodes/{nid}/revisions | List revisions for a page node | viewer |
-| GET | /api/nodes/{nid}/revisions/{rid} | Get a specific revision | viewer |
-| GET/POST | /api/nodes/{nid}/attachments | List / upload attachments on a page node | viewer/editor |
-| GET | /api/nodes/{nid}/attachments/{aid}/file | Download attachment binary | viewer |
+| GET/POST | /api/nodes/{node_id}/share-links | List / create view-only share links | viewer/editor |
+| DELETE | /api/share-links/{link_id} | Revoke a share link | editor |
+| GET | /shared/{token} | **Unauthenticated** read-only view of a shared node (page content or folder subtree) | — |
 
-> **v0.1 → v0.2 schema collapse:** the old `collections` and `pages` tables were folded into a single self-referential `nodes` tree (type ∈ {folder, page}). Routes that used to live under `/api/collections/...` or `/api/pages/...` are gone — use the `/api/nodes/...` and `/api/spaces/{sid}/nodes` routes above.
+> **Share links (#40):** `share_links` grant view-only public access to a node.
+> `GET /shared/{token}` requires no account: a page returns its current
+> revision content; a folder returns its visible (non-trashed) subtree
+> recursively. Expired links return 410, unknown/revoked return 404. The
+> public endpoint relies on RLS treating an unset `app.current_org` as
+> unrestricted (same pattern as the API-key/dev path). Export/restore
+> integration ("bundle v4") is **deferred**: `export.py`/`restore.py` still
+> reference removed Page/Collection classes and NameError at runtime until the
+> #132/#133 rewrites land — share links should be added to the bundle there.
+>
+> **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
 >
 > **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`.
 

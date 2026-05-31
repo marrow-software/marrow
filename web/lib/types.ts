@@ -124,3 +124,13 @@ export interface AuthStatus {
   method: string;
   oidc_enabled: boolean;
 }
+
+// View-only sharing links (#40)
+export interface ShareLink {
+  id: string;
+  node_id: string;
+  token: string;
+  created_by: string | null;
+  expires_at: string | null;
+  created_at: string;
+}

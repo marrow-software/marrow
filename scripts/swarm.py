@@ -137,6 +137,9 @@ class SwarmCoordinator:
         LOGS_DIR.mkdir(exist_ok=True)
         self.state = StateManager(STATE_FILE)
         self._setup_signal_handlers()
+        if KILL_FILE.exists():
+            print(f"[swarm] WARNING: kill switch is active ({KILL_FILE}). Remove it before running.")
+            sys.exit(1)
 
     # ------------------------------------------------------------------
     # Setup
@@ -160,9 +163,6 @@ class SwarmCoordinator:
             return sha
 
     def _setup_signal_handlers(self) -> None:
-        if KILL_FILE.exists():
-            KILL_FILE.unlink()
-
         def _handle(signum, frame):
             print("\n[swarm] Signal received — activating kill switch.")
             KILL_FILE.touch()
@@ -338,7 +338,7 @@ class SwarmCoordinator:
         fp_map = {fp.number: fp for fp in footprints}
         assignment: dict[int, int] = {}
 
-        for fp in footprints:
+        for fp in sorted(footprints, key=lambda x: x.number):
             used = {assignment[n] for n in graph[fp.number] if n in assignment}
             batch = 0
             while batch in used:

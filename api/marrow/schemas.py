@@ -171,6 +171,44 @@ class SearchResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Share links
+# ---------------------------------------------------------------------------
+
+
+class ShareLinkCreate(BaseModel):
+    expires_at: datetime | None = None
+
+
+class ShareLinkRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    token: str
+    created_by: UUID | None
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class SharedNode(BaseModel):
+    """A node rendered for a public viewer (no account required).
+
+    For pages, ``content`` / ``content_format`` carry the current revision.
+    For folders, ``children`` carries the visible (non-trashed) subtree.
+    """
+
+    id: UUID
+    type: Literal["folder", "page"]
+    name: str
+    slug: str
+    description: str | None = None
+    content: str | None = None
+    content_format: Literal["markdown", "json"] | None = None
+    children: list["SharedNode"] = []
+
+
+SharedNode.model_rebuild()
+
+
+# ---------------------------------------------------------------------------
 # Organization
 # ---------------------------------------------------------------------------
 
