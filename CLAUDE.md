@@ -253,6 +253,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | nodes | id, space_id (FK cascade), parent_id (self-FK cascade, nullable for space-root), type ('folder'\|'page'), name, slug, position (TEXT — fractional index), description (folders), current_revision_id (deferred FK, pages), search_vector (tsvector, pages), deleted_at (nullable) |
 | revisions | id, node_id (FK cascade — must reference type='page'), content (TEXT), content_format ('markdown'\|'json') — **immutable via PG trigger** |
 | attachments | id, node_id (FK cascade), filename, hash (SHA256), size_bytes |
+| node_links | id, source_node_id (FK cascade), target_node_id (FK cascade), unique (source, target) — backlink index, reconciled on every page save |
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
 | share_links | id, node_id (FK cascade), token (unique), created_by (FK users, SET NULL), expires_at (nullable), created_at |
 
@@ -311,7 +312,9 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 >
 > **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
 >
-> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`.
+> **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
+>
+> **Backlinks (#100, 2.6):** `GET /api/nodes/{nid}/backlinks` returns the nodes that link to `{nid}` (min role `viewer`, trashed sources excluded). `marrow/links.py` parses wiki-links and reconciles the `node_links` table on every page create/update via `reconcile_node_links()`. Export/restore calls `serialize_node_links()` / `rebuild_node_links()` to persist the index in `links.json`.
 
 ### Storage Adapter Interface
 

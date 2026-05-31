@@ -533,6 +533,7 @@ export function PageEditor({ initialPage }: Props) {
         <SideDrawer
           which={sideDrawer}
           nodeId={initialPage.id}
+          workspaceId={workspaceId}
           onClose={() => setSideDrawer(null)}
           onRestore={handleRestore}
         />

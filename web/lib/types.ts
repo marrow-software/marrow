@@ -51,6 +51,15 @@ export interface Node {
   content_format?: "markdown" | "json" | null;
 }
 
+// A node that links to the current page (backlinks drawer).
+export interface Backlink {
+  id: string;
+  space_id: string;
+  type: "folder" | "page";
+  name: string;
+  slug: string;
+}
+
 export interface Revision {
   id: string;
   node_id: string;

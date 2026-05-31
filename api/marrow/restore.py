@@ -150,13 +150,17 @@ def restore_workspace(
         else:
             _restore_v4_nodes(manifest, zf, session, storage, names, is_slim)
 
-        # Rebuild backlink index from links.json if present.
+        # Rebuild the node_links index from links.json if present.
+        # v3 bundles use source_page_id/target_page_id; normalize to node_id keys.
         if "links.json" in names:
-            try:
-                links_data = json.loads(zf.read("links.json"))
-                rebuild_node_links(session, links_data.get("internal_links", []))
-            except (json.JSONDecodeError, KeyError):
-                logger.warning("Could not parse links.json; skipping backlink rebuild")
+            links_data = json.loads(zf.read("links.json"))
+            raw_links = links_data.get("internal_links", [])
+            normalized = [
+                {"source_node_id": lnk.get("source_node_id", lnk.get("source_page_id")),
+                 "target_node_id": lnk.get("target_node_id", lnk.get("target_page_id"))}
+                for lnk in raw_links
+            ]
+            rebuild_node_links(session, normalized)
 
     return ws_meta["slug"]
 
@@ -210,6 +214,11 @@ def _restore_v3_nodes(
         page_to_node_id[p["id"]] = page_node_id
         parent_id = uuid.UUID(p["collection_id"]) if p.get("collection_id") else None
         space_id = col_space_map.get(p.get("collection_id", ""))
+        if space_id is None:
+            raise ValueError(
+                f"Page '{p['id']}' has collection_id '{p.get('collection_id')}' "
+                "which could not be mapped to a space — bundle may be corrupt."
+            )
 
         session.add(
             Node(
@@ -265,7 +274,11 @@ def _restore_v3_nodes(
             if rev_file not in names:
                 raise ValueError(f"Bundle is missing revision file: {rev_file}")
             content = zf.read(rev_file).decode()
-            node_id = page_to_node_id.get(page_id, uuid.UUID(page_id))
+            node_id = page_to_node_id.get(page_id)
+            if node_id is None:
+                raise ValueError(
+                    f"Revision '{rev_id}' references unknown page '{page_id}' — bundle may be corrupt."
+                )
             session.add(
                 Revision(
                     id=uuid.UUID(rev_id),
@@ -448,6 +461,8 @@ def _restore_v4_nodes(
             )
 
         storage.write(att_id, att["filename"], data)
+        if "node_id" not in att:
+            raise ValueError(f"Attachment '{att_id}' is missing 'node_id' — v4 bundle may be corrupt.")
         session.add(
             Attachment(
                 id=uuid.UUID(att_id),
