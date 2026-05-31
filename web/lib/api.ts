@@ -331,6 +331,16 @@ export function getOrg(orgId: string): Promise<Organization> {
   return apiFetch(`/api/orgs/${orgId}`);
 }
 
+export function updateOrg(
+  orgId: string,
+  patch: { members_can_create_spaces?: boolean }
+): Promise<Organization> {
+  return apiFetch(`/api/orgs/${orgId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
 export function listOrgMembers(orgId: string): Promise<OrgMembership[]> {
   return apiFetch(`/api/orgs/${orgId}/members`);
 }

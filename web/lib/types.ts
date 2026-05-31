@@ -5,6 +5,7 @@ export interface Organization {
   slug: string;
   name: string;
   created_at: string;
+  members_can_create_spaces: boolean;
 }
 
 export interface OrgMembership {

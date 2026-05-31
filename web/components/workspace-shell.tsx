@@ -6,17 +6,19 @@ import { AppRail, type RailPanel } from "@/components/app-rail";
 import { AppSidebar } from "@/components/app-sidebar";
 import { WorkspaceTreeProvider } from "@/components/workspace-tree-context";
 import { listNotifications } from "@/lib/api";
-import type { User, WorkspaceTree } from "@/lib/types";
+import type { User, Workspace, WorkspaceTree } from "@/lib/types";
 
 interface Props {
   tree: WorkspaceTree;
   user: User | null;
   memberCount: number | null;
   showOrgSettings: boolean;
+  workspaces: Workspace[];
+  userRole: string | null;
   children: React.ReactNode;
 }
 
-export function WorkspaceShell({ tree, user, memberCount, showOrgSettings, children }: Props) {
+export function WorkspaceShell({ tree, user, memberCount, showOrgSettings, workspaces, userRole, children }: Props) {
   const [panel, setPanel] = useState<RailPanel>("pages");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [inboxUnread, setInboxUnread] = useState(0);
@@ -58,12 +60,15 @@ export function WorkspaceShell({ tree, user, memberCount, showOrgSettings, child
       <div className="flex h-svh w-full overflow-hidden bg-background text-foreground">
         <AppRail
           workspaceName={tree.name}
+          currentWorkspaceId={tree.id}
           panel={panel}
           onPanelChange={setPanel}
           sidebarOpen={sidebarOpen}
           onSidebarToggle={() => setSidebarOpen((v) => !v)}
           user={user}
           inboxUnread={inboxUnread}
+          workspaces={workspaces}
+          userRole={userRole}
         />
         {sidebarOpen && (
           <AppSidebar

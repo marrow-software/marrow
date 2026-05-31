@@ -310,6 +310,11 @@ class OrganizationRead(_ReadBase):
     slug: str
     name: str
     created_at: datetime
+    members_can_create_spaces: bool = True
+
+
+class OrganizationUpdate(BaseModel):
+    members_can_create_spaces: bool | None = None
 
 
 # ---------------------------------------------------------------------------

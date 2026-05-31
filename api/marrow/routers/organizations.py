@@ -13,6 +13,7 @@ from ..rbac import require_org_role
 from ..schemas import (
     OrganizationCreate,
     OrganizationRead,
+    OrganizationUpdate,
     OrgMembershipCreate,
     OrgMembershipRead,
     OrgMembershipUpdate,
@@ -103,6 +104,24 @@ def get_org(
     org = db.get(Organization, org_id)
     if org is None:
         raise HTTPException(404, "Organization not found")
+    return org
+
+
+@router.patch("/{org_id}", response_model=OrganizationRead)
+def update_org(
+    org_id: UUID,
+    body: OrganizationUpdate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_org_role(OrgRole.OWNER)),
+):
+    """Update org-level settings. Requires owner role."""
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise HTTPException(404, "Organization not found")
+    if body.members_can_create_spaces is not None:
+        org.members_can_create_spaces = body.members_can_create_spaces
+    db.commit()
+    db.refresh(org)
     return org
 
 
