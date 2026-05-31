@@ -53,6 +53,11 @@ class Organization(Base):
     stripe_subscription_id: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
     self_hosted_license: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Permissions
+    members_can_create_spaces: Mapped[bool] = mapped_column(
+        nullable=False, server_default="true"
+    )
+
     memberships: Mapped[list["OrgMembership"]] = relationship(
         back_populates="organization", passive_deletes=True
     )

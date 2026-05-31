@@ -137,7 +137,9 @@ marrow/
 │   │       ├── c333d20a46d9_add_content_format_to_revisions.py
 │   │       ├── bd52bac0673f_node_tree_schema_collapse_collections_.py
 │   │       ├── 2b5326d2d299_add_rls_tenant_isolation.py
-│   │       └── fdf65c08ffa8_add_node_fts_triggers_and_gin_index.py
+│   │       ├── fdf65c08ffa8_add_node_fts_triggers_and_gin_index.py
+│   │       ├── c58f38d0a5aa_add_billing_columns_to_organizations.py
+│   │       └── e3f7a92b1d05_add_members_can_create_spaces_to_orgs.py
 │   ├── marrow/                       # Main package
 │   │   ├── app.py                    # FastAPI app factory, CORS + session middleware
 │   │   ├── auth.py                   # OIDC config, session JWT helpers, cookie params
@@ -249,7 +251,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 
 | Table | Key columns |
 | --- | --- |
-| organizations | id, slug (unique), name |
+| organizations | id, slug (unique), name, members_can_create_spaces (bool, default true) |
 | org_memberships | id, org_id (FK), user_id (FK, nullable for pending), email, role (owner/editor/viewer) |
 | workspaces | id, org_id (FK), slug (unique), name |
 | spaces | id, workspace_id (FK cascade), slug (unique per workspace), name |
@@ -288,6 +290,7 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | POST | /api/auth/logout | Clear session cookie | — |
 | GET/POST | /api/orgs | List user's orgs / create org | session |
 | GET | /api/orgs/{oid} | Get org details | viewer |
+| PATCH | /api/orgs/{oid} | Update org settings (members_can_create_spaces) | owner |
 | GET | /api/orgs/{oid}/members | List members (incl. pending) | viewer |
 | POST | /api/orgs/{oid}/members | Invite member by email | owner |
 | PATCH | /api/orgs/{oid}/members/{mid} | Change member role | owner |
