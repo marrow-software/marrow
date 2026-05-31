@@ -1,59 +1,38 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  getOrg,
   listOrgMembers,
   inviteMember,
   updateMemberRole,
   removeMember,
-  updateOrg,
 } from "@/lib/api";
-import type { Organization, OrgMembership } from "@/lib/types";
+import type { OrgMembership } from "@/lib/types";
 
 const ROLES = ["owner", "editor", "viewer"] as const;
 
-export default function OrgSettingsPage() {
+export function UsersSection() {
   const { orgId } = useParams<{ orgId: string }>();
-  const [org, setOrg] = useState<Organization | null>(null);
   const [members, setMembers] = useState<OrgMembership[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<string>("editor");
   const [busy, setBusy] = useState(false);
-  const [savingPermission, setSavingPermission] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [o, m] = await Promise.all([getOrg(orgId), listOrgMembers(orgId)]);
-      setOrg(o);
-      setMembers(m);
+      setMembers(await listOrgMembers(orgId));
     } catch (err) {
       toast.error(String(err));
     }
   }, [orgId]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const [o, m] = await Promise.all([getOrg(orgId), listOrgMembers(orgId)]);
-        if (cancelled) return;
-        setOrg(o);
-        setMembers(m);
-      } catch (err) {
-        if (!cancelled) toast.error(String(err));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [orgId]);
+    load();
+  }, [load]);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -89,33 +68,13 @@ export default function OrgSettingsPage() {
     }
   }
 
-  if (!org) {
-    return <div className="p-8 text-muted-foreground">Loading...</div>;
-  }
-
   return (
-    <div className="mx-auto max-w-2xl p-8 space-y-8">
-      <div className="space-y-3">
-        <Link
-          href="/workspaces"
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-3 w-3" />
-          Workspaces
-        </Link>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">{org.name}</h1>
-            <p className="text-sm text-muted-foreground">Organization settings</p>
-          </div>
-          <Link
-            href={`/orgs/${orgId}/admin`}
-            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
-          >
-            <LayoutDashboard className="h-3.5 w-3.5" />
-            Admin dashboard
-          </Link>
-        </div>
+    <div className="mx-auto max-w-3xl p-8 space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold">User management</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Invite users, change roles, and remove access.
+        </p>
       </div>
 
       <section className="space-y-4">
@@ -157,38 +116,6 @@ export default function OrgSettingsPage() {
           {members.length === 0 && (
             <p className="px-4 py-3 text-sm text-muted-foreground">No members</p>
           )}
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold">Permissions</h2>
-        <div className="flex items-center justify-between rounded-md border px-4 py-3">
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium">Allow members to create spaces</p>
-            <p className="text-xs text-muted-foreground">
-              When off, only owners can create spaces in this org&apos;s workspaces.
-            </p>
-          </div>
-          <input
-            type="checkbox"
-            disabled={savingPermission}
-            checked={org.members_can_create_spaces}
-            onChange={async (e) => {
-              setSavingPermission(true);
-              try {
-                const updated = await updateOrg(orgId, {
-                  members_can_create_spaces: e.target.checked,
-                });
-                setOrg(updated);
-                toast.success("Setting saved");
-              } catch (err) {
-                toast.error(String(err));
-              } finally {
-                setSavingPermission(false);
-              }
-            }}
-            className="h-4 w-4 cursor-pointer accent-primary"
-          />
         </div>
       </section>
 

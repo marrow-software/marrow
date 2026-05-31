@@ -186,6 +186,8 @@ marrow/
 │   │   ├── login/page.tsx            # SSO login page (shown when OIDC enabled)
 │   │   ├── auth/callback/page.tsx    # Post-OIDC callback landing page
 │   │   ├── orgs/[orgId]/settings/page.tsx  # Org member management UI
+│   │   ├── orgs/[orgId]/admin/page.tsx     # Admin dashboard — renders section via ?section=
+│   │   ├── orgs/[orgId]/admin/layout.tsx   # Admin shell: left nav + owner-only gate
 │   │   ├── workspaces/page.tsx       # Workspace list + creation
 │   │   └── w/[workspaceId]/
 │   │       ├── layout.tsx            # Workspace shell with sidebar + auth status
@@ -193,6 +195,11 @@ marrow/
 │   │       └── n/[nodeId]/[[...slug]]/
 │   │           └── page.tsx          # Node route — renders PageEditor (type='page') or FolderView (type='folder'). Slug suffix is optional and decorative.
 │   ├── components/
+│   │   ├── admin/                    # Admin dashboard section components
+│   │   │   ├── mission-control-section.tsx  # Overview cards + workspace list
+│   │   │   ├── users-section.tsx     # Member management (reused from org settings)
+│   │   │   ├── spaces-section.tsx    # Spaces grouped by workspace
+│   │   │   └── stub-section.tsx      # Placeholder for not-yet-built sections
 │   │   ├── app-sidebar.tsx           # Tree nav: Spaces → recursive nodes (folders/pages), drag-and-drop, inline create
 │   │   ├── folder-view.tsx           # Folder landing page: breadcrumb + children list
 │   │   ├── search-dialog.tsx         # Cmd+K search dialog
