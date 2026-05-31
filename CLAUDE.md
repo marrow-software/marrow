@@ -160,7 +160,8 @@ marrow/
 │   │       ├── nodes.py               # Node CRUD, revisions, attachments, star/unstar (#124, #102)
 │   │       ├── share_links.py         # View-only sharing links + public /shared/{token} (#40)
 │   │       ├── comments.py            # Page-level comments: CRUD, resolve, replies (#101)
-│   │       └── users.py               # GET /api/users/me/starred (#102)
+│   │       ├── users.py               # GET /api/users/me/starred (#102)
+│   │       └── properties.py          # Node property schemas + values (#42)
 │   │       # Node CRUD/tree routes land in #124 (2.0b); old collection/page routers
 │   │       # were removed by the v0.2 schema migration (#123).
 │   ├── tests/
@@ -257,6 +258,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 | attachments | id, node_id (FK cascade), filename, hash (SHA256), size_bytes |
 | node_links | id, source_node_id (FK cascade), target_node_id (FK cascade), unique (source, target) — backlink index, reconciled on every page save |
 | comments | id, node_id (FK cascade, page-only — app-enforced), author_user_id (FK SET NULL, nullable), parent_comment_id (self-FK cascade, nullable for replies), body (TEXT), resolved_at (nullable), created_at, updated_at |
+| node_properties | id, node_id (FK cascade), key, value (nullable), value_type, options (JSON list — select types), updated_at; unique (node_id, key); value_type ∈ {text, number, date, select, multi-select, checkbox} |
 | users | id, oidc_issuer, oidc_subject (unique together), email, name, last_login_at |
 | share_links | id, node_id (FK cascade), token (unique), created_by (FK users, SET NULL), expires_at (nullable), created_at |
 | user_stars | id, user_id (FK cascade), node_id (FK cascade), created_at — unique on (user_id, node_id); per-user, **never exported** |
@@ -319,6 +321,10 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET | /api/users/me/notifications?unread_only= | List own Inbox notifications + unread_count | session |
 | PATCH | /api/notifications/{nid} | Mark a notification read | session |
 | POST | /api/users/me/notifications/read-all | Mark all own notifications read | session |
+| GET | /api/nodes/{id}/property-schema | List a folder's property schema defs | viewer |
+| PUT/DELETE | /api/nodes/{id}/property-schema/{key} | Define/update / remove a folder schema property | editor |
+| GET | /api/nodes/{id}/properties | Effective properties for a page (inherited + own) | viewer |
+| PUT/DELETE | /api/nodes/{id}/properties/{key} | Set / clear a page's property value | editor |
 
 > **Share links (#40):** `share_links` grant view-only public access to a node.
 > `GET /shared/{token}` requires no account: a page returns its current
@@ -337,6 +343,7 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 > **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
 >
 > **Backlinks (#100, 2.6):** `GET /api/nodes/{nid}/backlinks` returns the nodes that link to `{nid}` (min role `viewer`, trashed sources excluded). `marrow/links.py` parses wiki-links and reconciles the `node_links` table on every page create/update via `reconcile_node_links()`. Export/restore calls `serialize_node_links()` / `rebuild_node_links()` to persist the index in `links.json`.
+> **Node properties (#42, 2.4):** Folder nodes declare a property schema (key + `value_type` + `options`); every descendant page inherits it (nearest-ancestor wins) and may set its own value. Effective properties resolve at read time via the ancestor folder chain. Property keys+values fold into the page `search_vector` at weight C — a single `marrow_node_search_vector(uuid)` SQL helper computes the full vector and all node search triggers (revision-insert, name-change, and the new `node_properties` change trigger) keep it consistent. Frontend: `web/components/property-editor.tsx` renders chips/date pickers/dropdowns/checkboxes below the page title. Export/restore bundle bumped to **v4** (`node_properties` array in `manifest.json`); the v4 export/restore *handlers* still depend on the #132/#133 node-aware rewrite to run end-to-end, but the property serialization (`export.serialize_node_properties`) and restore loop are in place and symmetric.
 
 ### Storage Adapter Interface
 
@@ -367,6 +374,9 @@ marrow-export-{workspace-slug}-slim-{timestamp}.zip     # slim
 ```
 
 **Schema versions**: v1/v2 were Markdown-only. v3 added `.json` as canonical. v4 (Marrow 0.2) carries the `nodes` tree (folders + pages, with `parent_id`, `position`, `deleted_at`) instead of the old `collections`+`pages` shape. Restore supports v1–v4 — older bundles are auto-upgraded onto the node tree on read.
+v1/v2 bundles had only `.md` files. v3 adds `.json` as canonical for JSON-format revisions.
+v4 adds a `node_properties` array to `manifest.json` (folder schemas + page values).
+Restore supports v1, v2, v3, and v4 bundles.
 
 **Slim bundles** omit the `revisions/` directory entirely and set `"slim": true` + `"revisions": []` in `manifest.json`. Restore recreates one revision per page from `pages/` content. CLI: `marrow export --slim`; API: `?slim=true`.
 

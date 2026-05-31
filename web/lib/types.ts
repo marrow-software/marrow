@@ -130,6 +130,37 @@ export interface WorkspaceTree {
   spaces: SpaceTreeItem[];
 }
 
+// Node properties
+export type PropertyValueType =
+  | "text"
+  | "number"
+  | "date"
+  | "select"
+  | "multi-select"
+  | "checkbox";
+
+export interface PropertySchema {
+  id: string;
+  node_id: string;
+  key: string;
+  value_type: PropertyValueType;
+  options: string[] | null;
+}
+
+export interface EffectiveProperty {
+  key: string;
+  value_type: PropertyValueType;
+  options: string[] | null;
+  value: string | null;
+  inherited: boolean;
+  defined_on: string | null;
+}
+
+export interface EffectivePropertiesResponse {
+  node_id: string;
+  properties: EffectiveProperty[];
+}
+
 // Auth
 export interface User {
   id: string;

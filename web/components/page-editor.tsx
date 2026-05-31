@@ -38,6 +38,7 @@ import {
 import { calloutBlockSpec, calloutSlashMenuItem } from "@/components/editor/callout-block";
 import { mentionInlineContentSpec } from "@/components/editor/mention-inline-content";
 import { pageLinkSlashMenuItem } from "@/components/editor/page-link-slash-item";
+import { PropertyEditor } from "@/components/property-editor";
 import { useWorkspaceTree } from "@/components/workspace-tree-context";
 import {
   Dialog,
@@ -451,6 +452,9 @@ export function PageEditor({ initialPage }: Props) {
           placeholder="Untitled"
         />
       </div>
+
+      {/* Typed key-value metadata (inherited folder schemas + page values) */}
+      <PropertyEditor nodeId={initialPage.id} />
 
       {/* BlockNote editor */}
       <div className="flex-1 overflow-auto">
