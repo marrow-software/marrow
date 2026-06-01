@@ -467,9 +467,8 @@ export function markNotificationRead(id: string): Promise<Notification> {
 
 export async function markAllNotificationsRead(): Promise<void> {
   await apiFetch("/api/users/me/notifications/read-all", { method: "POST" });
+}
 
-// ---------------------------------------------------------------------------
-// Node properties
 // ---------------------------------------------------------------------------
 // Node properties
 // ---------------------------------------------------------------------------

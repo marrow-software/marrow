@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from marrow.auth import COOKIE_NAME, create_session_jwt, reset_oidc_config
 from marrow.models import (
-    Node,
     Notification,
     Organization,
     OrgMembership,

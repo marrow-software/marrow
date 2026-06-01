@@ -76,6 +76,7 @@ export function WorkspaceShell({ tree, user, memberCount, showOrgSettings, works
             user={user}
             panel={panel}
             memberCount={memberCount}
+            showOrgSettings={showOrgSettings}
             searchInputRef={searchInputRef}
             onInboxUnreadChange={setInboxUnread}
           />

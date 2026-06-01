@@ -18,12 +18,12 @@ import logging
 import re
 import uuid
 
-logger = logging.getLogger(__name__)
-
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from .models import Node, NodeLink
+
+logger = logging.getLogger(__name__)
 
 # A canonical UUID, optionally followed by a trailing path/query/fragment.
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
