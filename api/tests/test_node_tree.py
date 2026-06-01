@@ -15,7 +15,6 @@ from marrow.models import (
     Node,
     Organization,
     OrgMembership,
-    OrgRole,
     Space,
     User,
     Workspace,
@@ -336,7 +335,7 @@ def test_soft_deleted_node_hidden_from_list(session, client):
     user = _make_user(session, "viewer-listhidden@test.com")
     session.add(OrgMembership(org_id=org.id, user_id=user.id, email=user.email, role="viewer"))
 
-    alive = _make_folder(session, space, "alive")
+    _make_folder(session, space, "alive")
     dead = _make_folder(session, space, "dead")
     dead.deleted_at = datetime.now(timezone.utc)
     session.commit()

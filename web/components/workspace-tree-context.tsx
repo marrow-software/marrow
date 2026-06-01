@@ -45,10 +45,7 @@ export function findNodeBreadcrumb(
  * callers should migrate to findNodeBreadcrumb. Kept as a no-op for incremental
  * migration of consumer components.
  */
-export function findBreadcrumb(
-  _tree: WorkspaceTree,
-  _id: string,
-): { spaceName: string; collectionName: string } | null {
+export function findBreadcrumb(): { spaceName: string; collectionName: string } | null {
   return null;
 }
 

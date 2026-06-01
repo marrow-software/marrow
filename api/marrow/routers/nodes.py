@@ -13,7 +13,17 @@ from sqlalchemy.orm import Session
 from ..dependencies import AuthContext, get_db, get_storage, verify_auth
 from ..fractional_index import after as fi_after
 from ..links import reconcile_node_links
-from ..models import Attachment, Node, NodeLink, NodeWatch, OrgRole, Revision, Space, UserStar, Workspace
+from ..models import (
+    Attachment,
+    Node,
+    NodeLink,
+    NodeWatch,
+    OrgRole,
+    Revision,
+    Space,
+    UserStar,
+    Workspace,
+)
 from ..notifications import deliver_mention_notifications
 from ..rbac import _check_membership, require_node_role, require_space_role
 from ..schemas import (

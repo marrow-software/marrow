@@ -7,7 +7,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .dependencies import verify_auth
-from .routers import auth, billing, comments, nodes, notifications, organizations, properties, share_links, spaces, users, views, workspaces
+from .routers import (
+    auth,
+    billing,
+    comments,
+    nodes,
+    notifications,
+    organizations,
+    properties,
+    share_links,
+    spaces,
+    users,
+    views,
+    workspaces,
+)
 
 
 def _truthy(value: str | None) -> bool:

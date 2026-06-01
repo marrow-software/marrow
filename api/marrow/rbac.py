@@ -172,6 +172,10 @@ def require_comment_role(min_role: OrgRole):
             raise HTTPException(404, "Comment not found")
         space = db.get(Space, node.space_id)
         workspace = db.get(Workspace, space.workspace_id)
+        _check_membership(db, workspace.org_id, auth, min_role)
+        return auth
+
+    return _dep
 
 
 def require_view_role(min_role: OrgRole):

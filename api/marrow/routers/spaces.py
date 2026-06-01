@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db
-from ..models import OrgMembership, OrgRole, Organization, Space, Workspace
+from ..models import Organization, OrgMembership, OrgRole, Space, Workspace
 from ..rbac import require_workspace_role
 from ..schemas import SpaceCreate, SpaceRead
 

@@ -29,7 +29,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from .models import Attachment, Node, NodeProperty, Workspace
+from .models import Node, NodeProperty, Workspace
 from .storage import StorageAdapter
 
 SCHEMA_VERSION = "4"
@@ -474,7 +474,7 @@ def export_workspace(
 
         zf.writestr("links.json", json.dumps(_build_links(nodes, node_id_set), indent=2))
 
-        node_id_list = [n.id for n in all_nodes]
+        node_id_list = [n.id for n in nodes]
         prop_rows = (
             session.query(NodeProperty)
             .filter(NodeProperty.node_id.in_(node_id_list))

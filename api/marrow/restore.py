@@ -277,7 +277,8 @@ def _restore_v3_nodes(
             node_id = page_to_node_id.get(page_id)
             if node_id is None:
                 raise ValueError(
-                    f"Revision '{rev_id}' references unknown page '{page_id}' — bundle may be corrupt."
+                    f"Revision '{rev_id}' references unknown page"
+                    f" '{page_id}' — bundle may be corrupt."
                 )
             session.add(
                 Revision(
@@ -462,7 +463,9 @@ def _restore_v4_nodes(
 
         storage.write(att_id, att["filename"], data)
         if "node_id" not in att:
-            raise ValueError(f"Attachment '{att_id}' is missing 'node_id' — v4 bundle may be corrupt.")
+            raise ValueError(
+                f"Attachment '{att_id}' is missing 'node_id' — v4 bundle may be corrupt."
+            )
         session.add(
             Attachment(
                 id=uuid.UUID(att_id),
