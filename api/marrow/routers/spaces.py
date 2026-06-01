@@ -46,8 +46,9 @@ def create_space(
         org = db.get(Organization, ws.org_id)
         if org is not None and not org.members_can_create_spaces:
             membership = db.execute(
-                select(OrgMembership)
-                .where(OrgMembership.org_id == ws.org_id, OrgMembership.user_id == auth.user_id)
+                select(OrgMembership).where(
+                    OrgMembership.org_id == ws.org_id, OrgMembership.user_id == auth.user_id
+                )
             ).scalar_one_or_none()
             if membership is None or membership.role != OrgRole.OWNER:
                 raise HTTPException(403, "Only org owners can create spaces in this workspace")

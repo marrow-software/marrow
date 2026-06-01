@@ -298,6 +298,7 @@ def test_export_restore_round_trip(db_url, tmp_path):
 
     # Verify v4 bundle format
     import zipfile
+
     with zipfile.ZipFile(bundle_path) as zf:
         manifest = _json.loads(zf.read("manifest.json"))
     assert manifest["schema_version"] == "4"
@@ -427,8 +428,22 @@ def test_restore_v3_bundle_empty(db_url, tmp_path):
         "schema_version": "3",
         "export_timestamp": now,
         "organization": {"id": str(org_id), "slug": "v3-org", "name": "V3 Org", "created_at": now},
-        "workspace": {"id": str(ws_id), "org_id": str(org_id), "slug": "v3-ws", "name": "V3 WS", "created_at": now},
-        "spaces": [{"id": str(space_id), "workspace_id": str(ws_id), "slug": "main", "name": "Main", "created_at": now}],
+        "workspace": {
+            "id": str(ws_id),
+            "org_id": str(org_id),
+            "slug": "v3-ws",
+            "name": "V3 WS",
+            "created_at": now,
+        },
+        "spaces": [
+            {
+                "id": str(space_id),
+                "workspace_id": str(ws_id),
+                "slug": "main",
+                "name": "Main",
+                "created_at": now,
+            }
+        ],
         "collections": [],
         "pages": [],
         "revisions": [],
@@ -444,8 +459,11 @@ def test_restore_v3_bundle_empty(db_url, tmp_path):
     from marrow.storage import StorageAdapter as _SA
 
     class _FakeStorage(_SA):
-        def read(self, *a): raise FileNotFoundError
-        def write(self, *a): pass
+        def read(self, *a):
+            raise FileNotFoundError
+
+        def write(self, *a):
+            pass
 
     with Session(engine) as session:
         restore_workspace(bundle_path, session, _FakeStorage())

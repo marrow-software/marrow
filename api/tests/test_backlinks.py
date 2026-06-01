@@ -91,9 +91,7 @@ class TestExtractLinkTargets:
         blocks = [
             {
                 "type": "paragraph",
-                "content": [
-                    {"type": "mention", "props": {"userId": str(uuid.uuid4())}}
-                ],
+                "content": [{"type": "mention", "props": {"userId": str(uuid.uuid4())}}],
             }
         ]
         assert extract_link_targets(json.dumps(blocks), "json") == set()
@@ -172,9 +170,7 @@ def _make_page(session, space, name: str, content: str = "") -> Node:
 
 
 def _add_membership(session, org, user, role: OrgRole) -> None:
-    session.add(
-        OrgMembership(org_id=org.id, user_id=user.id, email=user.email, role=role.value)
-    )
+    session.add(OrgMembership(org_id=org.id, user_id=user.id, email=user.email, role=role.value))
     session.flush()
 
 
@@ -199,13 +195,10 @@ class TestReconcile:
             src = _make_page(db, space, "Source")
             db.commit()
 
-            reconcile_node_links(
-                db, src.id, f"[a](/pages/{a.id}) [b](/pages/{b.id})", "markdown"
-            )
+            reconcile_node_links(db, src.id, f"[a](/pages/{a.id}) [b](/pages/{b.id})", "markdown")
             db.commit()
             targets = {
-                row.target_node_id
-                for row in db.query(NodeLink).filter_by(source_node_id=src.id)
+                row.target_node_id for row in db.query(NodeLink).filter_by(source_node_id=src.id)
             }
             assert targets == {a.id, b.id}
 
@@ -213,8 +206,7 @@ class TestReconcile:
             reconcile_node_links(db, src.id, f"[a](/pages/{a.id})", "markdown")
             db.commit()
             targets = {
-                row.target_node_id
-                for row in db.query(NodeLink).filter_by(source_node_id=src.id)
+                row.target_node_id for row in db.query(NodeLink).filter_by(source_node_id=src.id)
             }
             assert targets == {a.id}
         finally:
@@ -346,9 +338,7 @@ class TestSerializeRebuild:
             db.commit()
 
             dumped = serialize_node_links(db, {a.id, b.id})
-            assert dumped == [
-                {"source_node_id": str(a.id), "target_node_id": str(b.id)}
-            ]
+            assert dumped == [{"source_node_id": str(a.id), "target_node_id": str(b.id)}]
 
             db.query(NodeLink).delete()
             db.commit()

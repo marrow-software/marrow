@@ -476,13 +476,17 @@ def export_workspace(
 
         node_id_list = [n.id for n in nodes]
         prop_rows = (
-            session.query(NodeProperty)
-            .filter(NodeProperty.node_id.in_(node_id_list))
-            .all()
-        ) if node_id_list else []
+            (session.query(NodeProperty).filter(NodeProperty.node_id.in_(node_id_list)).all())
+            if node_id_list
+            else []
+        )
 
         manifest = _build_manifest(
-            workspace, nodes, attachment_records, export_timestamp, include_trash=include_trash,
+            workspace,
+            nodes,
+            attachment_records,
+            export_timestamp,
+            include_trash=include_trash,
             node_properties=serialize_node_properties(prop_rows) if prop_rows else None,
         )
         if slim:

@@ -114,7 +114,7 @@ def between(a: str | None, b: str | None) -> str:
         return INTEGER_ZERO
     if a is None:
         int_b = _get_integer_part(b)  # type: ignore[arg-type]
-        frac_b = b[len(int_b):]  # type: ignore[index]
+        frac_b = b[len(int_b) :]  # type: ignore[index]
         if int_b == SMALLEST_INTEGER:
             return int_b + _midpoint("", frac_b)
         dec = _decrement_integer(int_b)
@@ -123,7 +123,7 @@ def between(a: str | None, b: str | None) -> str:
         return dec
     if b is None:
         int_a = _get_integer_part(a)
-        frac_a = a[len(int_a):]
+        frac_a = a[len(int_a) :]
         inc = _increment_integer(int_a)
         if inc is None:
             return int_a + _midpoint(frac_a, None)
@@ -131,9 +131,9 @@ def between(a: str | None, b: str | None) -> str:
     if a >= b:
         raise ValueError(f"{a!r} >= {b!r}")
     int_a = _get_integer_part(a)
-    frac_a = a[len(int_a):]
+    frac_a = a[len(int_a) :]
     int_b = _get_integer_part(b)
-    frac_b = b[len(int_b):]
+    frac_b = b[len(int_b) :]
     if int_a == int_b:
         return int_a + _midpoint(frac_a, frac_b)
     inc = _increment_integer(int_a)

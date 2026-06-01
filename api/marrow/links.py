@@ -150,9 +150,7 @@ def serialize_node_links(db: Session, node_ids: set[uuid.UUID]) -> list[dict]:
         .where(NodeLink.source_node_id.in_(node_ids))
         .order_by(NodeLink.source_node_id, NodeLink.target_node_id)
     ).all()
-    return [
-        {"source_node_id": str(src), "target_node_id": str(tgt)} for src, tgt in rows
-    ]
+    return [{"source_node_id": str(src), "target_node_id": str(tgt)} for src, tgt in rows]
 
 
 def rebuild_node_links(db: Session, links: list[dict]) -> None:
@@ -179,9 +177,7 @@ def rebuild_node_links(db: Session, links: list[dict]) -> None:
 
     all_ids = {nid for pair in candidates for nid in pair}
     live_ids: set[uuid.UUID] = set(
-        db.execute(
-            select(Node.id).where(Node.id.in_(all_ids), Node.deleted_at.is_(None))
-        ).scalars()
+        db.execute(select(Node.id).where(Node.id.in_(all_ids), Node.deleted_at.is_(None))).scalars()
     )
 
     valid = [(src, tgt) for src, tgt in candidates if src in live_ids and tgt in live_ids]

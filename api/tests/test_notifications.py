@@ -117,9 +117,7 @@ class TestMentionDelivery:
             )
             assert res.status_code == 201, res.text
 
-            notes = (
-                db.query(Notification).filter(Notification.user_id == target.id).all()
-            )
+            notes = db.query(Notification).filter(Notification.user_id == target.id).all()
             assert len(notes) == 1
             assert notes[0].kind == "mention"
             assert notes[0].payload["node_name"] == "Mentioning Page"
@@ -149,9 +147,7 @@ class TestMentionDelivery:
                 },
             )
             assert res.status_code == 201, res.text
-            assert db.query(Notification).filter(
-                Notification.user_id == author.id
-            ).count() == 0
+            assert db.query(Notification).filter(Notification.user_id == author.id).count() == 0
         finally:
             db.rollback()
             client.cookies.clear()
@@ -186,9 +182,7 @@ class TestMentionDelivery:
                 json={"content": doc, "content_format": "json"},
             )
             assert res.status_code == 200, res.text
-            assert db.query(Notification).filter(
-                Notification.user_id == target.id
-            ).count() == 1
+            assert db.query(Notification).filter(Notification.user_id == target.id).count() == 1
         finally:
             db.rollback()
             client.cookies.clear()

@@ -259,6 +259,7 @@ class EffectivePropertiesResponse(BaseModel):
     node_id: UUID
     properties: list[EffectiveProperty]
 
+
 # Node views (table / board / list over a folder of page nodes)
 # ---------------------------------------------------------------------------
 

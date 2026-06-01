@@ -130,7 +130,12 @@ def _make_bundle(
             },
         ],
         "revisions": [
-            {"id": str(rev_id), "node_id": str(page_id), "content_format": "markdown", "created_at": now}
+            {
+                "id": str(rev_id),
+                "node_id": str(page_id),
+                "content_format": "markdown",
+                "created_at": now,
+            }
         ],
         "attachments": (
             [
@@ -490,6 +495,7 @@ def test_restore_v3_bundle_supported(session, storage, tmp_path):
 
     ws_slug = manifest["workspace"]["slug"]
     from marrow.models import Workspace as _WS
+
     ws = session.query(_WS).filter_by(slug=ws_slug).first()
     assert ws is not None
 

@@ -75,7 +75,14 @@ def seeded(session):
     session.flush()
 
     # Node 1 — page with two revisions and one internal link to node2 (added later).
-    node1 = Node(space_id=space.id, parent_id=None, type="page", name="Page One", slug="page-one", position="a0")
+    node1 = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="page",
+        name="Page One",
+        slug="page-one",
+        position="a0",
+    )
     session.add(node1)
     session.flush()
 
@@ -91,7 +98,14 @@ def seeded(session):
     session.flush()
 
     # Node 2 — page (target of internal link from node1).
-    node2 = Node(space_id=space.id, parent_id=None, type="page", name="Page Two", slug="page-two", position="a1")
+    node2 = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="page",
+        name="Page Two",
+        slug="page-two",
+        position="a1",
+    )
     session.add(node2)
     session.flush()
 
@@ -312,8 +326,13 @@ def test_folder_node_has_no_content_file(session, tmp_path):
     session.flush()
 
     folder = Node(
-        space_id=space.id, parent_id=None, type="folder", name="My Folder",
-        slug="my-folder", position="a0", description="A folder"
+        space_id=space.id,
+        parent_id=None,
+        type="folder",
+        name="My Folder",
+        slug="my-folder",
+        position="a0",
+        description="A folder",
     )
     session.add(folder)
     session.flush()
@@ -369,8 +388,13 @@ def test_include_trash_includes_deleted_nodes(session, tmp_path):
     session.flush()
 
     trashed_node = Node(
-        space_id=space.id, parent_id=None, type="page", name="Trashed", slug="trashed",
-        position="a1", deleted_at=datetime.now(timezone.utc)
+        space_id=space.id,
+        parent_id=None,
+        type="page",
+        name="Trashed",
+        slug="trashed",
+        position="a1",
+        deleted_at=datetime.now(timezone.utc),
     )
     session.add(trashed_node)
     session.flush()
