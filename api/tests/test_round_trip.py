@@ -411,8 +411,8 @@ def test_export_restore_round_trip(db_url, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_restore_v3_bundle_raises_unsupported(db_url, tmp_path):
-    """v3 bundles (legacy Page/Collection model) are not supported — restore raises ValueError."""
+def test_restore_v3_bundle_empty(db_url, tmp_path):
+    """v3 bundles (legacy Page/Collection model) are supported — empty bundle restores cleanly."""
     import zipfile as _zipfile
     from datetime import datetime, timezone
 
@@ -448,7 +448,7 @@ def test_restore_v3_bundle_raises_unsupported(db_url, tmp_path):
         def write(self, *a): pass
 
     with Session(engine) as session:
-        with pytest.raises(ValueError, match="legacy Page/Collection model"):
-            restore_workspace(bundle_path, session, _FakeStorage())
+        restore_workspace(bundle_path, session, _FakeStorage())
+        session.commit()
 
     engine.dispose()

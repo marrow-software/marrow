@@ -196,6 +196,12 @@ class Node(Base):
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="node", passive_deletes=True
     )
+    properties: Mapped[list["NodeProperty"]] = relationship(
+        back_populates="node", passive_deletes=True
+    )
+    views: Mapped[list["NodeView"]] = relationship(
+        back_populates="folder_node", passive_deletes=True
+    )
 
 
 class Revision(Base):
