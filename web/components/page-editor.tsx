@@ -560,7 +560,7 @@ export function PageEditor({ initialPage }: Props) {
         <CommentBubbleFab onClick={openComments} unread={commentsCtl.unreadCount} />
       )}
 
-      {sideDrawer && (
+      {sideDrawer && workspaceId && (
         <SideDrawer
           which={sideDrawer}
           nodeId={initialPage.id}

@@ -25,7 +25,7 @@ function Breadcrumbs({ nodeId, pageTitle }: { nodeId: string; pageTitle: string 
   const tree = useWorkspaceTree();
   const crumb = tree ? findNodeBreadcrumb(tree, nodeId) : null;
   const parts = crumb
-    ? [crumb.spaceName, ...crumb.ancestors.map((a) => a.name), pageTitle]
+    ? [crumb.spaceName, ...crumb.ancestorNames, pageTitle]
     : [pageTitle];
 
   return (
@@ -100,7 +100,7 @@ export function EditorHeader({
       </button>
 
       <PageMenu
-        nodeId={collectionId}
+        nodeId={nodeId}
         open={menuOpen}
         onOpenChange={setMenuOpen}
         starred={starred}

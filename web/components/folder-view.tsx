@@ -34,7 +34,7 @@ export function FolderView({ node, workspaceId }: Props) {
   }, [node.id]);
 
   const breadcrumbParts = crumb
-    ? [crumb.spaceName, ...crumb.ancestors.map((a) => a.name), node.name]
+    ? [crumb.spaceName, ...crumb.ancestorNames, node.name]
     : [node.name];
 
   return (
