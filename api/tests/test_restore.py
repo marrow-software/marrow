@@ -130,7 +130,12 @@ def _make_bundle(
             },
         ],
         "revisions": [
-            {"id": str(rev_id), "node_id": str(page_id), "content_format": "markdown", "created_at": now}
+            {
+                "id": str(rev_id),
+                "node_id": str(page_id),
+                "content_format": "markdown",
+                "created_at": now,
+            }
         ],
         "attachments": (
             [
@@ -480,13 +485,19 @@ def test_restore_not_a_zip_raises(session, storage, tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_restore_v3_bundle_raises_unsupported(session, storage, tmp_path):
-    """v3 bundles are not supported in this release — restore raises a clear ValueError."""
-    bundle_bytes, _ = _make_v3_bundle(ws_slug="v3-unsupported-ws")
-    path = _write_bundle(tmp_path, bundle_bytes, name="v3-unsupported.zip")
+def test_restore_v3_bundle_supported(session, storage, tmp_path):
+    """v3 bundles (collections + pages) are supported — restore converts to the v0.2 node tree."""
+    bundle_bytes, manifest = _make_v3_bundle(ws_slug="v3-supported-ws")
+    path = _write_bundle(tmp_path, bundle_bytes, name="v3-supported.zip")
 
-    with pytest.raises(ValueError, match="legacy Page/Collection model"):
-        restore_workspace(path, session, storage)
+    restore_workspace(path, session, storage)
+    session.flush()
+
+    ws_slug = manifest["workspace"]["slug"]
+    from marrow.models import Workspace as _WS
+
+    ws = session.query(_WS).filter_by(slug=ws_slug).first()
+    assert ws is not None
 
 
 # ---------------------------------------------------------------------------

@@ -147,8 +147,16 @@ marrow/
 │   │       ├── 2b5326d2d299_add_rls_tenant_isolation.py
 │   │       ├── fdf65c08ffa8_add_node_fts_triggers_and_gin_index.py
 │   │       ├── c58f38d0a5aa_add_billing_columns_to_organizations.py
-│   │       └── e3f7a92b1d05_add_members_can_create_spaces_to_orgs.py
-│   │       └── 3ee68ab5ba33_add_node_views_table.py
+│   │       ├── e3f7a92b1d05_add_members_can_create_spaces_to_orgs.py
+│   │       ├── 63d0b2f71a42_add_notifications_table.py
+│   │       ├── 94d64b4e6869_add_node_watches_table.py
+│   │       ├── 2187bd1a529d_add_node_properties_table.py
+│   │       ├── 305b120ceb16_add_comments_table.py
+│   │       ├── 3ee68ab5ba33_add_node_views_table.py
+│   │       ├── 5441fe9ca011_add_share_links_table.py
+│   │       ├── ac1e5d8ab0f8_add_node_links_backlink_index.py
+│   │       ├── cd990242773c_add_user_stars_table.py
+│   │       └── 70645242437d_merge_swarm_v0_2_migrations.py
 │   ├── marrow/                       # Main package
 │   │   ├── app.py                    # FastAPI app factory, CORS + session middleware
 │   │   ├── auth.py                   # OIDC config, session JWT helpers, cookie params

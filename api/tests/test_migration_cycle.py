@@ -53,7 +53,7 @@ def db_url():
 
 
 def _insert_revision(db_url: str) -> str:
-    """Insert the minimum rows needed to get a revision row; return its id."""
+    """Insert the minimum rows to get a revision row; return its id."""
     conn = psycopg2.connect(db_url)
     conn.autocommit = True
     with conn.cursor() as cur:
@@ -76,20 +76,15 @@ def _insert_revision(db_url: str) -> str:
         sp_id = cur.fetchone()[0]
 
         cur.execute(
-            "INSERT INTO collections (space_id, slug, name) VALUES (%s, %s, %s) RETURNING id",
-            (sp_id, f"col-{uuid.uuid4().hex[:6]}", "Test Collection"),
+            "INSERT INTO nodes (space_id, type, name, slug, position)"
+            " VALUES (%s, 'page', 'Test Page', %s, 'a0') RETURNING id",
+            (sp_id, f"pg-{uuid.uuid4().hex[:6]}"),
         )
-        col_id = cur.fetchone()[0]
+        node_id = cur.fetchone()[0]
 
         cur.execute(
-            "INSERT INTO pages (collection_id, slug, title) VALUES (%s, %s, %s) RETURNING id",
-            (col_id, f"pg-{uuid.uuid4().hex[:6]}", "Test Page"),
-        )
-        pg_id = cur.fetchone()[0]
-
-        cur.execute(
-            "INSERT INTO revisions (page_id, content) VALUES (%s, %s) RETURNING id",
-            (pg_id, "Initial content"),
+            "INSERT INTO revisions (node_id, content) VALUES (%s, %s) RETURNING id",
+            (node_id, "Initial content"),
         )
         rev_id = cur.fetchone()[0]
 
@@ -98,9 +93,10 @@ def _insert_revision(db_url: str) -> str:
 
 
 class TestMigrationCycle:
-    """Verify the upgrade/downgrade cycle for the core schema migration.
+    """Verify the upgrade cycle and schema invariants for v0.2.
 
-    Tests run in file order: upgrade → constraint checks → downgrade.
+    Tests run in file order: upgrade → constraint checks.
+    Note: downgrade to base is a one-way migration in v0.2 and is not supported.
     """
 
     def test_upgrade_runs_cleanly(self, db_url):
@@ -118,13 +114,20 @@ class TestMigrationCycle:
         expected = {
             "workspaces",
             "spaces",
-            "collections",
-            "pages",
+            "nodes",
             "revisions",
             "attachments",
             "users",
             "organizations",
             "org_memberships",
+            "node_properties",
+            "node_views",
+            "node_links",
+            "node_watches",
+            "notifications",
+            "comments",
+            "share_links",
+            "user_stars",
         }
         assert expected.issubset(tables)
 
@@ -143,24 +146,7 @@ class TestMigrationCycle:
             cur.close()
             conn.close()
 
-    def test_downgrade_reverses_cleanly(self, db_url):
-        command.downgrade(_alembic_cfg(db_url), "base")
-
-        conn = psycopg2.connect(db_url)
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT table_name FROM information_schema.tables "
-                "WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
-            )
-            tables = {row[0] for row in cur.fetchall()}
-        conn.close()
-
-        marrow_tables = {
-            "workspaces",
-            "spaces",
-            "collections",
-            "pages",
-            "revisions",
-            "attachments",
-        }
-        assert not marrow_tables & tables
+    def test_downgrade_raises_not_implemented(self, db_url):
+        """v0.2 is a one-way migration — downgrade to base raises NotImplementedError."""
+        with pytest.raises(NotImplementedError, match="v0.2 schema is a one-way migration"):
+            command.downgrade(_alembic_cfg(db_url), "base")

@@ -54,9 +54,7 @@ class Organization(Base):
     self_hosted_license: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Permissions
-    members_can_create_spaces: Mapped[bool] = mapped_column(
-        nullable=False, server_default="true"
-    )
+    members_can_create_spaces: Mapped[bool] = mapped_column(nullable=False, server_default="true")
 
     memberships: Mapped[list["OrgMembership"]] = relationship(
         back_populates="organization", passive_deletes=True
@@ -195,6 +193,12 @@ class Node(Base):
     )
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="node", passive_deletes=True
+    )
+    properties: Mapped[list["NodeProperty"]] = relationship(
+        back_populates="node", passive_deletes=True
+    )
+    views: Mapped[list["NodeView"]] = relationship(
+        back_populates="folder_node", passive_deletes=True
     )
 
 

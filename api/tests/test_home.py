@@ -91,12 +91,13 @@ def _create_page(db, space, slug, name, *, parent=None, updated_at=None) -> Node
     )
     db.add(node)
     db.flush()
+    # The home query orders by MAX(revision.created_at), not node.updated_at.
     rev = Revision(node_id=node.id, content=f"# {name}")
+    if updated_at is not None:
+        rev.created_at = updated_at
     db.add(rev)
     db.flush()
     node.current_revision_id = rev.id
-    if updated_at is not None:
-        node.updated_at = updated_at
     db.flush()
     return node
 

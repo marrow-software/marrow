@@ -32,9 +32,7 @@ def list_notifications(
     query = select(Notification).where(Notification.user_id == user_id)
     if unread_only:
         query = query.where(Notification.read_at.is_(None))
-    items = (
-        db.execute(query.order_by(Notification.created_at.desc())).scalars().all()
-    )
+    items = db.execute(query.order_by(Notification.created_at.desc())).scalars().all()
 
     unread_count = db.execute(
         select(func.count())

@@ -303,9 +303,7 @@ def restore_node(
     if node.parent_id is not None:
         parent = db.get(Node, node.parent_id)
         if parent is None or parent.deleted_at is not None:
-            raise HTTPException(
-                422, "Cannot restore: parent node is missing or trashed"
-            )
+            raise HTTPException(422, "Cannot restore: parent node is missing or trashed")
 
     db.execute(
         text("""
@@ -354,9 +352,7 @@ def star_node(
     _node_or_404(node_id, db)
 
     exists = db.execute(
-        select(UserStar).where(
-            UserStar.user_id == auth.user_id, UserStar.node_id == node_id
-        )
+        select(UserStar).where(UserStar.user_id == auth.user_id, UserStar.node_id == node_id)
     ).scalar_one_or_none()
     if exists is None:
         db.add(UserStar(user_id=auth.user_id, node_id=node_id))
@@ -377,9 +373,7 @@ def unstar_node(
         raise HTTPException(400, "Starring requires an authenticated user")
 
     star = db.execute(
-        select(UserStar).where(
-            UserStar.user_id == auth.user_id, UserStar.node_id == node_id
-        )
+        select(UserStar).where(UserStar.user_id == auth.user_id, UserStar.node_id == node_id)
     ).scalar_one_or_none()
     if star is not None:
         db.delete(star)
@@ -532,9 +526,7 @@ def get_watch_status(
     user_id = _require_user(auth)
     _node_or_404(node_id, db)
     watch = db.execute(
-        select(NodeWatch).where(
-            NodeWatch.node_id == node_id, NodeWatch.user_id == user_id
-        )
+        select(NodeWatch).where(NodeWatch.node_id == node_id, NodeWatch.user_id == user_id)
     ).scalar_one_or_none()
     return WatchStatus(watching=watch is not None)
 
@@ -548,9 +540,7 @@ def watch_node(
     user_id = _require_user(auth)
     _node_or_404(node_id, db)
     existing = db.execute(
-        select(NodeWatch).where(
-            NodeWatch.node_id == node_id, NodeWatch.user_id == user_id
-        )
+        select(NodeWatch).where(NodeWatch.node_id == node_id, NodeWatch.user_id == user_id)
     ).scalar_one_or_none()
     if existing is None:
         db.add(NodeWatch(node_id=node_id, user_id=user_id))
@@ -567,9 +557,7 @@ def unwatch_node(
     user_id = _require_user(auth)
     _node_or_404(node_id, db)
     watch = db.execute(
-        select(NodeWatch).where(
-            NodeWatch.node_id == node_id, NodeWatch.user_id == user_id
-        )
+        select(NodeWatch).where(NodeWatch.node_id == node_id, NodeWatch.user_id == user_id)
     ).scalar_one_or_none()
     if watch is not None:
         db.delete(watch)

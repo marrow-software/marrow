@@ -156,8 +156,10 @@ def restore_workspace(
             links_data = json.loads(zf.read("links.json"))
             raw_links = links_data.get("internal_links", [])
             normalized = [
-                {"source_node_id": lnk.get("source_node_id", lnk.get("source_page_id")),
-                 "target_node_id": lnk.get("target_node_id", lnk.get("target_page_id"))}
+                {
+                    "source_node_id": lnk.get("source_node_id", lnk.get("source_page_id")),
+                    "target_node_id": lnk.get("target_node_id", lnk.get("target_page_id")),
+                }
                 for lnk in raw_links
             ]
             rebuild_node_links(session, normalized)
@@ -317,9 +319,7 @@ def _restore_v3_nodes(
         page_id = att.get("page_id", "")
         node_id = page_to_node_id.get(page_id)
         if node_id is None:
-            raise ValueError(
-                f"Attachment {att_id} references unknown page_id '{page_id}'"
-            )
+            raise ValueError(f"Attachment {att_id} references unknown page_id '{page_id}'")
         session.add(
             Attachment(
                 id=uuid.UUID(att_id),
@@ -482,9 +482,7 @@ def _restore_v4_nodes(
     for prop in manifest.get("node_properties", []):
         node_id = uuid.UUID(prop["node_id"])
         if session.get(Node, node_id) is None:
-            raise ValueError(
-                f"node_properties entry references unknown node_id '{node_id}'"
-            )
+            raise ValueError(f"node_properties entry references unknown node_id '{node_id}'")
         session.add(
             NodeProperty(
                 id=uuid.UUID(prop["id"]),
