@@ -3,6 +3,7 @@
 Personal step-by-step guide for deploying the Marrow SaaS product to Cloudflare for the first time. This is internal-only and not published.
 
 **Stack being deployed:**
+
 - `marrow.so` + `www.marrow.so` → marketing site (Cloudflare Pages, static)
 - `app.marrow.so` → product app (Cloudflare Workers, OpenNext)
 - `api.marrow.so` → FastAPI backend (Cloudflare Containers)
@@ -40,9 +41,11 @@ You need a token that CI can use to deploy. This is a one-time setup.
 3. Neon will create a default database. Click **Connect**.
 4. Under **Connection string**, make sure **Pooled connection** is selected (not direct).
 5. Copy the full string — it looks like:
+
+   ``` text
+      postgresql://neondb_owner:<password>@ep-<something>.us-east-2.aws.neon.tech/neondb?sslmode=require
    ```
-   postgresql://neondb_owner:<password>@ep-<something>.us-east-2.aws.neon.tech/neondb?sslmode=require
-   ```
+
 6. Keep this safe — this is your `DATABASE_URL`.
 
 ### 3. R2 bucket
@@ -190,7 +193,7 @@ The web Worker (`marrow-web`) is created automatically when CI runs `wrangler de
 In Cloudflare dashboard → **marrow.so** zone → **DNS → Records → Add record**:
 
 | Type | Name | Target | Proxy status |
-|------|------|--------|--------------|
+| ------ | ------ | -------- | -------------- |
 | CNAME | `@` | `marrow-marketing.pages.dev` | Proxied (orange cloud) |
 | CNAME | `www` | `marrow-marketing.pages.dev` | Proxied |
 | CNAME | `app` | *(leave blank for now — fill in after first web Worker deploy)* | Proxied |
@@ -203,6 +206,7 @@ After CI deploys `marrow-web`, find your Workers subdomain in the Cloudflare das
 ### 11. Add custom domains in Cloudflare dashboards
 
 After the first successful CI deploy, for each project:
+
 - **marrow-marketing**: Cloudflare → Workers & Pages → marrow-marketing → Custom Domains → Add `marrow.so` and `www.marrow.so`
 - **marrow-docs**: Custom Domains → Add `docs.marrow.so`
 - **marrow-web (Worker)**: Settings → Domains & Routes → Add Route → `app.marrow.so/*`
@@ -229,6 +233,7 @@ git push origin v0.2.0
 ```
 
 Watch the **Actions** tab in GitHub. Two workflows run:
+
 - **Release** — builds API image → pushes to GHCR → deploys API Container → builds web Worker → deploys Worker
 - **CI** (triggered by push to main) — runs tests + deploys docs
 
@@ -237,20 +242,26 @@ Marketing deploys via **Marketing site** workflow (also triggered by the merge).
 ### 13. Register the Stripe webhook
 
 Once the API is live:
+
 1. Stripe dashboard → **Developers → Webhooks → Add endpoint**.
 2. Endpoint URL: `https://api.marrow.so/api/billing/webhook`
 3. Events to listen to:
+
    - `checkout.session.completed`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
    - `invoice.payment_failed`
+
 4. Click **Add endpoint** → reveal and copy the **Signing secret** (`whsec_...`).
 5. Add it as a wrangler secret:
+
    ```bash
    cd api
    wrangler secret put STRIPE_WEBHOOK_SECRET
    ```
+
 6. Re-deploy the API so it picks up the new secret:
+
    ```bash
    wrangler deploy
    ```
@@ -272,9 +283,11 @@ Once the API is live:
 1. Go to `https://app.marrow.so` → sign in with GitHub.
 2. Your personal org is auto-created. Note your org slug (visible in the URL: `/orgs/<slug>/...` or in org settings).
 3. In the Neon dashboard → **SQL Editor**, run:
+
    ```sql
    UPDATE organizations SET tier = 'enterprise' WHERE slug = '<your-org-slug>';
    ```
+
    This gives the Marrow org all features with no billing requirement.
 
 ### 16. End-to-end test
@@ -284,6 +297,7 @@ Once the API is live:
 3. Add a comment on the page.
 4. Share the page via the share button → copy the link → open it in an incognito window (should load without login).
 5. Run the export/restore round-trip from your machine:
+
    ```bash
    cd api
    source .venv/bin/activate
