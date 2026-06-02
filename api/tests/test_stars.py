@@ -110,7 +110,8 @@ class TestStarToggle:
             ids = [n["id"] for n in listed.json()]
             assert str(node.id) in ids
 
-            assert client.delete(f"/api/nodes/{node.id}/star").status_code == 204
+            r = client.delete(f"/api/nodes/{node.id}/star")
+            assert r.status_code == 204
             assert client.get("/api/users/me/starred").json() == []
         finally:
             db.rollback()
@@ -153,7 +154,8 @@ class TestStarToggle:
             db.commit()
 
             _auth_cookie(client, user)
-            assert client.delete(f"/api/nodes/{node.id}/star").status_code == 204
+            r = client.delete(f"/api/nodes/{node.id}/star")
+            assert r.status_code == 204
         finally:
             db.rollback()
             client.cookies.clear()

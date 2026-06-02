@@ -28,8 +28,10 @@ logger = logging.getLogger(__name__)
 # A canonical UUID, optionally followed by a trailing path/query/fragment.
 _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
 
-# Markdown link target: [text](href)
-_MD_HREF_RE = re.compile(r"\[(?:[^\]]*)\]\(([^)]+)\)")
+# Markdown link target: [text](href).
+# Atomic group (?>...) on the link text prevents catastrophic backtracking on
+# adversarial input (ReDoS). Requires Python 3.11+.
+_MD_HREF_RE = re.compile(r"\[(?>[^\]]*)\]\(([^)]+)\)")
 
 # Pull the node id out of a /pages/{id} href (with or without a /w/{ws} prefix).
 _PAGE_HREF_RE = re.compile(rf"/pages/({_UUID})(?:[/?#]|$)")

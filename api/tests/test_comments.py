@@ -236,7 +236,8 @@ class TestRbac:
         node_id = str(node.id)
         _auth_cookie(client, editor)
         cid = client.post(f"/api/nodes/{node_id}/comments", json={"body": "mine"}).json()["id"]
-        assert client.delete(f"/api/comments/{cid}").status_code == 204
+        r = client.delete(f"/api/comments/{cid}")
+        assert r.status_code == 204
 
     def test_editor_cannot_delete_others_comment(self, client, db):
         author = _make_user(db, "a1@test.com")
@@ -250,7 +251,8 @@ class TestRbac:
         cid = client.post(f"/api/nodes/{node_id}/comments", json={"body": "x"}).json()["id"]
 
         _auth_cookie(client, other)
-        assert client.delete(f"/api/comments/{cid}").status_code == 403
+        r = client.delete(f"/api/comments/{cid}")
+        assert r.status_code == 403
 
     def test_owner_can_delete_others_comment(self, client, db):
         author = _make_user(db, "a3@test.com")
@@ -264,4 +266,5 @@ class TestRbac:
         cid = client.post(f"/api/nodes/{node_id}/comments", json={"body": "x"}).json()["id"]
 
         _auth_cookie(client, owner)
-        assert client.delete(f"/api/comments/{cid}").status_code == 204
+        r = client.delete(f"/api/comments/{cid}")
+        assert r.status_code == 204

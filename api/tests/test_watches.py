@@ -160,7 +160,8 @@ class TestWatchEndpoints:
 
         assert client.get(f"/api/nodes/{nid}/watching").json() == {"watching": True}
 
-        assert client.delete(f"/api/nodes/{nid}/watch").status_code == 204
+        r = client.delete(f"/api/nodes/{nid}/watch")
+        assert r.status_code == 204
         assert client.get(f"/api/nodes/{nid}/watching").json() == {"watching": False}
 
     def test_non_member_forbidden(self, client, db):

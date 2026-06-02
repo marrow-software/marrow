@@ -292,7 +292,8 @@ class TestBacklinksEndpoint:
             assert [n["id"] for n in resp.json()] == [linker_id]
 
             # Trash the linker — it must drop out of backlinks.
-            assert client.delete(f"/api/nodes/{linker_id}").status_code == 204
+            r = client.delete(f"/api/nodes/{linker_id}")
+            assert r.status_code == 204
             resp = client.get(f"/api/nodes/{target_id}/backlinks")
             assert resp.json() == []
         finally:
