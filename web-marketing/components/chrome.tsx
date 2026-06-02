@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { MarrowWordmark, MarrowGlyph, SunIcon, MoonIcon, MenuIcon } from "./icons";
+import { MarrowWordmark, MarrowGlyph, SunIcon, MoonIcon } from "./icons";
 import { useTheme } from "./theme-provider";
 
 const navLinks = [
@@ -14,7 +13,6 @@ const navLinks = [
 
 export function SiteNav() {
   const { theme, toggle } = useTheme();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header

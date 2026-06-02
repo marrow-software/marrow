@@ -68,7 +68,7 @@ export default function ProductPage() {
           >
             Everything your notes need.
             <br />
-            Nothing they don't.
+            Nothing they don&apos;t.
           </h1>
           <p
             className="text-lg max-w-xl mx-auto"
