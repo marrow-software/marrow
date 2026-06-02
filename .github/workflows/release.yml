@@ -77,13 +77,16 @@ jobs:
       - name: Install web deps
         working-directory: web
         run: npm ci
-      - name: Build for Cloudflare Pages
+      - name: Build for Cloudflare Workers
         working-directory: web
+        env:
+          NEXT_PUBLIC_API_URL: "https://api.marrow.so"
+          NEXT_PUBLIC_OIDC_ENABLED: "true"
         run: npm run pages:build
-      - name: Deploy web to Cloudflare Pages
+      - name: Deploy web to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: web
-          command: pages deploy .vercel/output/static --project-name=marrow-web
+          command: deploy

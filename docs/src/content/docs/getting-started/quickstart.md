@@ -57,6 +57,7 @@ The frontend runs at `http://localhost:3000`.
 - Open `http://localhost:3000`.
 - Create a workspace, then a space, then add folders and pages inside that space.
 - Type into the editor — it auto-saves after 2 seconds and creates a revision on every save.
+- Hover over a folder in the sidebar to create child folders and pages via the `+` buttons.
 - Try `cd api && marrow export --workspace <slug> --output ./out.zip` and inspect the bundle. Then `marrow restore ./out.zip` into a fresh database to confirm the round-trip.
 
 ## Configuration

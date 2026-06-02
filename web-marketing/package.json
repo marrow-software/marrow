@@ -7,8 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "pages:build": "CF_PAGES=1 next-on-pages",
-    "pages:deploy": "wrangler pages deploy .vercel/output/static"
+    "pages:build": "next build",
+    "pages:deploy": "wrangler pages deploy out --project-name=marrow-marketing"
   },
   "dependencies": {
     "next": "^16.2.4",
@@ -16,7 +16,6 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
-    "@cloudflare/next-on-pages": "^1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24",
     "@types/react": "^19",

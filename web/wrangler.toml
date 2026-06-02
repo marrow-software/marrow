@@ -1,20 +1,24 @@
-# Cloudflare Pages config for the Marrow web frontend.
+# Cloudflare Workers config for the Marrow web app (app.marrow.so).
+# Deployed via @opennextjs/cloudflare (supports Next.js 16+).
 #
 # Build:
-#   npm run pages:build          # runs next-on-pages against next.config.pages.ts
+#   npm run pages:build          # CLOUDFLARE_BUILD=1 opennextjs-cloudflare build
 # Deploy:
-#   npm run pages:deploy         # wrangler pages deploy .vercel/output/static
+#   npm run pages:deploy         # wrangler deploy
 #
-# Note: @cloudflare/next-on-pages support for Next.js 16 is pre-release.
-# The infrastructure is in place; re-run pages:build once support lands.
+# DNS (marrow.so zone is already on Cloudflare):
+#   app.marrow.so   CNAME  marrow-web.<account>.workers.dev  (proxied)
+#
+# Custom domain is configured in the Cloudflare Workers dashboard after first deploy.
+#
+# NEXT_PUBLIC_* vars must be set as env vars at build time in CI (not as wrangler [vars],
+# which are runtime-only). Set them in the release.yml build step or Pages dashboard env.
 
 name = "marrow-web"
 compatibility_date = "2025-10-01"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".vercel/output/static"
-# Build command for the Pages dashboard: npm run pages:build
+main = ".open-next/worker.js"
 
-[vars]
-# Public env baked at build time. Override per-environment in the Pages dashboard.
-NEXT_PUBLIC_API_URL = "https://api.marrow.so"
-NEXT_PUBLIC_OIDC_ENABLED = "true"
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"

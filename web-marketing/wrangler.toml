@@ -1,11 +1,11 @@
 # Cloudflare Pages config for the Marrow marketing site (marrow.so + www.marrow.so).
 #
 # Build:
-#   npm run pages:build          # runs next-on-pages against next.config.pages.ts
+#   npm run pages:build          # next build → static export to out/
 # Deploy:
-#   npm run pages:deploy         # wrangler pages deploy .vercel/output/static
+#   npm run pages:deploy         # wrangler pages deploy out --project-name=marrow-marketing
 #
-# DNS (requires #76 — Cloudflare DNS delegation):
+# DNS (marrow.so zone is already on Cloudflare):
 #   marrow.so       CNAME  marrow-marketing.pages.dev   (proxied)
 #   www.marrow.so   CNAME  marrow-marketing.pages.dev   (proxied)
 #
@@ -13,5 +13,4 @@
 
 name = "marrow-marketing"
 compatibility_date = "2025-10-01"
-compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = ".vercel/output/static"
+pages_build_output_dir = "out"

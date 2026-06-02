@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { TopNav, Footer } from "@/components/chrome";
+import { SiteNav, SiteFooter } from "@/components/chrome";
 import {
   EditorDemo,
   OrganizationDemo,
@@ -47,7 +47,7 @@ const SECTIONS = [
 export default function ProductPage() {
   return (
     <div className="min-h-screen flex flex-col">
-      <TopNav />
+      <SiteNav />
 
       <main className="flex-1">
         {/* Hero */}
@@ -171,7 +171,7 @@ export default function ProductPage() {
         </section>
       </main>
 
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }
