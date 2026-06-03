@@ -31,8 +31,8 @@ STORAGE_BACKEND = "r2"
 SAAS_MODE = "true"
 
 # OIDC — fill in after Auth0 app is created (Phase 1, Step 4 of deploy-runbook)
-# OIDC_ISSUER     = "https://<your-auth0-domain>/"  # trailing slash required
-# OIDC_CLIENT_ID  = "<auth0-client-id>"
+OIDC_ISSUER     = "https://dev-cjafzt7x7ozoltln.us.auth0.com/"  # trailing slash required
+OIDC_CLIENT_ID  = "ZKCgLWAHJShCpA4eqpoyCRj0rH13HC42"
 OIDC_REDIRECT_URI = "https://api.marrow.so/api/auth/callback"
 
 # Stripe — price IDs are not secret (they're product references, safe in source)
