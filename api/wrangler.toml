@@ -28,13 +28,31 @@ CORS_ORIGINS = "https://app.marrow.so"
 FRONTEND_URL = "https://app.marrow.so"
 COOKIE_DOMAIN = ".marrow.so"
 STORAGE_BACKEND = "r2"
-# OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_REDIRECT_URI: set per environment.
-#
+SAAS_MODE = "true"
+
+# OIDC — fill in after Auth0 app is created (Phase 1, Step 4 of deploy-runbook)
+# OIDC_ISSUER     = "https://<your-auth0-domain>/"  # trailing slash required
+# OIDC_CLIENT_ID  = "<auth0-client-id>"
+OIDC_REDIRECT_URI = "https://api.marrow.so/api/auth/callback"
+
+# Stripe — price IDs are not secret (they're product references, safe in source)
+STRIPE_STARTER_PRICE_MONTHLY      = "price_1TUKmsBpYG35ummT6XmaFJKl"
+STRIPE_STARTER_PRICE_YEARLY       = "price_1TUKuqBpYG35ummTJoOMaYQ4"
+STRIPE_BUSINESS_PRICE_MONTHLY     = "price_1TUKtVBpYG35ummTomer2fz9"
+STRIPE_BUSINESS_PRICE_YEARLY      = "price_1TUKvOBpYG35ummTkwoQxv2p"
+STRIPE_GROWTH_PRICE_MONTHLY       = "price_1TUL1KBpYG35ummTQB2Mo4ED"
+STRIPE_GROWTH_PRICE_YEARLY        = "price_1TUL1KBpYG35ummTcj4XpxBT"
+STRIPE_SH_BUSINESS_PRICE_YEARLY   = "price_1TUKNdBpYG35ummTUpLA0WlA"
+STRIPE_SH_ENTERPRISE_PRICE_YEARLY = "price_1TUKU5BpYG35ummTvzjA7Ikn"
+
 # Secrets — configure via `wrangler secret put` (never store values here):
 #   wrangler secret put SECRET_KEY
-#   wrangler secret put DATABASE_URL        # Neon pooled endpoint
+#   wrangler secret put DATABASE_URL          # Neon pooled endpoint
 #   wrangler secret put R2_ENDPOINT_URL
 #   wrangler secret put R2_ACCESS_KEY_ID
 #   wrangler secret put R2_SECRET_ACCESS_KEY
 #   wrangler secret put R2_BUCKET
-#   wrangler secret put OIDC_CLIENT_SECRET  # if using OIDC
+#   wrangler secret put OIDC_CLIENT_SECRET    # Auth0 client secret
+#   wrangler secret put STRIPE_SECRET_KEY     # sk_test_... or sk_live_...
+#   wrangler secret put STRIPE_WEBHOOK_SECRET # whsec_... (after first deploy)
+#   wrangler secret put LICENSE_SIGNING_KEY   # long random secret
