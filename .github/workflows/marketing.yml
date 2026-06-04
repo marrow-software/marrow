@@ -53,4 +53,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: web-marketing
-          command: pages deploy .vercel/output/static --project-name=marrow-marketing
+          command: pages deploy out --project-name=marrow-marketing
