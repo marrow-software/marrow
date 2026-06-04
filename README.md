@@ -23,24 +23,30 @@ These are not aspirations. They are constraints that every architectural and pro
 1. **Restore guarantee** — A Marrow export bundle is restorable to an exact replica of the original workspace. A failing restore test is a critical bug.
 2. **Transparent format** — Markdown, JSON, attachments in a zip. No proprietary blobs.
 3. **Append-only history** — Every save creates a revision. Old revisions are never modified or deleted (enforced by a database trigger).
-4. **Pluggable storage** — Local filesystem today, S3 / R2 next. Business logic never bypasses the storage adapter.
+4. **Pluggable storage** — Local filesystem or Cloudflare R2. Business logic never bypasses the storage adapter.
 5. **Self-hosted by default** — Your data stays on infrastructure you control.
 
 See **[Restore guarantee](./docs/src/content/docs/concepts/restore-guarantee.md)** for the full explanation.
 
 ---
 
-## What Marrow is (v0.1)
+## What Marrow is (v0.2)
 
-- Pages organized in a tree: Organizations → Workspaces → Spaces → Collections → Pages
+- Content organized in a tree: Organizations → Workspaces → Spaces → Folders / Pages
 - BlockNote-powered editor with code blocks, tables, page links, and `@` mentions
+- Folder views: table, board, and list — rendered from page properties
+- Node properties (text, number, date, select, multi-select, checkbox) inherited from parent folders
+- Comments (threads, replies, resolve) on any page
+- Backlinks — every page knows what links to it
+- Stars, watches, and per-user Inbox (notifications for edits and `@` mentions)
+- View-only share links for any page or folder (no account required to view)
 - File attachments
 - Full-text search across a workspace
 - Append-only revision history on every save
 - One-command export to a transparent zip bundle (full or slim)
 - One-command restore from any export bundle (forwards-compatible across versions)
 - OIDC authentication with org-level RBAC (owner / editor / viewer)
-- Pluggable storage (local filesystem; S3 / R2 next)
+- Pluggable storage (local filesystem; Cloudflare R2)
 
 ---
 
@@ -80,7 +86,7 @@ For more depth see **[Quickstart](./docs/src/content/docs/getting-started/quicks
 ## Production deployment
 
 - **[Docker Compose](./docs/src/content/docs/deployment/docker-compose.md)** — recommended. Build images, configure `.env`, `docker compose -f docker-compose.prod.yml up`.
-- **[Cloudflare](./docs/src/content/docs/deployment/cloudflare.md)** — Pages + Containers + Neon + R2 (config landed in v0.1.0; full deploy finalized in [#41](https://github.com/spmcgraw/marrow/issues/41)).
+- **[Cloudflare](./docs/src/content/docs/deployment/cloudflare.md)** — Workers + Containers + Neon + R2. The full Cloudflare stack is supported as of v0.2.
 
 See **[Environment variables](./docs/src/content/docs/configuration/env-vars.md)** for the full config reference and **[OIDC](./docs/src/content/docs/configuration/oidc.md)** for sign-in setup.
 
@@ -92,10 +98,11 @@ See **[Environment variables](./docs/src/content/docs/configuration/env-vars.md)
 | --- | --- |
 | Backend | FastAPI, SQLAlchemy, Alembic |
 | Database | PostgreSQL 16 |
-| Frontend | Next.js 16, React 19, Tailwind 4, Base UI, BlockNote |
-| Auth | OIDC (any provider) + API key fallback |
+| Product app | Next.js 16, React 19, Tailwind 4, Base UI, BlockNote (`web/`) |
+| Marketing site | Next.js 16, static export to Cloudflare Pages (`web-marketing/`) |
+| Auth | OIDC (any provider, Auth0 recommended for multi-provider) + API key fallback |
 | Search | PostgreSQL FTS (Meilisearch later) |
-| Storage | Local filesystem (S3-compatible adapter next) |
+| Storage | Local filesystem; Cloudflare R2 |
 | CLI | Typer (`marrow export`, `marrow restore`) |
 
 ---

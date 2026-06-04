@@ -5,6 +5,7 @@ export interface Organization {
   slug: string;
   name: string;
   created_at: string;
+  members_can_create_spaces: boolean;
 }
 
 export interface OrgMembership {
@@ -32,36 +33,55 @@ export interface Space {
   created_at: string;
 }
 
-export interface Collection {
+export type NodeType = "folder" | "page";
+
+export interface Node {
   id: string;
   space_id: string;
-  slug: string;
+  parent_id: string | null;
+  type: NodeType;
   name: string;
+  slug: string;
+  position: string;
+  description: string | null;
+  current_revision_id: string | null;
+  deleted_at: string | null;
   created_at: string;
+  updated_at: string;
+  content?: string | null;
+  content_format?: "markdown" | "json" | null;
 }
 
-export interface Page {
+// A node that links to the current page (backlinks drawer).
+export interface Backlink {
   id: string;
-  collection_id: string;
+  space_id: string;
+  type: "folder" | "page";
+  name: string;
   slug: string;
-  title: string;
-  current_revision_id: string | null;
-  created_at: string;
-  content?: string | null;
-  content_format?: string; // 'markdown' | 'json'
+}
+
+export interface StarredNode {
+  id: string;
+  space_id: string;
+  parent_id: string | null;
+  type: "folder" | "page";
+  name: string;
+  slug: string;
+  starred_at: string;
 }
 
 export interface Revision {
   id: string;
-  page_id: string;
-  content_format: string; // 'markdown' | 'json'
+  node_id: string;
+  content: string;
+  content_format: "markdown" | "json";
   created_at: string;
-  content?: string;
 }
 
 export interface Attachment {
   id: string;
-  page_id: string;
+  node_id: string;
   filename: string;
   hash: string;
   size_bytes: number;
@@ -70,13 +90,12 @@ export interface Attachment {
 
 // Search
 export interface SearchResultItem {
-  page_id: string;
-  title: string;
+  node_id: string;
+  name: string;
   snippet: string;
-  collection_id: string;
   space_id: string;
   space_name: string;
-  collection_name: string;
+  node_path: string[];
   rank: number;
 }
 
@@ -85,27 +104,23 @@ export interface SearchResponse {
   results: SearchResultItem[];
 }
 
-// Nested tree for sidebar rendering
-export interface PageTreeItem {
+// Nested tree for sidebar rendering (recursive node hierarchy)
+export interface NodeTreeItem {
   id: string;
-  collection_id: string;
-  slug: string;
-  title: string;
-  current_revision_id: string | null;
-}
-
-export interface CollectionTreeItem {
-  id: string;
-  slug: string;
+  parent_id: string | null;
+  type: NodeType;
   name: string;
-  pages: PageTreeItem[];
+  slug: string;
+  position: string;
+  description: string | null;
+  children: NodeTreeItem[];
 }
 
 export interface SpaceTreeItem {
   id: string;
   slug: string;
   name: string;
-  collections: CollectionTreeItem[];
+  nodes: NodeTreeItem[];
 }
 
 export interface WorkspaceTree {
@@ -114,6 +129,88 @@ export interface WorkspaceTree {
   slug: string;
   name: string;
   spaces: SpaceTreeItem[];
+}
+
+// Node properties
+export type PropertyValueType =
+  | "text"
+  | "number"
+  | "date"
+  | "select"
+  | "multi-select"
+  | "checkbox";
+
+export interface PropertySchema {
+  id: string;
+  node_id: string;
+  key: string;
+  value_type: PropertyValueType;
+  options: string[] | null;
+}
+
+export interface EffectiveProperty {
+  key: string;
+  value_type: PropertyValueType;
+  options: string[] | null;
+  value: string | null;
+  inherited: boolean;
+  defined_on: string | null;
+}
+
+export interface EffectivePropertiesResponse {
+  node_id: string;
+  properties: EffectiveProperty[];
+}
+
+// Home / For You
+export interface RecentNodeItem {
+  node_id: string;
+  name: string;
+  space_id: string;
+  space_name: string;
+  node_path: string[]; // ancestor folder names, root -> leaf
+  updated_at: string;
+}
+
+export interface WorkspaceHome {
+  workspace_id: string;
+  workspace_name: string;
+  space_count: number;
+  page_count: number;
+  recent: RecentNodeItem[];
+}
+
+
+// Node views (table / board / list over a folder of page nodes)
+export type ViewType = "table" | "board" | "list";
+
+export interface ViewSort {
+  property: string;
+  direction: "asc" | "desc";
+}
+
+export interface ViewFilter {
+  property: string;
+  operator: "eq" | "neq" | "contains" | "is_empty" | "is_not_empty";
+  value?: string | null;
+}
+
+export interface NodeViewConfig {
+  sorts: ViewSort[];
+  filters: ViewFilter[];
+  group_by: string | null;
+  visible_properties: string[];
+}
+
+export interface NodeView {
+  id: string;
+  folder_node_id: string;
+  name: string;
+  view_type: ViewType;
+  position: string;
+  config: NodeViewConfig;
+  created_at: string;
+  updated_at: string;
 }
 
 // Auth
@@ -128,4 +225,51 @@ export interface AuthStatus {
   user: User | null;
   method: string;
   oidc_enabled: boolean;
+}
+
+// View-only sharing links (#40)
+export interface ShareLink {
+  id: string;
+  node_id: string;
+  token: string;
+  created_by: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+// Comments (page-level discussion; #101)
+export interface Comment {
+  id: string;
+  node_id: string;
+  author_user_id: string | null;
+  author_name: string | null;
+  parent_comment_id: string | null;
+  body: string;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WatchStatus {
+  watching: boolean;
+}
+
+// Notifications (Inbox)
+export type NotificationKind =
+  | "mention"
+  | "comment_reply"
+  | "share_request"
+  | "watch_event";
+
+export interface Notification {
+  id: string;
+  kind: NotificationKind;
+  payload: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationList {
+  notifications: Notification[];
+  unread_count: number;
 }

@@ -17,6 +17,9 @@ def export(
     slim: bool = typer.Option(
         False, "--slim", help="Skip revision history; export current content only"
     ),
+    include_trash: bool = typer.Option(
+        False, "--include-trash", help="Include soft-deleted (trashed) nodes in the export"
+    ),
     database_url: str | None = typer.Option(
         None, "--database-url", envvar="DATABASE_URL", help="PostgreSQL connection URL"
     ),
@@ -44,6 +47,7 @@ def export(
                 storage=storage,
                 output_path=output,
                 slim=slim,
+                include_trash=include_trash,
             )
         typer.echo(f"Exported to {result}")
     except ValueError as exc:

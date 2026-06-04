@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,10 +13,12 @@ from ..rbac import require_org_role
 from ..schemas import (
     OrganizationCreate,
     OrganizationRead,
+    OrganizationUpdate,
     OrgMembershipCreate,
     OrgMembershipRead,
     OrgMembershipUpdate,
 )
+from .billing import TIER_SEAT_LIMITS, _saas_mode
 
 router = APIRouter(prefix="/api/orgs", tags=["organizations"])
 
@@ -84,6 +86,24 @@ def get_org(
     return org
 
 
+@router.patch("/{org_id}", response_model=OrganizationRead)
+def update_org(
+    org_id: UUID,
+    body: OrganizationUpdate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_org_role(OrgRole.OWNER)),
+):
+    """Update org-level settings. Requires owner role."""
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise HTTPException(404, "Organization not found")
+    if body.members_can_create_spaces is not None:
+        org.members_can_create_spaces = body.members_can_create_spaces
+    db.commit()
+    db.refresh(org)
+    return org
+
+
 @router.get("/{org_id}/members", response_model=list[OrgMembershipRead])
 def list_members(
     org_id: UUID,
@@ -111,6 +131,24 @@ def invite_member(
     """Invite a user by email. Creates a pending membership if the user has no account yet."""
     if body.role not in (r.value for r in OrgRole):
         raise HTTPException(422, f"Invalid role: {body.role}")
+
+    # Enforce seat limit in SaaS mode
+    if _saas_mode:
+        org = db.get(Organization, org_id)
+        if org:
+            seat_limit = TIER_SEAT_LIMITS.get(org.tier)
+            if seat_limit is not None:
+                current_count = db.execute(
+                    select(func.count())
+                    .select_from(OrgMembership)
+                    .where(OrgMembership.org_id == org_id)
+                ).scalar_one()
+                if current_count >= seat_limit:
+                    raise HTTPException(
+                        402,
+                        f"Seat limit reached for the {org.tier.title()} plan ({seat_limit} seats). "
+                        "Upgrade your plan to add more members.",
+                    )
 
     # Check if user exists
     user = db.execute(select(User).where(User.email == body.email)).scalar_one_or_none()

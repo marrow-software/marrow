@@ -3,11 +3,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db
-from ..models import OrgRole, Space, Workspace
+from ..models import Organization, OrgMembership, OrgRole, Space, Workspace
 from ..rbac import require_workspace_role
 from ..schemas import SpaceCreate, SpaceRead
 
@@ -38,7 +39,20 @@ def create_space(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_workspace_role(OrgRole.EDITOR)),
 ):
-    _get_workspace_or_404(workspace_id, db)
+    ws = _get_workspace_or_404(workspace_id, db)
+
+    # If the org restricts space creation to owners only, enforce that here
+    if auth.user_id is not None:
+        org = db.get(Organization, ws.org_id)
+        if org is not None and not org.members_can_create_spaces:
+            membership = db.execute(
+                select(OrgMembership).where(
+                    OrgMembership.org_id == ws.org_id, OrgMembership.user_id == auth.user_id
+                )
+            ).scalar_one_or_none()
+            if membership is None or membership.role != OrgRole.OWNER:
+                raise HTTPException(403, "Only org owners can create spaces in this workspace")
+
     space = Space(workspace_id=workspace_id, slug=body.slug, name=body.name)
     db.add(space)
     try:

@@ -3,7 +3,7 @@
 These models mirror the Alembic migration exactly, including:
 - Server-side UUID primary keys (gen_random_uuid())
 - Server-side timestamps (now())
-- Deferred FK: pages.current_revision_id → revisions.id
+- Deferred FK: nodes.current_revision_id → revisions.id
 - attachments.hash NOT NULL
 """
 
@@ -13,13 +13,14 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    CheckConstraint,
     DateTime,
     ForeignKeyConstraint,
     Text,
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -44,6 +45,16 @@ class Organization(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+    # Billing
+    tier: Mapped[str] = mapped_column(Text, nullable=False, server_default="starter")
+    billing_interval: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stripe_customer_id: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
+    self_hosted_license: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Permissions
+    members_can_create_spaces: Mapped[bool] = mapped_column(nullable=False, server_default="true")
 
     memberships: Mapped[list["OrgMembership"]] = relationship(
         back_populates="organization", passive_deletes=True
@@ -121,76 +132,73 @@ class Space(Base):
     )
 
     workspace: Mapped["Workspace"] = relationship(back_populates="spaces")
-    collections: Mapped[list["Collection"]] = relationship(
-        back_populates="space", passive_deletes=True
-    )
+    nodes: Mapped[list["Node"]] = relationship(back_populates="space", passive_deletes=True)
 
 
-class Collection(Base):
-    __tablename__ = "collections"
+class Node(Base):
+    __tablename__ = "nodes"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
     space_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    slug: Mapped[str] = mapped_column(Text, nullable=False)
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    type: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-    __table_args__ = (
-        UniqueConstraint("space_id", "slug"),
-        ForeignKeyConstraint(["space_id"], ["spaces.id"], ondelete="CASCADE"),
-    )
-
-    space: Mapped["Space"] = relationship(back_populates="collections")
-    pages: Mapped[list["Page"]] = relationship(back_populates="collection", passive_deletes=True)
-
-
-class Page(Base):
-    __tablename__ = "pages"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
-    )
-    collection_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     slug: Mapped[str] = mapped_column(Text, nullable=False)
-    title: Mapped[str] = mapped_column(Text, nullable=False)
-    # Nullable until a revision exists; deferred FK defined in __table_args__
+    position: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     current_revision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     # Managed by database triggers — never set from application code.
     search_vector: Mapped[str | None] = mapped_column(TSVECTOR, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
     __table_args__ = (
-        UniqueConstraint("collection_id", "slug"),
-        ForeignKeyConstraint(["collection_id"], ["collections.id"], ondelete="CASCADE"),
-        # Deferred so a page and its first revision can be inserted in the same
-        # transaction without ordering constraints.
+        ForeignKeyConstraint(["space_id"], ["spaces.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["parent_id"], ["nodes.id"], ondelete="CASCADE"),
+        # Deferred so a node and its first revision can be inserted in the
+        # same transaction without ordering constraints.
         ForeignKeyConstraint(
             ["current_revision_id"],
             ["revisions.id"],
-            name="fk_pages_current_revision",
+            name="fk_nodes_current_revision",
             deferrable=True,
             initially="DEFERRED",
         ),
+        CheckConstraint("type IN ('folder', 'page')", name="nodes_type_valid"),
+        CheckConstraint(
+            "(type = 'folder' AND current_revision_id IS NULL AND search_vector IS NULL)"
+            " OR (type = 'page' AND description IS NULL)",
+            name="nodes_shape_by_type",
+        ),
     )
 
-    collection: Mapped["Collection"] = relationship(back_populates="pages")
+    space: Mapped["Space"] = relationship(back_populates="nodes")
+    parent: Mapped["Node | None"] = relationship(back_populates="children", remote_side="Node.id")
+    children: Mapped[list["Node"]] = relationship(back_populates="parent", passive_deletes=True)
     current_revision: Mapped["Revision | None"] = relationship(
-        foreign_keys="[Page.current_revision_id]"
+        foreign_keys="[Node.current_revision_id]"
     )
     revisions: Mapped[list["Revision"]] = relationship(
-        back_populates="page",
-        foreign_keys="[Revision.page_id]",
+        back_populates="node",
+        foreign_keys="[Revision.node_id]",
         order_by="Revision.created_at",
         passive_deletes=True,
     )
     attachments: Mapped[list["Attachment"]] = relationship(
-        back_populates="page", passive_deletes=True
+        back_populates="node", passive_deletes=True
+    )
+    properties: Mapped[list["NodeProperty"]] = relationship(
+        back_populates="node", passive_deletes=True
+    )
+    views: Mapped[list["NodeView"]] = relationship(
+        back_populates="folder_node", passive_deletes=True
     )
 
 
@@ -200,7 +208,7 @@ class Revision(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
-    page_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # 'markdown' for legacy plain-text revisions; 'json' for BlockNote JSON revisions.
     content_format: Mapped[str] = mapped_column(Text, nullable=False, server_default="markdown")
@@ -208,10 +216,10 @@ class Revision(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    __table_args__ = (ForeignKeyConstraint(["page_id"], ["pages.id"], ondelete="CASCADE"),)
+    __table_args__ = (ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),)
 
-    page: Mapped["Page"] = relationship(
-        back_populates="revisions", foreign_keys="[Revision.page_id]"
+    node: Mapped["Node"] = relationship(
+        back_populates="revisions", foreign_keys="[Revision.node_id]"
     )
 
 
@@ -221,7 +229,7 @@ class Attachment(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
-    page_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     filename: Mapped[str] = mapped_column(Text, nullable=False)
     hash: Mapped[str] = mapped_column(Text, nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -229,9 +237,186 @@ class Attachment(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    __table_args__ = (ForeignKeyConstraint(["page_id"], ["pages.id"], ondelete="CASCADE"),)
+    __table_args__ = (ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),)
 
-    page: Mapped["Page"] = relationship(back_populates="attachments")
+    node: Mapped["Node"] = relationship(back_populates="attachments")
+
+
+class NodeProperty(Base):
+    """Typed key-value metadata attached to a node.
+
+    Folder nodes declare schema definitions (key + value_type + options).
+    Page nodes store actual values for those keys. Inheritance is resolved
+    at read time by walking ancestor folders.
+    """
+
+    __tablename__ = "node_properties"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    value_type: Mapped[str] = mapped_column(Text, nullable=False)
+    options: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        UniqueConstraint("node_id", "key", name="uq_node_properties_node_key"),
+        CheckConstraint(
+            "value_type IN ('text', 'number', 'date', 'select', 'multi-select', 'checkbox')",
+            name="node_properties_value_type_valid",
+        ),
+    )
+
+    node: Mapped["Node"] = relationship(back_populates="properties")
+
+
+class NodeView(Base):
+    """A configurable view (table / board / list) over a folder of page nodes.
+
+    Notion-database-style: a folder node can have any number of saved views
+    that render its descendant *page* nodes as rows or cards using their
+    properties. ``config`` is an opaque JSONB blob holding sort / filter /
+    group-by directives plus view-type-specific options; its shape is
+    interpreted by the frontend (see ``schemas.NodeViewConfig``).
+    """
+
+    __tablename__ = "node_views"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    folder_node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    view_type: Mapped[str] = mapped_column(Text, nullable=False)
+    position: Mapped[str] = mapped_column(Text, nullable=False, server_default="a0")
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["folder_node_id"], ["nodes.id"], ondelete="CASCADE"),
+        CheckConstraint(
+            "view_type IN ('table', 'board', 'list')",
+            name="node_views_view_type_valid",
+        ),
+    )
+
+    folder_node: Mapped["Node"] = relationship(back_populates="views")
+
+
+class ShareLink(Base):
+    """A view-only public link to a node (folder or page).
+
+    Sharing a folder shares its visible (non-trashed) subtree. Links may have
+    an optional expiry; an expired or deleted link is treated as revoked.
+    """
+
+    __tablename__ = "share_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    # Nullable: API-key / anonymous callers have no user identity.
+    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="SET NULL"),
+    )
+
+    node: Mapped["Node"] = relationship()
+
+
+class NodeLink(Base):
+    """A directed link from one page node to another, derived from page content.
+
+    Rows are reconciled on every save of the source node: wiki-links and
+    `@` mentions in the content are parsed and the set is made to match.
+    Both endpoints cascade-delete with their nodes; the pair is unique.
+    """
+
+    __tablename__ = "node_links"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    source_node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    target_node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["source_node_id"], ["nodes.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["target_node_id"], ["nodes.id"], ondelete="CASCADE"),
+        UniqueConstraint("source_node_id", "target_node_id", name="uq_node_links_pair"),
+    )
+
+
+class Comment(Base):
+    """Page-level discussion threads.
+
+    ``node_id`` must reference a type='page' node — enforced at the application
+    layer (see routers/comments.py), mirroring the issue's "check or app-level"
+    allowance. ``parent_comment_id`` is a self-FK enabling one level of replies.
+    ``block_id`` is intentionally absent for now; block-level comments are out of
+    scope but the schema (nullable, additive) leaves room for it.
+    """
+
+    __tablename__ = "comments"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    author_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    parent_comment_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["author_user_id"], ["users.id"], ondelete="SET NULL"),
+        ForeignKeyConstraint(["parent_comment_id"], ["comments.id"], ondelete="CASCADE"),
+    )
+
+    node: Mapped["Node"] = relationship()
+    author: Mapped["User | None"] = relationship()
+    replies: Mapped[list["Comment"]] = relationship(
+        back_populates="parent",
+        foreign_keys="[Comment.parent_comment_id]",
+        passive_deletes=True,
+    )
+    parent: Mapped["Comment | None"] = relationship(
+        back_populates="replies",
+        remote_side="Comment.id",
+        foreign_keys="[Comment.parent_comment_id]",
+    )
 
 
 class User(Base):
@@ -254,3 +439,90 @@ class User(Base):
     __table_args__ = (UniqueConstraint("oidc_issuer", "oidc_subject"),)
 
     memberships: Mapped[list["OrgMembership"]] = relationship(back_populates="user")
+
+
+class UserStar(Base):
+    """Per-user starred node (folder or page). Unique on (user_id, node_id).
+
+    User-scoped state — never included in workspace export bundles.
+    """
+
+    __tablename__ = "user_stars"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "node_id", name="uq_user_stars_user_node"),
+        ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+    )
+
+
+class NotificationKind(str, enum.Enum):
+    MENTION = "mention"
+    COMMENT_REPLY = "comment_reply"
+    SHARE_REQUEST = "share_request"
+    WATCH_EVENT = "watch_event"
+
+
+class Notification(Base):
+    """User-scoped activity feed item surfaced in the Inbox rail panel.
+
+    Not part of any export bundle — notifications are personal and
+    workspace-independent, so they are deliberately excluded from the
+    restore guarantee.
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        CheckConstraint(
+            "kind IN ('mention', 'comment_reply', 'share_request', 'watch_event')",
+            name="notifications_kind_valid",
+        ),
+    )
+
+
+class NodeWatch(Base):
+    """A user's subscription to change notifications for a node.
+
+    Watching a folder fans out notifications on changes to any descendant
+    page node (resolved at notification time, not stored). User-scoped and
+    workspace-independent — never part of an export bundle.
+    """
+
+    __tablename__ = "node_watches"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    node_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        ForeignKeyConstraint(["node_id"], ["nodes.id"], ondelete="CASCADE"),
+        UniqueConstraint("user_id", "node_id", name="uq_node_watches_user_node"),
+    )

@@ -1,13 +1,10 @@
 """Pydantic request/response schemas for the Marrow REST API."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
-
-# ---------------------------------------------------------------------------
-# Shared config — all read schemas allow ORM model instances as input
-# ---------------------------------------------------------------------------
 
 
 class _ReadBase(BaseModel):
@@ -22,7 +19,7 @@ class _ReadBase(BaseModel):
 class WorkspaceCreate(BaseModel):
     slug: str
     name: str
-    org_id: UUID | None = None  # if None, uses personal org
+    org_id: UUID | None = None
 
 
 class WorkspaceRead(_ReadBase):
@@ -52,53 +49,142 @@ class SpaceRead(_ReadBase):
 
 
 # ---------------------------------------------------------------------------
-# Collection
+# Node
 # ---------------------------------------------------------------------------
 
 
-class CollectionCreate(BaseModel):
-    slug: str
+class NodeCreate(BaseModel):
+    type: Literal["folder", "page"]
     name: str
+    slug: str | None = None
+    parent_id: UUID | None = None
+    position: str | None = None
+    description: str | None = None
+    content: str | None = None
+    content_format: Literal["markdown", "json"] = "markdown"
 
 
-class CollectionRead(_ReadBase):
+class NodeRead(_ReadBase):
     id: UUID
     space_id: UUID
+    parent_id: UUID | None
+    type: Literal["folder", "page"]
+    name: str
+    slug: str
+    position: str
+    description: str | None
+    current_revision_id: UUID | None
+    deleted_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class NodeReadWithContent(NodeRead):
+    content: str | None = None
+    content_format: Literal["markdown", "json"] | None = None
+
+
+class StarredNodeRead(_ReadBase):
+    """A starred node, surfaced in the Starred rail panel."""
+
+    id: UUID
+    space_id: UUID
+    parent_id: UUID | None
+    type: Literal["folder", "page"]
+    name: str
+    slug: str
+    starred_at: datetime
+
+
+class NodeUpdate(BaseModel):
+    name: str | None = None
+    slug: str | None = None
+    description: str | None = None
+    content: str | None = None
+    content_format: Literal["markdown", "json"] | None = None
+    position: str | None = None
+    parent_id: UUID | None = None
+
+
+class NodeTreeItem(_ReadBase):
+    id: UUID
+    parent_id: UUID | None
+    type: Literal["folder", "page"]
+    name: str
+    slug: str
+    position: str
+    description: str | None
+    children: list["NodeTreeItem"] = []
+
+
+NodeTreeItem.model_rebuild()
+
+
+# ---------------------------------------------------------------------------
+# Comment
+# ---------------------------------------------------------------------------
+
+
+class CommentCreate(BaseModel):
+    body: str
+    parent_comment_id: UUID | None = None
+
+
+class CommentUpdate(BaseModel):
+    """All fields optional — used for editing the body and/or resolve toggle."""
+
+    body: str | None = None
+    resolved: bool | None = None
+
+
+class CommentRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    author_user_id: UUID | None
+    author_name: str | None = None
+    parent_comment_id: UUID | None
+    body: str
+    resolved_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SpaceTreeItem(_ReadBase):
+    id: UUID
     slug: str
     name: str
-    created_at: datetime
+    nodes: list[NodeTreeItem] = []
 
 
-# ---------------------------------------------------------------------------
-# Page
-# ---------------------------------------------------------------------------
-
-
-class PageCreate(BaseModel):
-    slug: str
-    title: str
-    content: str = ""  # seeds the first revision
-    content_format: str = "markdown"  # 'markdown' or 'json'
-
-
-class PageUpdate(BaseModel):
-    title: str | None = None
-    content: str | None = None  # non-None → new revision appended
-    content_format: str = "markdown"  # format of the new content
-
-
-class PageRead(_ReadBase):
+class WorkspaceTree(_ReadBase):
     id: UUID
-    collection_id: UUID
+    org_id: UUID
     slug: str
-    title: str
-    current_revision_id: UUID | None
-    created_at: datetime
+    name: str
+    spaces: list[SpaceTreeItem] = []
 
 
-class PageReadWithContent(PageRead):
-    content: str | None = None  # current revision content; None if no revisions yet
-    content_format: str = "markdown"  # format of current revision content
+# ---------------------------------------------------------------------------
+# Home / For You
+# ---------------------------------------------------------------------------
+
+
+class RecentNodeItem(_ReadBase):
+    node_id: UUID
+    name: str
+    space_id: UUID
+    space_name: str
+    # Ancestor folder names, root -> leaf (empty when page sits at space root).
+    node_path: list[str]
+    updated_at: datetime
+
+
+class WorkspaceHome(_ReadBase):
+    workspace_id: UUID
+    workspace_name: str
+    space_count: int
+    page_count: int
+    recent: list[RecentNodeItem] = []
 
 
 # ---------------------------------------------------------------------------
@@ -108,13 +194,10 @@ class PageReadWithContent(PageRead):
 
 class RevisionRead(_ReadBase):
     id: UUID
-    page_id: UUID
-    content_format: str
-    created_at: datetime
-
-
-class RevisionReadWithContent(RevisionRead):
+    node_id: UUID
     content: str
+    content_format: Literal["markdown", "json"]
+    created_at: datetime
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +207,7 @@ class RevisionReadWithContent(RevisionRead):
 
 class AttachmentRead(_ReadBase):
     id: UUID
-    page_id: UUID
+    node_id: UUID
     filename: str
     hash: str
     size_bytes: int
@@ -132,38 +215,104 @@ class AttachmentRead(_ReadBase):
 
 
 # ---------------------------------------------------------------------------
-# Workspace tree (nested, for sidebar)
+# Node properties
+# ---------------------------------------------------------------------------
+
+PropertyValueType = Literal["text", "number", "date", "select", "multi-select", "checkbox"]
+
+
+class PropertySchemaUpsert(BaseModel):
+    """Define or update a property in a folder's schema."""
+
+    value_type: PropertyValueType
+    options: list[str] | None = None
+
+
+class PropertySchemaRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    key: str
+    value_type: PropertyValueType
+    options: list[str] | None = None
+
+
+class PropertyValueUpsert(BaseModel):
+    """Set a property value on a page node."""
+
+    value: str | None = None
+    value_type: PropertyValueType
+
+
+class EffectiveProperty(BaseModel):
+    """A property as seen on a page: its type/options (possibly inherited from
+    an ancestor folder schema) plus the page's own value when set."""
+
+    key: str
+    value_type: PropertyValueType
+    options: list[str] | None = None
+    value: str | None = None
+    inherited: bool = False
+    defined_on: UUID | None = None
+
+
+class EffectivePropertiesResponse(BaseModel):
+    node_id: UUID
+    properties: list[EffectiveProperty]
+
+
+# Node views (table / board / list over a folder of page nodes)
 # ---------------------------------------------------------------------------
 
 
-class PageTreeItem(_ReadBase):
-    id: UUID
-    collection_id: UUID
-    slug: str
-    title: str
-    current_revision_id: UUID | None
+class ViewSort(BaseModel):
+    property: str
+    direction: Literal["asc", "desc"] = "asc"
 
 
-class CollectionTreeItem(_ReadBase):
-    id: UUID
-    slug: str
+class ViewFilter(BaseModel):
+    property: str
+    operator: Literal["eq", "neq", "contains", "is_empty", "is_not_empty"] = "eq"
+    value: str | None = None
+
+
+class NodeViewConfig(BaseModel):
+    """Opaque-ish render directives shared by all three view types.
+
+    - ``sorts`` / ``filters`` apply to every view type.
+    - ``group_by`` names the (select) property whose distinct values become
+      board columns; ignored by table/list.
+    - ``visible_properties`` orders/limits columns in table view; an empty
+      list means "show all".
+    """
+
+    sorts: list[ViewSort] = []
+    filters: list[ViewFilter] = []
+    group_by: str | None = None
+    visible_properties: list[str] = []
+
+
+class NodeViewCreate(BaseModel):
     name: str
-    pages: list[PageTreeItem]
+    view_type: Literal["table", "board", "list"] = "list"
+    config: NodeViewConfig = NodeViewConfig()
 
 
-class SpaceTreeItem(_ReadBase):
+class NodeViewUpdate(BaseModel):
+    name: str | None = None
+    view_type: Literal["table", "board", "list"] | None = None
+    position: str | None = None
+    config: NodeViewConfig | None = None
+
+
+class NodeViewRead(_ReadBase):
     id: UUID
-    slug: str
+    folder_node_id: UUID
     name: str
-    collections: list[CollectionTreeItem]
-
-
-class WorkspaceTree(_ReadBase):
-    id: UUID
-    org_id: UUID
-    slug: str
-    name: str
-    spaces: list[SpaceTreeItem]
+    view_type: Literal["table", "board", "list"]
+    position: str
+    config: NodeViewConfig
+    created_at: datetime
+    updated_at: datetime
 
 
 # ---------------------------------------------------------------------------
@@ -172,19 +321,56 @@ class WorkspaceTree(_ReadBase):
 
 
 class SearchResultItem(BaseModel):
-    page_id: UUID
-    title: str
+    node_id: UUID
+    name: str
     snippet: str
-    collection_id: UUID
     space_id: UUID
     space_name: str
-    collection_name: str
+    node_path: list[str]
     rank: float
 
 
 class SearchResponse(BaseModel):
     query: str
     results: list[SearchResultItem]
+
+
+# ---------------------------------------------------------------------------
+# Share links
+# ---------------------------------------------------------------------------
+
+
+class ShareLinkCreate(BaseModel):
+    expires_at: datetime | None = None
+
+
+class ShareLinkRead(_ReadBase):
+    id: UUID
+    node_id: UUID
+    token: str
+    created_by: UUID | None
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class SharedNode(BaseModel):
+    """A node rendered for a public viewer (no account required).
+
+    For pages, ``content`` / ``content_format`` carry the current revision.
+    For folders, ``children`` carries the visible (non-trashed) subtree.
+    """
+
+    id: UUID
+    type: Literal["folder", "page"]
+    name: str
+    slug: str
+    description: str | None = None
+    content: str | None = None
+    content_format: Literal["markdown", "json"] | None = None
+    children: list["SharedNode"] = []
+
+
+SharedNode.model_rebuild()
 
 
 # ---------------------------------------------------------------------------
@@ -202,6 +388,11 @@ class OrganizationRead(_ReadBase):
     slug: str
     name: str
     created_at: datetime
+    members_can_create_spaces: bool = True
+
+
+class OrganizationUpdate(BaseModel):
+    members_can_create_spaces: bool | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +402,7 @@ class OrganizationRead(_ReadBase):
 
 class OrgMembershipCreate(BaseModel):
     email: str
-    role: str  # "owner" | "editor" | "viewer"
+    role: str
 
 
 class OrgMembershipRead(_ReadBase):
@@ -241,5 +432,29 @@ class UserRead(_ReadBase):
 class AuthStatus(BaseModel):
     authenticated: bool
     user: UserRead | None = None
-    method: str  # "session", "api_key", or "anonymous"
+    method: str
     oidc_enabled: bool
+
+
+class WatchStatus(BaseModel):
+    """Whether the current user is watching a given node."""
+
+    watching: bool
+
+
+# ---------------------------------------------------------------------------
+# Notifications
+# ---------------------------------------------------------------------------
+
+
+class NotificationRead(_ReadBase):
+    id: UUID
+    kind: Literal["mention", "comment_reply", "share_request", "watch_event"]
+    payload: dict
+    read_at: datetime | None
+    created_at: datetime
+
+
+class NotificationList(BaseModel):
+    notifications: list[NotificationRead]
+    unread_count: int

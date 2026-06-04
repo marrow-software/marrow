@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import {
   inviteMember,
   updateMemberRole,
   removeMember,
+  updateOrg,
 } from "@/lib/api";
 import type { Organization, OrgMembership } from "@/lib/types";
 
@@ -25,6 +26,7 @@ export default function OrgSettingsPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<string>("editor");
   const [busy, setBusy] = useState(false);
+  const [savingPermission, setSavingPermission] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -101,9 +103,18 @@ export default function OrgSettingsPage() {
           <ArrowLeft className="h-3 w-3" />
           Workspaces
         </Link>
-        <div>
-          <h1 className="text-2xl font-bold">{org.name}</h1>
-          <p className="text-sm text-muted-foreground">Organization settings</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold">{org.name}</h1>
+            <p className="text-sm text-muted-foreground">Organization settings</p>
+          </div>
+          <Link
+            href={`/orgs/${orgId}/admin`}
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+          >
+            <LayoutDashboard className="h-3.5 w-3.5" />
+            Admin dashboard
+          </Link>
         </div>
       </div>
 
@@ -146,6 +157,38 @@ export default function OrgSettingsPage() {
           {members.length === 0 && (
             <p className="px-4 py-3 text-sm text-muted-foreground">No members</p>
           )}
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold">Permissions</h2>
+        <div className="flex items-center justify-between rounded-md border px-4 py-3">
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium">Allow members to create spaces</p>
+            <p className="text-xs text-muted-foreground">
+              When off, only owners can create spaces in this org&apos;s workspaces.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            disabled={savingPermission}
+            checked={org.members_can_create_spaces}
+            onChange={async (e) => {
+              setSavingPermission(true);
+              try {
+                const updated = await updateOrg(orgId, {
+                  members_can_create_spaces: e.target.checked,
+                });
+                setOrg(updated);
+                toast.success("Setting saved");
+              } catch (err) {
+                toast.error(String(err));
+              } finally {
+                setSavingPermission(false);
+              }
+            }}
+            className="h-4 w-4 cursor-pointer accent-primary"
+          />
         </div>
       </section>
 

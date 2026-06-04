@@ -3,14 +3,16 @@
 import { useState } from "react";
 import { ChevronRight, Eye, MoreHorizontal } from "lucide-react";
 import { PageMenu, type PageMenuDrawer } from "@/components/page-menu";
-import { useWorkspaceTree, findBreadcrumb } from "@/components/workspace-tree-context";
+import { useWorkspaceTree, findNodeBreadcrumb } from "@/components/workspace-tree-context";
 
 interface Props {
-  collectionId: string;
+  nodeId: string;
   pageTitle: string;
   saveLabel: string;
   onOpenDrawer: (which: PageMenuDrawer) => void;
   onShare: () => void;
+  starred?: boolean;
+  onToggleStar?: () => void;
 }
 
 const MOCK_AVATARS = [
@@ -19,11 +21,11 @@ const MOCK_AVATARS = [
   { letter: "L", color: "#4a6b8a" },
 ];
 
-function Breadcrumbs({ collectionId, pageTitle }: { collectionId: string; pageTitle: string }) {
+function Breadcrumbs({ nodeId, pageTitle }: { nodeId: string; pageTitle: string }) {
   const tree = useWorkspaceTree();
-  const crumb = tree ? findBreadcrumb(tree, collectionId) : null;
+  const crumb = tree ? findNodeBreadcrumb(tree, nodeId) : null;
   const parts = crumb
-    ? [crumb.spaceName, crumb.collectionName, pageTitle]
+    ? [crumb.spaceName, ...crumb.ancestorNames, pageTitle]
     : [pageTitle];
 
   return (
@@ -66,17 +68,19 @@ function StackedAvatars() {
 }
 
 export function EditorHeader({
-  collectionId,
+  nodeId,
   pageTitle,
   saveLabel,
   onOpenDrawer,
   onShare,
+  starred,
+  onToggleStar,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="flex items-center gap-3 border-b border-border px-6 py-3">
-      <Breadcrumbs collectionId={collectionId} pageTitle={pageTitle} />
+      <Breadcrumbs nodeId={nodeId} pageTitle={pageTitle} />
 
       {saveLabel && (
         <span className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
@@ -96,8 +100,11 @@ export function EditorHeader({
       </button>
 
       <PageMenu
+        nodeId={nodeId}
         open={menuOpen}
         onOpenChange={setMenuOpen}
+        starred={starred}
+        onToggleStar={onToggleStar}
         onOpenDrawer={(which) => {
           setMenuOpen(false);
           onOpenDrawer(which);

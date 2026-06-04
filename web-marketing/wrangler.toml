@@ -1,0 +1,16 @@
+# Cloudflare Pages config for the Marrow marketing site (marrow.so + www.marrow.so).
+#
+# Build:
+#   npm run pages:build          # next build → static export to out/
+# Deploy:
+#   npm run pages:deploy         # wrangler pages deploy out --project-name=marrow-marketing
+#
+# DNS (marrow.so zone is already on Cloudflare):
+#   marrow.so       CNAME  marrow-marketing.pages.dev   (proxied)
+#   www.marrow.so   CNAME  marrow-marketing.pages.dev   (proxied)
+#
+# Custom domains are configured in the Cloudflare Pages dashboard after the project is created.
+
+name = "marrow-marketing"
+compatibility_date = "2025-10-01"
+pages_build_output_dir = "out"

@@ -2,32 +2,90 @@
 
 import os
 import tempfile
+from collections import defaultdict
 from io import BytesIO
+from operator import attrgetter
 from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_search_backend, verify_auth
-from ..models import OrgMembership, OrgRole, Workspace
+from ..models import Node, OrgMembership, OrgRole, Space, Workspace
 from ..rbac import require_workspace_role
 from ..schemas import (
+    NodeTreeItem,
+    RecentNodeItem,
     SearchResponse,
     SearchResultItem,
+    SpaceTreeItem,
     WorkspaceCreate,
+    WorkspaceHome,
     WorkspaceRead,
     WorkspaceTree,
 )
-from ..search import SearchBackend
+from ..search import _ANCESTOR_PATH_CTE, SearchBackend
 from ..storage import LocalFilesystemAdapter
 
 router = APIRouter(prefix="/api/workspaces", tags=["workspaces"])
 
 _MAX_BUNDLE_BYTES = 500 * 1024 * 1024  # 500 MB
+
+# Order by latest revision rather than nodes.updated_at — revisions are
+# append-only so MAX(created_at) is a reliable recency signal.
+_HOME_RECENT_SQL = text(
+    """
+    SELECT
+        n.id AS node_id,
+        n.name,
+        s.id AS space_id,
+        s.name AS space_name,
+        COALESCE(
+            ("""
+    + _ANCESTOR_PATH_CTE
+    + """),
+            ARRAY[]::text[]
+        ) AS node_path,
+        COALESCE(MAX(r.created_at), n.created_at) AS updated_at
+    FROM nodes n
+    JOIN spaces s ON s.id = n.space_id
+    LEFT JOIN revisions r ON r.node_id = n.id
+    WHERE s.workspace_id = :workspace_id
+      AND n.type = 'page'
+      AND n.deleted_at IS NULL
+    GROUP BY n.id, n.name, s.id, s.name, n.parent_id, n.created_at
+    ORDER BY updated_at DESC
+    LIMIT :limit
+    """
+)
+
+
+def _build_node_tree(nodes: list[Node]) -> list[NodeTreeItem]:
+    children_map: dict[UUID, list[Node]] = defaultdict(list)
+    for node in nodes:
+        if node.parent_id is not None:
+            children_map[node.parent_id].append(node)
+
+    by_position = attrgetter("position")
+
+    def to_item(node: Node) -> NodeTreeItem:
+        return NodeTreeItem(
+            id=node.id,
+            parent_id=node.parent_id,
+            type=node.type,
+            name=node.name,
+            slug=node.slug,
+            position=node.position,
+            description=node.description,
+            children=[to_item(c) for c in sorted(children_map.get(node.id, []), key=by_position)],
+        )
+
+    roots = [n for n in nodes if n.parent_id is None]
+    return [to_item(n) for n in sorted(roots, key=by_position)]
 
 
 @router.get("", response_model=list[WorkspaceRead])
@@ -140,13 +198,94 @@ def get_workspace(
 def get_workspace_tree(
     workspace_id: UUID,
     db: Session = Depends(get_db),
-    auth: AuthContext = Depends(require_workspace_role(OrgRole.VIEWER)),
-):
-    """Return the full workspace hierarchy for sidebar rendering."""
+    _: AuthContext = Depends(require_workspace_role(OrgRole.VIEWER)),
+) -> WorkspaceTree:
     ws = db.get(Workspace, workspace_id)
     if ws is None:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    return ws
+
+    spaces = db.execute(select(Space).where(Space.workspace_id == workspace_id)).scalars().all()
+    space_ids = [s.id for s in spaces]
+    nodes_by_space: dict[UUID, list[Node]] = defaultdict(list)
+    if space_ids:
+        all_nodes = (
+            db.execute(select(Node).where(Node.space_id.in_(space_ids), Node.deleted_at.is_(None)))
+            .scalars()
+            .all()
+        )
+        for node in all_nodes:
+            nodes_by_space[node.space_id].append(node)
+
+    return WorkspaceTree(
+        id=ws.id,
+        org_id=ws.org_id,
+        slug=ws.slug,
+        name=ws.name,
+        spaces=[
+            SpaceTreeItem(
+                id=s.id,
+                slug=s.slug,
+                name=s.name,
+                nodes=_build_node_tree(nodes_by_space[s.id]),
+            )
+            for s in spaces
+        ],
+    )
+
+
+@router.get("/{workspace_id}/home", response_model=WorkspaceHome)
+def get_workspace_home(
+    workspace_id: UUID,
+    limit: int = 12,
+    db: Session = Depends(get_db),
+    _: AuthContext = Depends(require_workspace_role(OrgRole.VIEWER)),
+) -> WorkspaceHome:
+    """Data backing the Home / For You landing page.
+
+    Returns lightweight workspace stats plus the most recently edited pages
+    (ordered by the node's own ``updated_at``, which bumps on every save).
+    The frontend uses ``space_count``/``page_count`` to choose between the
+    populated layout and the brand-new-workspace empty state.
+    """
+    ws = db.get(Workspace, workspace_id)
+    if ws is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    limit = max(1, min(limit, 50))
+
+    space_count = db.execute(
+        select(func.count(Space.id)).where(Space.workspace_id == workspace_id)
+    ).scalar_one()
+
+    page_count = db.execute(
+        select(func.count(Node.id))
+        .join(Space, Space.id == Node.space_id)
+        .where(
+            Space.workspace_id == workspace_id,
+            Node.type == "page",
+            Node.deleted_at.is_(None),
+        )
+    ).scalar_one()
+
+    rows = db.execute(_HOME_RECENT_SQL, {"workspace_id": workspace_id, "limit": limit}).fetchall()
+
+    return WorkspaceHome(
+        workspace_id=ws.id,
+        workspace_name=ws.name,
+        space_count=space_count,
+        page_count=page_count,
+        recent=[
+            RecentNodeItem(
+                node_id=row.node_id,
+                name=row.name,
+                space_id=row.space_id,
+                space_name=row.space_name,
+                node_path=list(row.node_path) if row.node_path else [],
+                updated_at=row.updated_at,
+            )
+            for row in rows
+        ],
+    )
 
 
 @router.get("/{workspace_id}/search", response_model=SearchResponse)

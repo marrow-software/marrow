@@ -15,17 +15,49 @@ compatibility_date = "2025-10-01"
 main = "container-entrypoint.js"
 
 [[containers]]
-name = "marrow-api"
+class_name = "MarrowAPI"
 image = "ghcr.io/spmcgraw/marrow-api:latest"
-instance_type = "standard"
+instance_type = "standard-1"
 max_instances = 5
 
-[containers.configuration]
-port = 8000
+[[durable_objects.bindings]]
+name = "MARROW_API"
+class_name = "MarrowAPI"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MarrowAPI"]
 
 [vars]
-STORAGE_PATH = "/data/storage"
 CORS_ORIGINS = "https://app.marrow.so"
 FRONTEND_URL = "https://app.marrow.so"
 COOKIE_DOMAIN = ".marrow.so"
-# OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_REDIRECT_URI: set per environment.
+STORAGE_BACKEND = "r2"
+SAAS_MODE = "true"
+
+# OIDC — fill in after Auth0 app is created (Phase 1, Step 4 of deploy-runbook)
+OIDC_ISSUER     = "https://dev-cjafzt7x7ozoltln.us.auth0.com/"  # trailing slash required
+OIDC_CLIENT_ID  = "ZKCgLWAHJShCpA4eqpoyCRj0rH13HC42"
+OIDC_REDIRECT_URI = "https://api.marrow.so/api/auth/callback"
+
+# Stripe — price IDs are not secret (they're product references, safe in source)
+STRIPE_STARTER_PRICE_MONTHLY      = "price_1TeUDEBpYG35ummTRMdkOIrz"
+STRIPE_STARTER_PRICE_YEARLY       = "price_1TeUDEBpYG35ummTh0kFQOLm"
+STRIPE_BUSINESS_PRICE_MONTHLY     = "price_1TeUFtBpYG35ummTHn4EP5VF"
+STRIPE_BUSINESS_PRICE_YEARLY      = "price_1TeUFtBpYG35ummTFf8Scugv"
+STRIPE_GROWTH_PRICE_MONTHLY       = "price_1TeUHfBpYG35ummTx8M7M4YN"
+STRIPE_GROWTH_PRICE_YEARLY        = "price_1TeUHfBpYG35ummTAfE3MRTp"
+STRIPE_SH_BUSINESS_PRICE_YEARLY   = "price_1TeUR8BpYG35ummT2xIp1wCi"
+STRIPE_SH_ENTERPRISE_PRICE_YEARLY = "price_1TeUQ7BpYG35ummTNQIKkm5x"
+
+# Secrets — configure via `wrangler secret put` (never store values here):
+#   wrangler secret put SECRET_KEY
+#   wrangler secret put DATABASE_URL          # Neon pooled endpoint
+#   wrangler secret put R2_ENDPOINT_URL
+#   wrangler secret put R2_ACCESS_KEY_ID
+#   wrangler secret put R2_SECRET_ACCESS_KEY
+#   wrangler secret put R2_BUCKET
+#   wrangler secret put OIDC_CLIENT_SECRET    # Auth0 client secret
+#   wrangler secret put STRIPE_SECRET_KEY     # sk_test_... or sk_live_...
+#   wrangler secret put STRIPE_WEBHOOK_SECRET # whsec_... (after first deploy)
+#   wrangler secret put LICENSE_SIGNING_KEY   # long random secret

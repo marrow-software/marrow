@@ -1,21 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FolderClosed, Search, Star, Inbox, LogOut } from "lucide-react";
+import { FolderClosed, Search, Star, Inbox, LogOut, Plus, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { logout } from "@/lib/api";
-import type { User } from "@/lib/types";
+import type { User, Workspace } from "@/lib/types";
 
 export type RailPanel = "pages" | "search" | "starred" | "inbox";
 
 interface Props {
   workspaceName: string;
+  currentWorkspaceId: string;
   panel: RailPanel;
   onPanelChange: (panel: RailPanel) => void;
   sidebarOpen: boolean;
   onSidebarToggle: () => void;
   user?: User | null;
+  inboxUnread?: number;
+  workspaces: Workspace[];
+  userRole: string | null;
 }
 
 const TABS: Array<{ id: RailPanel; label: string; Icon: typeof FolderClosed }> = [
@@ -34,11 +38,15 @@ function initials(name?: string | null) {
 
 export function AppRail({
   workspaceName,
+  currentWorkspaceId,
   panel,
   onPanelChange,
   sidebarOpen,
   onSidebarToggle,
   user,
+  inboxUnread = 0,
+  workspaces,
+  userRole,
 }: Props) {
   return (
     <div className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar py-3.5">
@@ -52,6 +60,7 @@ export function AppRail({
 
       {TABS.map(({ id, label, Icon }) => {
         const active = panel === id && sidebarOpen;
+        const badge = id === "inbox" && inboxUnread > 0;
         return (
           <button
             key={id}
@@ -64,17 +73,22 @@ export function AppRail({
                 if (!sidebarOpen) onSidebarToggle();
               }
             }}
-            title={label}
-            aria-label={label}
+            title={badge ? `${label} (${inboxUnread} unread)` : label}
+            aria-label={badge ? `${label}, ${inboxUnread} unread` : label}
             aria-pressed={active}
             className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+              "relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
               active
                 ? "bg-primary/15 text-primary"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
             <Icon className="h-4 w-4" />
+            {badge && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-none text-primary-foreground">
+                {inboxUnread > 9 ? "9+" : inboxUnread}
+              </span>
+            )}
           </button>
         );
       })}
@@ -86,14 +100,33 @@ export function AppRail({
         iconClassName="h-4 w-4"
       />
 
-      {user && <UserMenu user={user} />}
+      {user && (
+        <UserMenu
+          user={user}
+          workspaces={workspaces}
+          currentWorkspaceId={currentWorkspaceId}
+          userRole={userRole}
+        />
+      )}
     </div>
   );
 }
 
-function UserMenu({ user }: { user: User }) {
+function UserMenu({
+  user,
+  workspaces,
+  currentWorkspaceId,
+  userRole,
+}: {
+  user: User;
+  workspaces: Workspace[];
+  currentWorkspaceId: string;
+  userRole: string | null;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  const canCreateWorkspace = userRole === "owner" || userRole === null;
 
   useEffect(() => {
     if (!open) return;
@@ -119,13 +152,63 @@ function UserMenu({ user }: { user: User }) {
       {open && (
         <div
           role="menu"
-          className="absolute bottom-0 left-[calc(100%+8px)] z-50 w-60 rounded-md border border-border bg-popover py-1 shadow-lg"
+          className="absolute bottom-0 left-[calc(100%+8px)] z-50 w-64 rounded-md border border-border bg-popover py-1 shadow-lg"
         >
+          {/* User identity */}
           <div className="px-3 py-2">
             <p className="truncate text-sm font-medium text-foreground">{user.name}</p>
             <p className="truncate text-xs text-muted-foreground">{user.email}</p>
           </div>
+
           <div className="my-1 border-t border-border" />
+
+          {/* Workspace switcher */}
+          {workspaces.length > 0 && (
+            <>
+              <p className="px-3 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Workspaces
+              </p>
+              <div className="max-h-48 overflow-y-auto">
+                {workspaces.map((ws) => {
+                  const isCurrent = ws.id === currentWorkspaceId;
+                  return (
+                    <a
+                      key={ws.id}
+                      href={`/w/${ws.id}`}
+                      role="menuitem"
+                      onClick={() => setOpen(false)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent",
+                        isCurrent ? "text-foreground" : "text-foreground/80",
+                      )}
+                    >
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/10 text-[10px] font-semibold text-primary">
+                        {ws.name[0]?.toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{ws.name}</span>
+                      {isCurrent && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                    </a>
+                  );
+                })}
+              </div>
+
+              {canCreateWorkspace && (
+                <a
+                  href="/workspaces"
+                  role="menuitem"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Create workspace
+                </a>
+              )}
+
+              <div className="my-1 border-t border-border" />
+            </>
+          )}
+
+          {/* Sign out */}
           <button
             type="button"
             role="menuitem"

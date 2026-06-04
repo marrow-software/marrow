@@ -38,6 +38,7 @@ import {
 import { calloutBlockSpec, calloutSlashMenuItem } from "@/components/editor/callout-block";
 import { mentionInlineContentSpec } from "@/components/editor/mention-inline-content";
 import { pageLinkSlashMenuItem } from "@/components/editor/page-link-slash-item";
+import { PropertyEditor } from "@/components/property-editor";
 import { useWorkspaceTree } from "@/components/workspace-tree-context";
 import {
   Dialog,
@@ -60,23 +61,27 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { EditorHeader } from "@/components/inset-header";
+import { ShareDialog } from "@/components/share-dialog";
 import { SideDrawer, type SideDrawerKind } from "@/components/side-drawer";
 import { CommentsDrawer } from "@/components/comments-drawer";
 import { CommentBubbleFab } from "@/components/comment-bubble-fab";
+import { useComments } from "@/hooks/use-comments";
 import {
   attachmentFileUrl,
   listAttachments,
   listOrgMembers,
   searchWorkspace,
-  updatePage,
+  starNode,
+  unstarNode,
+  updateNode,
   uploadAttachment,
 } from "@/lib/api";
-import type { Attachment, OrgMembership, Page, SearchResultItem } from "@/lib/types";
+import type { Attachment, Node, OrgMembership, SearchResultItem } from "@/lib/types";
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 interface Props {
-  initialPage: Page;
+  initialPage: Node;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,8 +125,9 @@ const schema = BlockNoteSchema.create({
 // ---------------------------------------------------------------------------
 
 export function PageEditor({ initialPage }: Props) {
-  const [title, setTitle] = useState(initialPage.title);
+  const [title, setTitle] = useState(initialPage.name);
   const [status, setStatus] = useState<SaveStatus>("idle");
+  const [starred, setStarred] = useState(false);
   const { resolvedTheme } = useTheme();
 
   // Extract workspaceId from the URL for page mention search
@@ -146,7 +152,7 @@ export function PageEditor({ initialPage }: Props) {
 
   // Refs for save logic — avoids stale closures in debounce callbacks
   const titleRef = useRef(title);
-  const savedTitleRef = useRef(initialPage.title);
+  const savedTitleRef = useRef(initialPage.name);
   const savedContentRef = useRef(initialPage.content ?? "");
   // pendingContentRef holds the current JSON string to save
   const pendingContentRef = useRef(initialPage.content ?? "");
@@ -204,8 +210,8 @@ export function PageEditor({ initialPage }: Props) {
 
     setStatus("saving");
     try {
-      await updatePage(initialPage.id, {
-        title: newTitle,
+      await updateNode(initialPage.id, {
+        name: newTitle,
         content: newContent,
         content_format: "json",
       });
@@ -352,7 +358,7 @@ export function PageEditor({ initialPage }: Props) {
   const insertPageLink = useCallback(
     (result: SearchResultItem) => {
       if (!workspaceId) return;
-      editor.createLink(`/w/${workspaceId}/pages/${result.page_id}`, result.title);
+      editor.createLink(`/w/${workspaceId}/n/${result.node_id}`, result.name);
       setPickerOpen(false);
       setPickerQuery("");
       setPickerResults([]);
@@ -376,29 +382,57 @@ export function PageEditor({ initialPage }: Props) {
 
   const [sideDrawer, setSideDrawer] = useState<SideDrawerKind | null>(null);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const commentsCtl = useComments(initialPage.id);
+
+  function openComments() {
+    setSideDrawer(null);
+    setCommentsOpen(true);
+    commentsCtl.markVisited();
+  }
 
   function handleOpenDrawer(which: SideDrawerKind) {
     setCommentsOpen(false);
     setSideDrawer(which);
   }
 
-  function handleShareStub() {
-    toast.info("Sharing lands with #40");
+  const [shareOpen, setShareOpen] = useState(false);
+
+  async function handleToggleStar() {
+    try {
+      if (starred) {
+        await unstarNode(initialPage.id);
+        setStarred(false);
+      } else {
+        await starNode(initialPage.id);
+        setStarred(true);
+      }
+    } catch (err) {
+      toast.error(`Failed to ${starred ? "unstar" : "star"} page: ${String(err)}`);
+    }
   }
 
   return (
     <div className="relative flex h-full flex-col">
       <EditorHeader
-        collectionId={initialPage.collection_id}
+        nodeId={initialPage.id}
         pageTitle={title || "Untitled"}
         saveLabel={statusLabel}
         onOpenDrawer={handleOpenDrawer}
-        onShare={handleShareStub}
+        onShare={() => setShareOpen(true)}
+        starred={starred}
+        onToggleStar={handleToggleStar}
+      />
+
+      <ShareDialog
+        nodeId={initialPage.id}
+        nodeName={title || "Untitled"}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
       />
 
       {/* Attachments — retained while Phase A omits an Attachments menu entry */}
       <div className="flex items-center border-b border-border px-6 py-1.5">
-        <AttachmentSheet pageId={initialPage.id} collectionId={initialPage.collection_id} />
+        <AttachmentSheet nodeId={initialPage.id} />
       </div>
 
       {/* Title */}
@@ -418,6 +452,9 @@ export function PageEditor({ initialPage }: Props) {
           placeholder="Untitled"
         />
       </div>
+
+      {/* Typed key-value metadata (inherited folder schemas + page values) */}
+      <PropertyEditor nodeId={initialPage.id} />
 
       {/* BlockNote editor */}
       <div className="flex-1 overflow-auto">
@@ -498,7 +535,7 @@ export function PageEditor({ initialPage }: Props) {
             )}
             <ul className="flex flex-col gap-1">
               {pickerResults.map((r, i) => (
-                <li key={r.page_id}>
+                <li key={r.node_id}>
                   <button
                     type="button"
                     onClick={() => insertPageLink(r)}
@@ -507,9 +544,9 @@ export function PageEditor({ initialPage }: Props) {
                       i === pickerActiveIndex ? "bg-accent" : "hover:bg-accent/60"
                     }`}
                   >
-                    <div className="text-sm font-medium text-foreground">{r.title}</div>
+                    <div className="text-sm font-medium text-foreground">{r.name}</div>
                     <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                      {r.space_name} / {r.collection_name}
+                      {[r.space_name, ...r.node_path].join(" / ")}
                     </div>
                   </button>
                 </li>
@@ -520,19 +557,30 @@ export function PageEditor({ initialPage }: Props) {
       </Dialog>
 
       {!commentsOpen && (
-        <CommentBubbleFab onClick={() => { setSideDrawer(null); setCommentsOpen(true); }} />
+        <CommentBubbleFab onClick={openComments} unread={commentsCtl.unreadCount} />
       )}
 
-      {sideDrawer && (
+      {sideDrawer && workspaceId && (
         <SideDrawer
           which={sideDrawer}
-          pageId={initialPage.id}
+          nodeId={initialPage.id}
+          workspaceId={workspaceId}
           onClose={() => setSideDrawer(null)}
           onRestore={handleRestore}
         />
       )}
 
-      {commentsOpen && <CommentsDrawer onClose={() => setCommentsOpen(false)} />}
+      {commentsOpen && (
+        <CommentsDrawer
+          onClose={() => setCommentsOpen(false)}
+          comments={commentsCtl.comments}
+          loading={commentsCtl.loading}
+          error={commentsCtl.error}
+          post={commentsCtl.post}
+          setResolved={commentsCtl.setResolved}
+          remove={commentsCtl.remove}
+        />
+      )}
     </div>
   );
 }
@@ -541,20 +589,14 @@ export function PageEditor({ initialPage }: Props) {
 // Attachment panel
 // ---------------------------------------------------------------------------
 
-function AttachmentSheet({
-  pageId,
-  collectionId,
-}: {
-  pageId: string;
-  collectionId: string;
-}) {
+function AttachmentSheet({ nodeId }: { nodeId: string }) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     try {
-      const atts = await listAttachments(collectionId, pageId);
+      const atts = await listAttachments(nodeId);
       setAttachments(atts);
     } catch {
       toast.error("Failed to load attachments");
@@ -566,7 +608,7 @@ function AttachmentSheet({
     if (!file) return;
     setUploading(true);
     try {
-      await uploadAttachment(collectionId, pageId, file);
+      await uploadAttachment(nodeId, file);
       await load();
       toast.success(`${file.name} uploaded`);
     } catch (err) {
@@ -603,7 +645,7 @@ function AttachmentSheet({
                 </p>
               </div>
               <a
-                href={attachmentFileUrl(collectionId, pageId, att.id)}
+                href={attachmentFileUrl(nodeId, att.id)}
                 className="text-xs text-blue-600 hover:underline"
                 download={att.filename}
               >

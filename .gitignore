@@ -27,3 +27,9 @@ node_modules/
 *.log
 *.zip
 *.Zone.Identifier
+
+# Swarm coordinator runtime artifacts
+.swarm/
+
+# Internal-only references (PRDs, runbooks, brand docs) — Marrow org use only
+references/

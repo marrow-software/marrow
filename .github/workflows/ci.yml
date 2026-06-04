@@ -65,7 +65,7 @@ jobs:
       - run: npm run build
 
   docs:
-    name: Docs — build
+    name: Docs — build + deploy
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -79,3 +79,12 @@ jobs:
           cache-dependency-path: docs/package-lock.json
       - run: npm ci
       - run: npm run build
+      - name: Deploy to Cloudflare Pages
+        # Only deploy on pushes to main, not on PRs.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: docs
+          command: pages deploy dist --project-name=marrow-docs

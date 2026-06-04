@@ -14,7 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from marrow.export import SCHEMA_VERSION, estimate_export_sizes, export_workspace
-from marrow.models import Attachment, Collection, Organization, Page, Revision, Space, Workspace
+from marrow.models import Attachment, Node, Organization, Revision, Space, Workspace
 from marrow.storage import StorageAdapter
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://marrow:marrow@localhost:5433/marrow")
@@ -61,7 +61,7 @@ def session(engine):
 
 @pytest.fixture
 def seeded(session):
-    """Seed a workspace with two pages (two revisions each) and one attachment."""
+    """Seed a workspace with two page nodes (two revisions each) and one attachment."""
     org = Organization(slug="export-test-org", name="Export Test Org")
     session.add(org)
     session.flush()
@@ -74,52 +74,62 @@ def seeded(session):
     session.add(space)
     session.flush()
 
-    col = Collection(space_id=space.id, slug="col", name="Collection")
-    session.add(col)
+    # Node 1 — page with two revisions and one internal link to node2 (added later).
+    node1 = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="page",
+        name="Page One",
+        slug="page-one",
+        position="a0",
+    )
+    session.add(node1)
     session.flush()
 
-    # Page 1 with two revisions and one internal link to page 2 (added later).
-    page1 = Page(collection_id=col.id, slug="page-one", title="Page One")
-    session.add(page1)
-    session.flush()
-
-    rev1a = Revision(page_id=page1.id, content="# Page One\nFirst draft.")
+    rev1a = Revision(node_id=node1.id, content="# Page One\nFirst draft.")
     session.add(rev1a)
     session.flush()
 
-    rev1b = Revision(page_id=page1.id, content="# Page One\nSecond draft.")
+    rev1b = Revision(node_id=node1.id, content="# Page One\nSecond draft.")
     session.add(rev1b)
     session.flush()
 
-    page1.current_revision_id = rev1b.id
+    node1.current_revision_id = rev1b.id
     session.flush()
 
-    # Page 2 (target of internal link from page 1).
-    page2 = Page(collection_id=col.id, slug="page-two", title="Page Two")
-    session.add(page2)
+    # Node 2 — page (target of internal link from node1).
+    node2 = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="page",
+        name="Page Two",
+        slug="page-two",
+        position="a1",
+    )
+    session.add(node2)
     session.flush()
 
-    rev2 = Revision(page_id=page2.id, content="# Page Two\nOnly revision.")
+    rev2 = Revision(node_id=node2.id, content="# Page Two\nOnly revision.")
     session.add(rev2)
     session.flush()
 
-    page2.current_revision_id = rev2.id
+    node2.current_revision_id = rev2.id
     session.flush()
 
-    # Update page1 current revision to include a link to page2.
-    link_content = f"# Page One\n[See page two](/pages/{page2.id})"
-    rev1c = Revision(page_id=page1.id, content=link_content)
+    # Update node1 current revision to include a link to node2.
+    link_content = f"# Page One\n[See page two](/nodes/{node2.id})"
+    rev1c = Revision(node_id=node1.id, content=link_content)
     session.add(rev1c)
     session.flush()
 
-    page1.current_revision_id = rev1c.id
+    node1.current_revision_id = rev1c.id
     session.flush()
 
-    # Attachment on page1.
+    # Attachment on node1.
     att_data = b"fake image bytes"
     att_hash = hashlib.sha256(att_data).hexdigest()
     att = Attachment(
-        page_id=page1.id,
+        node_id=node1.id,
         filename="photo.png",
         hash=att_hash,
         size_bytes=len(att_data),
@@ -131,7 +141,7 @@ def seeded(session):
 
     return {
         "workspace": ws,
-        "pages": [page1, page2],
+        "nodes": [node1, node2],
         "attachment": att,
         "attachment_data": att_data,
         "storage": storage,
@@ -167,14 +177,14 @@ def test_zip_contains_expected_members(seeded, session, tmp_path):
     with zipfile.ZipFile(result) as zf:
         names = set(zf.namelist())
 
-    page1_id = str(seeded["pages"][0].id)
-    page2_id = str(seeded["pages"][1].id)
+    node1_id = str(seeded["nodes"][0].id)
+    node2_id = str(seeded["nodes"][1].id)
     att_id = str(seeded["attachment"].id)
 
     assert "manifest.json" in names
     assert "links.json" in names
-    assert f"pages/{page1_id}.md" in names
-    assert f"pages/{page2_id}.md" in names
+    assert f"nodes/{node1_id}.md" in names
+    assert f"nodes/{node2_id}.md" in names
     assert f"assets/{att_id}.png" in names
 
 
@@ -191,23 +201,26 @@ def test_manifest_content(seeded, session, tmp_path):
         manifest = json.loads(zf.read("manifest.json"))
 
     assert manifest["schema_version"] == SCHEMA_VERSION
+    assert manifest["schema_version"] == "4"
     assert manifest["workspace"]["slug"] == ws.slug
     assert manifest["workspace"]["id"] == str(ws.id)
 
+    assert "collections" not in manifest
+    assert "pages" not in manifest
     assert len(manifest["spaces"]) == 1
-    assert len(manifest["collections"]) == 1
-    assert len(manifest["pages"]) == 2
+    assert len(manifest["nodes"]) == 2
     assert len(manifest["revisions"]) == 4  # rev1a, rev1b, rev1c, rev2
     assert len(manifest["attachments"]) == 1
 
     att_record = manifest["attachments"][0]
     assert att_record["hash"] == seeded["attachment"].hash
     assert att_record["filename"] == "photo.png"
+    assert "node_id" in att_record
     assert "created_at" in att_record
 
 
-def test_page_content_matches_current_revision(seeded, session, tmp_path):
-    page1 = seeded["pages"][0]
+def test_node_content_matches_current_revision(seeded, session, tmp_path):
+    node1 = seeded["nodes"][0]
     result = export_workspace(
         slug="export-test-ws",
         session=session,
@@ -216,13 +229,13 @@ def test_page_content_matches_current_revision(seeded, session, tmp_path):
     )
 
     with zipfile.ZipFile(result) as zf:
-        content = zf.read(f"pages/{page1.id}.md").decode()
+        content = zf.read(f"nodes/{node1.id}.md").decode()
 
-    assert f"/pages/{seeded['pages'][1].id}" in content
+    assert f"/nodes/{seeded['nodes'][1].id}" in content
 
 
 def test_all_revisions_are_included(seeded, session, tmp_path):
-    page1 = seeded["pages"][0]
+    node1 = seeded["nodes"][0]
     result = export_workspace(
         slug="export-test-ws",
         session=session,
@@ -231,15 +244,15 @@ def test_all_revisions_are_included(seeded, session, tmp_path):
     )
 
     with zipfile.ZipFile(result) as zf:
-        rev_files = [n for n in zf.namelist() if n.startswith(f"revisions/{page1.id}/")]
+        rev_files = [n for n in zf.namelist() if n.startswith(f"revisions/{node1.id}/")]
 
-    # page1 has three revisions (rev1a, rev1b, rev1c)
+    # node1 has three revisions (rev1a, rev1b, rev1c)
     assert len(rev_files) == 3
 
 
 def test_links_json(seeded, session, tmp_path):
-    page1_id = str(seeded["pages"][0].id)
-    page2_id = str(seeded["pages"][1].id)
+    node1_id = str(seeded["nodes"][0].id)
+    node2_id = str(seeded["nodes"][1].id)
 
     result = export_workspace(
         slug="export-test-ws",
@@ -253,12 +266,12 @@ def test_links_json(seeded, session, tmp_path):
 
     internal = links["internal_links"]
     assert len(internal) == 1
-    assert internal[0]["source_page_id"] == page1_id
-    assert internal[0]["target_page_id"] == page2_id
+    assert internal[0]["source_node_id"] == node1_id
+    assert internal[0]["target_node_id"] == node2_id
 
-    # page2 is linked to, so only page1 is orphaned (nothing links to it)
-    assert page2_id not in links["orphaned_pages"]
-    assert page1_id in links["orphaned_pages"]
+    # node2 is linked to, so only node1 is orphaned (nothing links to it)
+    assert node2_id not in links["orphaned_nodes"]
+    assert node1_id in links["orphaned_nodes"]
 
 
 def test_attachment_hash_mismatch_raises(seeded, session, tmp_path):
@@ -298,6 +311,124 @@ def test_output_filename_default(seeded, session, tmp_path):
     assert result.name.endswith(".zip")
 
 
+def test_folder_node_has_no_content_file(session, tmp_path):
+    """Folder nodes appear in the manifest but get no nodes/{id}.md file."""
+    org = Organization(slug="folder-export-org", name="Folder Export Org")
+    session.add(org)
+    session.flush()
+
+    ws = Workspace(org_id=org.id, slug="folder-export-ws", name="Folder Export WS")
+    session.add(ws)
+    session.flush()
+
+    space = Space(workspace_id=ws.id, slug="sp", name="Space")
+    session.add(space)
+    session.flush()
+
+    folder = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="folder",
+        name="My Folder",
+        slug="my-folder",
+        position="a0",
+        description="A folder",
+    )
+    session.add(folder)
+    session.flush()
+
+    storage = FakeStorageAdapter()
+    result = export_workspace(
+        slug="folder-export-ws",
+        session=session,
+        storage=storage,
+        output_path=tmp_path,
+    )
+
+    with zipfile.ZipFile(result) as zf:
+        names = set(zf.namelist())
+        manifest = json.loads(zf.read("manifest.json"))
+
+    # Folder appears in manifest nodes list
+    assert len(manifest["nodes"]) == 1
+    assert manifest["nodes"][0]["type"] == "folder"
+    assert manifest["nodes"][0]["description"] == "A folder"
+
+    # No content file for folder
+    assert f"nodes/{folder.id}.md" not in names
+    assert f"nodes/{folder.id}.json" not in names
+
+
+def test_include_trash_includes_deleted_nodes(session, tmp_path):
+    """Soft-deleted nodes are excluded by default but included with include_trash=True."""
+    from datetime import datetime, timezone
+
+    org = Organization(slug="trash-export-org", name="Trash Export Org")
+    session.add(org)
+    session.flush()
+
+    ws = Workspace(org_id=org.id, slug="trash-export-ws", name="Trash Export WS")
+    session.add(ws)
+    session.flush()
+
+    space = Space(workspace_id=ws.id, slug="sp", name="Space")
+    session.add(space)
+    session.flush()
+
+    live_node = Node(
+        space_id=space.id, parent_id=None, type="page", name="Live", slug="live", position="a0"
+    )
+    session.add(live_node)
+    session.flush()
+
+    rev = Revision(node_id=live_node.id, content="Live content.")
+    session.add(rev)
+    session.flush()
+    live_node.current_revision_id = rev.id
+    session.flush()
+
+    trashed_node = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="page",
+        name="Trashed",
+        slug="trashed",
+        position="a1",
+        deleted_at=datetime.now(timezone.utc),
+    )
+    session.add(trashed_node)
+    session.flush()
+
+    storage = FakeStorageAdapter()
+
+    # Default export excludes trash
+    result = export_workspace(
+        slug="trash-export-ws",
+        session=session,
+        storage=storage,
+        output_path=tmp_path,
+    )
+    with zipfile.ZipFile(result) as zf:
+        manifest = json.loads(zf.read("manifest.json"))
+    node_ids = {n["id"] for n in manifest["nodes"]}
+    assert str(live_node.id) in node_ids
+    assert str(trashed_node.id) not in node_ids
+
+    # include_trash includes soft-deleted nodes
+    result2 = export_workspace(
+        slug="trash-export-ws",
+        session=session,
+        storage=storage,
+        output_path=tmp_path,
+        include_trash=True,
+    )
+    with zipfile.ZipFile(result2) as zf:
+        manifest2 = json.loads(zf.read("manifest.json"))
+    node_ids2 = {n["id"] for n in manifest2["nodes"]}
+    assert str(live_node.id) in node_ids2
+    assert str(trashed_node.id) in node_ids2
+
+
 # ---------------------------------------------------------------------------
 # Slim export tests
 # ---------------------------------------------------------------------------
@@ -316,7 +447,7 @@ def test_slim_export_omits_revisions(seeded, session, tmp_path):
         names = zf.namelist()
 
     assert not any(n.startswith("revisions/") for n in names)
-    assert any(n.startswith("pages/") for n in names)
+    assert any(n.startswith("nodes/") for n in names)
     assert "manifest.json" in names
 
 
@@ -348,7 +479,8 @@ def test_slim_manifest_has_slim_flag_and_empty_revisions(seeded, session, tmp_pa
 
 
 def test_slim_bundle_is_restorable(session, tmp_path):
-    """A slim bundle restores cleanly — one revision per page from pages/ content."""
+    """A slim v4 bundle restores cleanly — one revision per page from nodes/ content."""
+    import io as _io
     import uuid as _uuid
     from datetime import datetime, timezone
 
@@ -358,11 +490,10 @@ def test_slim_bundle_is_restorable(session, tmp_path):
     ws_id = _uuid.uuid4()
     org_id = _uuid.uuid4()
     space_id = _uuid.uuid4()
-    col_id = _uuid.uuid4()
-    page_id = _uuid.uuid4()
+    node_id = _uuid.uuid4()
 
     manifest = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": "4",
         "slim": True,
         "export_timestamp": now,
         "organization": {
@@ -387,21 +518,15 @@ def test_slim_bundle_is_restorable(session, tmp_path):
                 "created_at": now,
             }
         ],
-        "collections": [
+        "nodes": [
             {
-                "id": str(col_id),
+                "id": str(node_id),
                 "space_id": str(space_id),
-                "slug": "col",
-                "name": "Col",
-                "created_at": now,
-            }
-        ],
-        "pages": [
-            {
-                "id": str(page_id),
-                "collection_id": str(col_id),
+                "parent_id": None,
+                "type": "page",
+                "name": "Page",
                 "slug": "pg",
-                "title": "Page",
+                "position": "a0",
                 "current_revision_id": None,
                 "created_at": now,
             }
@@ -410,15 +535,13 @@ def test_slim_bundle_is_restorable(session, tmp_path):
         "attachments": [],
     }
 
-    import io as _io
-
     buf = _io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr("manifest.json", json.dumps(manifest))
-        zf.writestr(f"pages/{page_id}.md", "# Page\nCurrent content.")
+        zf.writestr(f"nodes/{node_id}.md", "# Page\nCurrent content.")
         zf.writestr(
             "links.json",
-            json.dumps({"internal_links": [], "broken_links": [], "orphaned_pages": []}),
+            json.dumps({"internal_links": [], "broken_links": [], "orphaned_nodes": []}),
         )
 
     bundle_path = tmp_path / "slim-bundle.zip"
@@ -428,15 +551,13 @@ def test_slim_bundle_is_restorable(session, tmp_path):
     slug = restore_workspace(bundle_path, session, storage)
     assert slug == "slim-restore-ws"
 
-    from marrow.models import Workspace
-
     restored_ws = session.query(Workspace).filter_by(slug="slim-restore-ws").one()
-    pages_list = [p for s in restored_ws.spaces for c in s.collections for p in c.pages]
-    assert len(pages_list) == 1
-    p = pages_list[0]
-    assert p.current_revision is not None
-    assert p.current_revision.content == "# Page\nCurrent content."
-    assert len(p.revisions) == 1
+    all_nodes = [n for s in restored_ws.spaces for n in s.nodes if n.type == "page"]
+    assert len(all_nodes) == 1
+    n = all_nodes[0]
+    assert n.current_revision is not None
+    assert n.current_revision.content == "# Page\nCurrent content."
+    assert len(n.revisions) == 1
 
 
 def test_estimate_export_sizes(seeded, session):

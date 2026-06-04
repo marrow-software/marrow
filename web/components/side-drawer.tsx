@@ -3,14 +3,16 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { getRevision, listRevisions } from "@/lib/api";
-import type { Revision } from "@/lib/types";
+import Link from "next/link";
+import { getBacklinks, getRevision, listRevisions } from "@/lib/api";
+import type { Backlink, Revision } from "@/lib/types";
 
 export type SideDrawerKind = "backlinks" | "history";
 
 interface Props {
   which: SideDrawerKind;
-  pageId: string;
+  nodeId: string;
+  workspaceId: string;
   onClose: () => void;
   onRestore: (content: string, contentFormat: string) => Promise<void>;
 }
@@ -20,7 +22,7 @@ const TITLES: Record<SideDrawerKind, string> = {
   history: "Version history",
 };
 
-export function SideDrawer({ which, pageId, onClose, onRestore }: Props) {
+export function SideDrawer({ which, nodeId, workspaceId, onClose, onRestore }: Props) {
   return (
     <aside
       className="absolute inset-y-0 right-0 z-15 flex w-[360px] flex-col border-l border-border bg-card shadow-[-20px_0_40px_-20px_rgba(0,0,0,0.3)]"
@@ -44,34 +46,97 @@ export function SideDrawer({ which, pageId, onClose, onRestore }: Props) {
         </button>
       </header>
       <div className="flex-1 overflow-auto px-4 py-4">
-        {which === "backlinks" && <BacklinksEmptyState />}
+        {which === "backlinks" && (
+          <BacklinksList pageId={nodeId} workspaceId={workspaceId} />
+        )}
         {which === "history" && (
-          <HistoryList pageId={pageId} onRestore={onRestore} onClose={onClose} />
+          <HistoryList nodeId={nodeId} onRestore={onRestore} onClose={onClose} />
         )}
       </div>
     </aside>
   );
 }
 
-function BacklinksEmptyState() {
+function BacklinksList({
+  pageId,
+  workspaceId,
+}: {
+  pageId: string;
+  workspaceId: string;
+}) {
+  const [backlinks, setBacklinks] = useState<Backlink[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const links = await getBacklinks(pageId);
+        if (!cancelled) setBacklinks(links);
+      } catch {
+        if (!cancelled) toast.error("Failed to load backlinks");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pageId]);
+
+  if (loading) {
+    return <p className="text-xs text-muted-foreground">Loading…</p>;
+  }
+
+  if (backlinks.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-border p-5 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">No backlinks yet.</p>
+        <p className="mt-2">
+          When another page links here with a <span className="font-mono">wiki-link</span>
+          {" "}or <span className="font-mono">@mention</span>, it will appear in this panel.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-md border border-dashed border-border p-5 text-xs text-muted-foreground">
-      <p className="font-medium text-foreground">No backlinks yet.</p>
-      <p className="mt-2">
-        When another page links here with <span className="font-mono">[[wikilink]]</span>
-        {" "}or <span className="font-mono">@mention</span>, it will appear in this panel.
-        Backlink indexing is upcoming.
-      </p>
-    </div>
+    <ul className="flex flex-col gap-1">
+      {backlinks.map((node) => {
+        const href = workspaceId ? `/w/${workspaceId}/pages/${node.id}` : null;
+        const inner = (
+          <>
+            <div className="text-xs font-medium text-foreground">{node.name}</div>
+            <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+              {node.slug}
+            </div>
+          </>
+        );
+        return (
+          <li key={node.id}>
+            {href ? (
+              <Link
+                href={href}
+                className="block rounded-md border border-border px-3 py-2 transition-colors hover:bg-accent"
+              >
+                {inner}
+              </Link>
+            ) : (
+              <div className="rounded-md border border-border px-3 py-2">{inner}</div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 function HistoryList({
-  pageId,
+  nodeId,
   onRestore,
   onClose,
 }: {
-  pageId: string;
+  nodeId: string;
   onRestore: (content: string, contentFormat: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -84,7 +149,7 @@ function HistoryList({
     let cancelled = false;
     (async () => {
       try {
-        const revs = await listRevisions(pageId);
+        const revs = await listRevisions(nodeId);
         if (!cancelled) setRevisions(revs);
       } catch {
         if (!cancelled) toast.error("Failed to load revisions");
@@ -95,11 +160,11 @@ function HistoryList({
     return () => {
       cancelled = true;
     };
-  }, [pageId]);
+  }, [nodeId]);
 
   async function handleSelect(rev: Revision) {
     try {
-      const detail = await getRevision(pageId, rev.id);
+      const detail = await getRevision(nodeId, rev.id);
       setSelected(detail);
     } catch {
       toast.error("Failed to load revision content");

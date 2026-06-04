@@ -9,14 +9,29 @@ import { getApiKey, getApiUrl, getInternalApiUrl } from "./runtime-config";
 import type {
   Attachment,
   AuthStatus,
-  Collection,
+  Backlink,
+  Comment,
+  EffectiveProperty,
+  EffectivePropertiesResponse,
+  Node,
+  NodeType,
+  NodeView,
+  NodeViewConfig,
+  Notification,
+  NotificationList,
   Organization,
   OrgMembership,
-  Page,
+  PropertySchema,
+  PropertyValueType,
   Revision,
   SearchResponse,
+  ShareLink,
   Space,
+  StarredNode,
+  ViewType,
+  WatchStatus,
   Workspace,
+  WorkspaceHome,
   WorkspaceTree,
 } from "./types";
 
@@ -93,6 +108,10 @@ export function getWorkspaceTree(id: string): Promise<WorkspaceTree> {
   return apiFetch(`/api/workspaces/${id}/tree`);
 }
 
+export function getWorkspaceHome(id: string): Promise<WorkspaceHome> {
+  return apiFetch(`/api/workspaces/${id}/home`);
+}
+
 export function getExportSizeEstimate(
   workspaceId: string
 ): Promise<{ full_bytes: number; slim_bytes: number }> {
@@ -141,6 +160,10 @@ export function searchWorkspace(workspaceId: string, query: string): Promise<Sea
 // Spaces
 // ---------------------------------------------------------------------------
 
+export function listSpaces(workspaceId: string): Promise<Space[]> {
+  return apiFetch(`/api/workspaces/${workspaceId}/spaces`);
+}
+
 export function createSpace(workspaceId: string, slug: string, name: string): Promise<Space> {
   return apiFetch(`/api/workspaces/${workspaceId}/spaces`, {
     method: "POST",
@@ -149,88 +172,160 @@ export function createSpace(workspaceId: string, slug: string, name: string): Pr
 }
 
 // ---------------------------------------------------------------------------
-// Collections
+// Node views (table / board / list over a folder of page nodes)
 // ---------------------------------------------------------------------------
 
-export function createCollection(spaceId: string, slug: string, name: string): Promise<Collection> {
-  return apiFetch(`/api/spaces/${spaceId}/collections`, {
+export function listNodeViews(folderNodeId: string): Promise<NodeView[]> {
+  return apiFetch(`/api/nodes/${folderNodeId}/views`);
+}
+
+export function createNodeView(
+  folderNodeId: string,
+  name: string,
+  viewType: ViewType = "list",
+  config?: Partial<NodeViewConfig>,
+): Promise<NodeView> {
+  return apiFetch(`/api/nodes/${folderNodeId}/views`, {
     method: "POST",
-    body: JSON.stringify({ slug, name }),
+    body: JSON.stringify({ name, view_type: viewType, ...(config ? { config } : {}) }),
   });
 }
 
-// ---------------------------------------------------------------------------
-// Pages
-// ---------------------------------------------------------------------------
-
-export function createPage(
-  collectionId: string,
-  slug: string,
-  title: string,
-  content = "",
-  content_format = "markdown"
-): Promise<Page> {
-  return apiFetch(`/api/collections/${collectionId}/pages`, {
-    method: "POST",
-    body: JSON.stringify({ slug, title, content, content_format }),
-  });
-}
-
-export function getPage(pageId: string): Promise<Page> {
-  return apiFetch(`/api/pages/${pageId}`);
-}
-
-export function updatePage(
-  pageId: string,
-  patch: { title?: string; content?: string; content_format?: string }
-): Promise<Page> {
-  return apiFetch(`/api/pages/${pageId}`, {
+export function updateNodeView(
+  viewId: string,
+  patch: Partial<Pick<NodeView, "name" | "view_type" | "position">> & {
+    config?: Partial<NodeViewConfig>;
+  },
+): Promise<NodeView> {
+  return apiFetch(`/api/views/${viewId}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
 }
 
-export function deletePage(collectionId: string, pageId: string): Promise<void> {
-  return apiFetch(`/api/collections/${collectionId}/pages/${pageId}`, {
-    method: "DELETE",
+export function deleteNodeView(viewId: string): Promise<void> {
+  return apiFetch(`/api/views/${viewId}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------------------
+// Collections
+// Nodes
+// ---------------------------------------------------------------------------
+
+export function createNode(
+  spaceId: string,
+  body: {
+    type: NodeType;
+    name: string;
+    slug?: string;
+    parent_id?: string | null;
+    description?: string | null;
+    content?: string;
+    content_format?: "markdown" | "json";
+    position?: string;
+  }
+): Promise<Node> {
+  return apiFetch(`/api/spaces/${spaceId}/nodes`, {
+    method: "POST",
+    body: JSON.stringify(body),
   });
+}
+
+export function getNode(nodeId: string): Promise<Node> {
+  return apiFetch(`/api/nodes/${nodeId}`);
+}
+
+export function updateNode(
+  nodeId: string,
+  patch: {
+    name?: string;
+    slug?: string;
+    description?: string | null;
+    content?: string;
+    content_format?: "markdown" | "json";
+    position?: string;
+    parent_id?: string | null;
+  }
+): Promise<Node> {
+  return apiFetch(`/api/nodes/${nodeId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}`, { method: "DELETE" });
+}
+
+export function moveNode(
+  nodeId: string,
+  newParentId: string | null,
+  position: string
+): Promise<Node> {
+  return updateNode(nodeId, { parent_id: newParentId, position });
+}
+
+export function listNodeChildren(nodeId: string): Promise<Node[]> {
+  return apiFetch(`/api/nodes/${nodeId}/children`);
 }
 
 // ---------------------------------------------------------------------------
 // Revisions
 // ---------------------------------------------------------------------------
 
-export function listRevisions(pageId: string): Promise<Revision[]> {
-  return apiFetch(`/api/pages/${pageId}/revisions`);
+export function listRevisions(nodeId: string): Promise<Revision[]> {
+  return apiFetch(`/api/nodes/${nodeId}/revisions`);
 }
 
-export function getRevision(pageId: string, revisionId: string): Promise<Revision> {
-  return apiFetch(`/api/pages/${pageId}/revisions/${revisionId}`);
+export function getRevision(nodeId: string, revisionId: string): Promise<Revision> {
+  return apiFetch(`/api/nodes/${nodeId}/revisions/${revisionId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Backlinks
+// ---------------------------------------------------------------------------
+
+export function getBacklinks(nodeId: string): Promise<Backlink[]> {
+  return apiFetch(`/api/nodes/${nodeId}/backlinks`);
+}
+
+// ---------------------------------------------------------------------------
+// Starred nodes
+// ---------------------------------------------------------------------------
+
+export function listStarred(): Promise<StarredNode[]> {
+  return apiFetch("/api/users/me/starred");
+}
+
+export function starNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/star`, { method: "POST" });
+}
+
+export function unstarNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/star`, { method: "DELETE" });
 }
 
 // ---------------------------------------------------------------------------
 // Attachments
 // ---------------------------------------------------------------------------
 
-export function listAttachments(collectionId: string, pageId: string): Promise<Attachment[]> {
-  return apiFetch(`/api/collections/${collectionId}/pages/${pageId}/attachments`);
+export function listAttachments(nodeId: string): Promise<Attachment[]> {
+  return apiFetch(`/api/nodes/${nodeId}/attachments`);
 }
 
-export async function uploadAttachment(
-  collectionId: string,
-  pageId: string,
-  file: File
-): Promise<Attachment> {
+export async function uploadAttachment(nodeId: string, file: File): Promise<Attachment> {
   const form = new FormData();
   form.append("file", file);
 
   const apiKey = getApiKey();
   const headers: Record<string, string> = apiKey ? { "X-API-Key": apiKey } : {};
 
-  const res = await fetch(
-    `${baseUrl()}/api/collections/${collectionId}/pages/${pageId}/attachments`,
-    { method: "POST", body: form, headers, credentials: "include" }
-  );
+  const res = await fetch(`${baseUrl()}/api/nodes/${nodeId}/attachments`, {
+    method: "POST",
+    body: form,
+    headers,
+    credentials: "include",
+  });
 
   if (!res.ok) {
     const text = await res.text().catch(() => res.statusText);
@@ -239,13 +334,9 @@ export async function uploadAttachment(
   return res.json();
 }
 
-export function attachmentFileUrl(collectionId: string, pageId: string, attachmentId: string): string {
-  return `${baseUrl()}/api/collections/${collectionId}/pages/${pageId}/attachments/${attachmentId}/file`;
+export function attachmentFileUrl(nodeId: string, attachmentId: string): string {
+  return `${baseUrl()}/api/nodes/${nodeId}/attachments/${attachmentId}/file`;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -281,6 +372,16 @@ export function getOrg(orgId: string): Promise<Organization> {
   return apiFetch(`/api/orgs/${orgId}`);
 }
 
+export function updateOrg(
+  orgId: string,
+  patch: { members_can_create_spaces?: boolean }
+): Promise<Organization> {
+  return apiFetch(`/api/orgs/${orgId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
 export function listOrgMembers(orgId: string): Promise<OrgMembership[]> {
   return apiFetch(`/api/orgs/${orgId}/members`);
 }
@@ -313,6 +414,122 @@ export function removeMember(orgId: string, membershipId: string): Promise<void>
   });
 }
 
+// ---------------------------------------------------------------------------
+// View-only sharing links (#40)
+// ---------------------------------------------------------------------------
+
+export function createShareLink(
+  nodeId: string,
+  expiresAt: string | null
+): Promise<ShareLink> {
+  return apiFetch(`/api/nodes/${nodeId}/share-links`, {
+    method: "POST",
+    body: JSON.stringify({ expires_at: expiresAt }),
+  });
+}
+
+export function listShareLinks(nodeId: string): Promise<ShareLink[]> {
+  return apiFetch(`/api/nodes/${nodeId}/share-links`);
+}
+
+export function revokeShareLink(linkId: string): Promise<void> {
+  return apiFetch(`/api/share-links/${linkId}`, { method: "DELETE" });
+}
+
+/** Public, no-account URL a viewer opens to read shared content. */
+export function sharedLinkUrl(token: string): string {
+  return `${getApiUrl()}/shared/${token}`;
+}
+
+// Node watches (#104) — subscribe to change notifications for a page or folder.
+
+export function getWatchStatus(nodeId: string): Promise<WatchStatus> {
+  return apiFetch(`/api/nodes/${nodeId}/watching`);
+}
+
+export function watchNode(nodeId: string): Promise<WatchStatus> {
+  return apiFetch(`/api/nodes/${nodeId}/watch`, { method: "POST" });
+}
+
+export function unwatchNode(nodeId: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/watch`, { method: "DELETE" });
+}
+
+// --- Notifications (Inbox) ---
+
+export function listNotifications(): Promise<NotificationList> {
+  return apiFetch("/api/users/me/notifications");
+}
+
+export function markNotificationRead(id: string): Promise<Notification> {
+  return apiFetch(`/api/notifications/${id}`, { method: "PATCH" });
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await apiFetch("/api/users/me/notifications/read-all", { method: "POST" });
+}
+
+// ---------------------------------------------------------------------------
+// Node properties
+// ---------------------------------------------------------------------------
+
+/** Effective properties for a node (inherited folder schemas + own values). */
+export function getNodeProperties(
+  nodeId: string
+): Promise<EffectivePropertiesResponse> {
+  return apiFetch(`/api/nodes/${nodeId}/properties`);
+}
+
+/** Set (or clear) a property value on a page node. */
+export function setNodeProperty(
+  nodeId: string,
+  key: string,
+  value: string | null,
+  valueType: PropertyValueType
+): Promise<EffectiveProperty> {
+  return apiFetch(`/api/nodes/${nodeId}/properties/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    body: JSON.stringify({ value, value_type: valueType }),
+  });
+}
+
+export function deleteNodeProperty(nodeId: string, key: string): Promise<void> {
+  return apiFetch(`/api/nodes/${nodeId}/properties/${encodeURIComponent(key)}`, {
+    method: "DELETE",
+  });
+}
+
+/** List a folder's property schema definitions. */
+export function getPropertySchema(nodeId: string): Promise<PropertySchema[]> {
+  return apiFetch(`/api/nodes/${nodeId}/property-schema`);
+}
+
+/** Define or update a property in a folder's schema. */
+export function upsertPropertySchema(
+  nodeId: string,
+  key: string,
+  valueType: PropertyValueType,
+  options: string[] | null
+): Promise<PropertySchema> {
+  return apiFetch(
+    `/api/nodes/${nodeId}/property-schema/${encodeURIComponent(key)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ value_type: valueType, options }),
+    }
+  );
+}
+
+export function deletePropertySchema(
+  nodeId: string,
+  key: string
+): Promise<void> {
+  return apiFetch(
+    `/api/nodes/${nodeId}/property-schema/${encodeURIComponent(key)}`,
+    { method: "DELETE" }
+  );
+}
+
 /** Convert a display name to a URL-safe slug. */
 export function slugify(name: string): string {
   return name
@@ -320,4 +537,40 @@ export function slugify(name: string): string {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+// ---------------------------------------------------------------------------
+// Comments (#101)
+// ---------------------------------------------------------------------------
+
+export function listComments(nodeId: string): Promise<Comment[]> {
+  return apiFetch(`/api/nodes/${nodeId}/comments`);
+}
+
+export function createComment(
+  nodeId: string,
+  body: string,
+  parentCommentId?: string
+): Promise<Comment> {
+  return apiFetch(`/api/nodes/${nodeId}/comments`, {
+    method: "POST",
+    body: JSON.stringify({
+      body,
+      parent_comment_id: parentCommentId ?? null,
+    }),
+  });
+}
+
+export function updateComment(
+  commentId: string,
+  patch: { body?: string; resolved?: boolean }
+): Promise<Comment> {
+  return apiFetch(`/api/comments/${commentId}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteComment(commentId: string): Promise<void> {
+  return apiFetch(`/api/comments/${commentId}`, { method: "DELETE" });
 }

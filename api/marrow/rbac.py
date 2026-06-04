@@ -13,13 +13,19 @@ from sqlalchemy.orm import Session
 
 from .dependencies import AuthContext, get_db, verify_auth
 from .models import (
-    Collection,
+    Comment,
+    Node,
+    NodeView,
     OrgMembership,
     OrgRole,
-    Page,
+    ShareLink,
     Space,
     Workspace,
 )
+
+# require_collection_role / require_page_role removed in #123 — collection and
+# page routers no longer exist. A node-based replacement (require_node_role)
+# lands in #124 (2.0b).
 
 ROLE_HIERARCHY: dict[OrgRole, int] = {
     OrgRole.VIEWER: 0,
@@ -101,46 +107,98 @@ def require_space_role(min_role: OrgRole):
     return _dep
 
 
-def require_collection_role(min_role: OrgRole):
-    """Dependency factory: resolve collection_id → space → workspace → org."""
+def require_node_role(min_role: OrgRole):
+    """Dependency factory: resolve node_id → space → workspace → org, then enforce role."""
 
     def _dep(
-        collection_id: uuid.UUID,
+        node_id: uuid.UUID,
         db: Session = Depends(get_db),
         auth: AuthContext = Depends(verify_auth),
     ) -> AuthContext:
-        org_id = db.execute(
-            select(Workspace.org_id)
-            .join(Space, Space.workspace_id == Workspace.id)
-            .join(Collection, Collection.space_id == Space.id)
-            .where(Collection.id == collection_id)
-        ).scalar_one_or_none()
-        if org_id is None:
-            raise HTTPException(404, "Collection not found")
-        _check_membership(db, org_id, auth, min_role)
+        node = db.get(Node, node_id)
+        if node is None or node.deleted_at is not None:
+            raise HTTPException(404, "Node not found")
+        space = db.get(Space, node.space_id)
+        workspace = db.get(Workspace, space.workspace_id)
+        _check_membership(db, workspace.org_id, auth, min_role)
         return auth
 
     return _dep
 
 
-def require_page_role(min_role: OrgRole):
-    """Dependency factory: resolve page_id → collection → space → workspace → org."""
+def require_share_link_role(min_role: OrgRole):
+    """Dependency factory: resolve link_id → node → space → workspace → org."""
 
     def _dep(
-        page_id: uuid.UUID,
+        link_id: uuid.UUID,
         db: Session = Depends(get_db),
         auth: AuthContext = Depends(verify_auth),
     ) -> AuthContext:
-        org_id = db.execute(
-            select(Workspace.org_id)
-            .join(Space, Space.workspace_id == Workspace.id)
-            .join(Collection, Collection.space_id == Space.id)
-            .join(Page, Page.collection_id == Collection.id)
-            .where(Page.id == page_id)
-        ).scalar_one_or_none()
-        if org_id is None:
-            raise HTTPException(404, "Page not found")
-        _check_membership(db, org_id, auth, min_role)
+        link = db.get(ShareLink, link_id)
+        if link is None:
+            raise HTTPException(404, "Share link not found")
+        node = db.get(Node, link.node_id)
+        if node is None:
+            raise HTTPException(404, "Node not found")
+        space = db.get(Space, node.space_id)
+        if space is None:
+            raise HTTPException(404, "Space not found")
+        workspace = db.get(Workspace, space.workspace_id)
+        if workspace is None:
+            raise HTTPException(404, "Workspace not found")
+        _check_membership(db, workspace.org_id, auth, min_role)
+        return auth
+
+    return _dep
+
+
+def require_comment_role(min_role: OrgRole):
+    """Dependency factory: resolve comment_id → node → space → workspace → org.
+
+    Does not enforce author-only rules; the delete handler layers an
+    "owner or author" check on top of an EDITOR floor.
+    """
+
+    def _dep(
+        comment_id: uuid.UUID,
+        db: Session = Depends(get_db),
+        auth: AuthContext = Depends(verify_auth),
+    ) -> AuthContext:
+        comment = db.get(Comment, comment_id)
+        if comment is None:
+            raise HTTPException(404, "Comment not found")
+        node = db.get(Node, comment.node_id)
+        if node is None:
+            raise HTTPException(404, "Comment not found")
+        space = db.get(Space, node.space_id)
+        workspace = db.get(Workspace, space.workspace_id)
+        _check_membership(db, workspace.org_id, auth, min_role)
+        return auth
+
+    return _dep
+
+
+def require_view_role(min_role: OrgRole):
+    """Dependency factory: resolve view_id → folder node → ... → org, enforce role."""
+
+    def _dep(
+        view_id: uuid.UUID,
+        db: Session = Depends(get_db),
+        auth: AuthContext = Depends(verify_auth),
+    ) -> AuthContext:
+        view = db.get(NodeView, view_id)
+        if view is None:
+            raise HTTPException(404, "View not found")
+        node = db.get(Node, view.folder_node_id)
+        if node is None or node.deleted_at is not None:
+            raise HTTPException(404, "View not found")
+        space = db.get(Space, node.space_id)
+        if space is None:
+            raise HTTPException(404, "Space not found")
+        workspace = db.get(Workspace, space.workspace_id)
+        if workspace is None:
+            raise HTTPException(404, "Workspace not found")
+        _check_membership(db, workspace.org_id, auth, min_role)
         return auth
 
     return _dep

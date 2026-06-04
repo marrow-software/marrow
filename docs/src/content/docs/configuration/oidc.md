@@ -3,7 +3,7 @@ title: OIDC authentication
 description: Wire Marrow up to an OIDC provider for sign-in.
 ---
 
-Marrow's backend acts as an OIDC Relying Party. Any compliant provider works — this page walks through Google and Keycloak, but the pattern is the same anywhere.
+Marrow's backend acts as an OIDC Relying Party. Any compliant provider works. This page covers **Auth0** (recommended for multi-provider sign-in), **Google**, and **Keycloak**.
 
 ## How it works
 
@@ -46,6 +46,28 @@ The session cookie is set on `COOKIE_DOMAIN`. For the cookie to be sent from the
 If the cookie isn't being sent on API calls, this is almost always the misconfiguration.
 
 ## Provider setup
+
+### Auth0 (recommended — supports GitHub + Google simultaneously)
+
+Marrow's backend connects to a single `OIDC_ISSUER`. Auth0 sits in front of multiple social providers and presents one OIDC endpoint to Marrow, so users can sign in with either GitHub or Google.
+
+**Auth0 free tier: 7,500 monthly active users.**
+
+1. Create an account at [auth0.com](https://auth0.com). Create a **Regular Web Application** (not SPA or Machine-to-Machine).
+2. In **Applications → Settings**:
+   - Allowed Callback URLs: `https://api.example.com/api/auth/callback`
+   - Allowed Logout URLs: `https://app.example.com`
+3. Note your **Domain** (e.g. `myapp.us.auth0.com`), **Client ID**, and **Client Secret**.
+4. **Enable GitHub** — Authentication → Social → GitHub:
+   - Create a [GitHub OAuth app](https://github.com/settings/developers). Homepage URL: your app URL. Callback URL: `https://<auth0-domain>/login/callback`.
+   - Paste the GitHub client ID and secret into Auth0.
+5. **Enable Google** — Authentication → Social → Google. Auth0's dev keys are fine for testing; replace with your own Google OAuth credentials for production.
+6. Set these env vars / secrets:
+   ```env
+   OIDC_ISSUER=https://<auth0-domain>/   # trailing slash required
+   OIDC_CLIENT_ID=<auth0-client-id>
+   OIDC_CLIENT_SECRET=<auth0-client-secret>
+   ```
 
 ### Google
 
