@@ -41,14 +41,14 @@ OIDC_CLIENT_ID  = "ZKCgLWAHJShCpA4eqpoyCRj0rH13HC42"
 OIDC_REDIRECT_URI = "https://api.marrow.so/api/auth/callback"
 
 # Stripe — price IDs are not secret (they're product references, safe in source)
-STRIPE_STARTER_PRICE_MONTHLY      = "price_1TUKmsBpYG35ummT6XmaFJKl"
-STRIPE_STARTER_PRICE_YEARLY       = "price_1TUKuqBpYG35ummTJoOMaYQ4"
-STRIPE_BUSINESS_PRICE_MONTHLY     = "price_1TUKtVBpYG35ummTomer2fz9"
-STRIPE_BUSINESS_PRICE_YEARLY      = "price_1TUKvOBpYG35ummTkwoQxv2p"
-STRIPE_GROWTH_PRICE_MONTHLY       = "price_1TUL1KBpYG35ummTQB2Mo4ED"
-STRIPE_GROWTH_PRICE_YEARLY        = "price_1TUL1KBpYG35ummTcj4XpxBT"
-STRIPE_SH_BUSINESS_PRICE_YEARLY   = "price_1TUKNdBpYG35ummTUpLA0WlA"
-STRIPE_SH_ENTERPRISE_PRICE_YEARLY = "price_1TUKU5BpYG35ummTvzjA7Ikn"
+STRIPE_STARTER_PRICE_MONTHLY      = "price_1TeUDEBpYG35ummTRMdkOIrz"
+STRIPE_STARTER_PRICE_YEARLY       = "price_1TeUDEBpYG35ummTh0kFQOLm"
+STRIPE_BUSINESS_PRICE_MONTHLY     = "price_1TeUFtBpYG35ummTHn4EP5VF"
+STRIPE_BUSINESS_PRICE_YEARLY      = "price_1TeUFtBpYG35ummTFf8Scugv"
+STRIPE_GROWTH_PRICE_MONTHLY       = "price_1TeUHfBpYG35ummTx8M7M4YN"
+STRIPE_GROWTH_PRICE_YEARLY        = "price_1TeUHfBpYG35ummTAfE3MRTp"
+STRIPE_SH_BUSINESS_PRICE_YEARLY   = "price_1TeUR8BpYG35ummT2xIp1wCi"
+STRIPE_SH_ENTERPRISE_PRICE_YEARLY = "price_1TeUQ7BpYG35ummTNQIKkm5x"
 
 # Secrets — configure via `wrangler secret put` (never store values here):
 #   wrangler secret put SECRET_KEY
