@@ -15,168 +15,99 @@ Personal step-by-step guide for deploying the Marrow SaaS product to Cloudflare 
 
 **Assumed starting state:** DNS for `marrow.so` is already on Cloudflare. GitHub repo is `spmcgraw/marrow`. No existing production deployment.
 
----
-
-## Phase 1 — Account setup (do this before touching any code)
-
-### 1. Cloudflare API token
-
-You need a token that CI can use to deploy. This is a one-time setup.
-
-1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) → click your avatar (top right) → **My Profile** → **API Tokens**.
-2. Click **Create Token**.
-3. Click **Use template** next to *Edit Cloudflare Workers*.
-4. Scroll down to **Zone Resources** — change "All zones" to "Include → Specific zone → marrow.so".
-5. Click **Continue to summary** → **Create Token**.
-6. **Copy the token now** — you won't see it again.
-7. In GitHub: go to `github.com/spmcgraw/marrow` → **Settings → Secrets and variables → Actions → New repository secret**.
-   - Name: `CLOUDFLARE_API_TOKEN` — paste the token value.
-8. Back in Cloudflare: on the right sidebar of any page you'll see **Account ID** (a 32-char hex string). Copy it.
-9. GitHub → add another secret: `CLOUDFLARE_ACCOUNT_ID` — paste your account ID.
-
-### 2. Neon Postgres (free tier)
-
-1. Go to [neon.tech](https://neon.tech) → **Sign up** (GitHub login works).
-2. Click **New Project** → name it `marrow-prod` → region: choose closest to your users (US East is fine for now).
-3. Neon will create a default database. Click **Connect**.
-4. Under **Connection string**, make sure **Pooled connection** is selected (not direct).
-5. Copy the full string — it looks like:
-
-   ``` text
-      postgresql://neondb_owner:<password>@ep-<something>.us-east-2.aws.neon.tech/neondb?sslmode=require
-   ```
-
-6. Keep this safe — this is your `DATABASE_URL`.
-
-### 3. R2 bucket
-
-1. In Cloudflare dashboard → **R2 Object Storage** (left sidebar).
-2. Click **Create bucket** → name: `marrow-attachments` → **Create bucket**.
-3. Click **Manage R2 API Tokens** (top right of R2 page).
-4. Click **Create API Token**.
-   - Token name: `marrow-api`
-   - Permissions: **Object Read & Write**
-   - Bucket: Specific bucket → `marrow-attachments`
-   - TTL: No expiry
-5. Click **Create API Token**. On the confirmation screen, note:
-   - **Access Key ID** (looks like `abc123...`)
-   - **Secret Access Key** (shows once — copy it)
-   - **Endpoint URL** (looks like `https://abc123.r2.cloudflarestorage.com`)
-
-### 4. Auth0 — GitHub + Google sign-in
-
-1. Go to [auth0.com](https://auth0.com) → **Sign up** (free tier is fine).
-2. During onboarding, choose **I'm building a web app** → pick any tech stack (doesn't matter).
-3. Once in the dashboard, go to **Applications → Applications** → **Create Application**.
-   - Name: `Marrow`
-   - Type: **Regular Web Applications**
-   - Click **Create**.
-4. You're now on the app's Settings tab. Fill in:
-   - **Allowed Callback URLs:** `https://api.marrow.so/api/auth/callback`
-   - **Allowed Logout URLs:** `https://app.marrow.so`
-   - Scroll down and click **Save Changes**.
-5. At the top of Settings, note:
-   - **Domain** (e.g. `dev-abc123.us.auth0.com`) — this is your `OIDC_ISSUER` value (add a trailing `/`)
-   - **Client ID** — this is `OIDC_CLIENT_ID`
-   - **Client Secret** (click Reveal) — this is `OIDC_CLIENT_SECRET`
-
-6. **Enable GitHub login:**
-   - Auth0 sidebar → **Authentication → Social**.
-   - Find **GitHub** → click it → toggle **Enable**.
-   - You need a GitHub OAuth app. Go to [github.com/settings/developers](https://github.com/settings/developers) → **OAuth Apps → New OAuth App**:
-     - Application name: `Marrow (Auth0)`
-     - Homepage URL: `https://marrow.so`
-     - Authorization callback URL: `https://<your-auth0-domain>/login/callback` (use the domain from step 5)
-     - Click **Register application** → note the **Client ID** and generate a **Client Secret**.
-   - Back in Auth0, paste the GitHub Client ID and Secret → **Save**.
-   - Click **Applications** tab (inside the GitHub social connection) → enable **Marrow**.
-
-7. **Enable Google login:**
-   - Auth0 sidebar → **Authentication → Social** → **Google / Gmail → Enable**.
-   - Auth0's own dev keys work for testing. For production, create a Google OAuth app at [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create → OAuth 2.0 Client. Redirect URI: `https://<auth0-domain>/login/callback`.
-   - Click **Applications** tab → enable **Marrow**.
-
-### 5. Stripe
-
-1. Go to [stripe.com](https://stripe.com) → sign up.
-2. Start in **Test mode** (toggle in top right — keep it on until you're ready for real payments).
-3. Create your products. Go to **Products → Add product**:
-   - **Starter** — flat rate, $X/mo and $Y/yr (two prices per product). Repeat for **Business** and **Growth**.
-4. For each price you create, copy the **Price ID** (starts with `price_`). You'll need:
-   - `STRIPE_STARTER_PRICE_MONTHLY`
-   - `STRIPE_STARTER_PRICE_YEARLY`
-   - `STRIPE_BUSINESS_PRICE_MONTHLY`
-   - `STRIPE_BUSINESS_PRICE_YEARLY`
-   - `STRIPE_GROWTH_PRICE_MONTHLY`
-   - `STRIPE_GROWTH_PRICE_YEARLY`
-5. Go to **Developers → API keys** → copy the **Secret key** (`sk_test_...`). This is `STRIPE_SECRET_KEY`.
-6. Webhook secret comes after Phase 2 deploy (Step 12 below).
+**How Cloudflare Containers handles secrets:** Secrets set via `wrangler secret put` land in the Worker wrapper's `env`, NOT automatically inside the Docker container. `container-entrypoint.js` explicitly forwards every secret and var to the FastAPI process via `envVars`. This means secrets must be set before (or immediately after) the first deploy, then re-deploy picks them up.
 
 ---
 
-## Phase 2 — Wire up the Cloudflare config
+## Phase 1 — Account setup ✅ DONE
 
-### 6. Install wrangler and log in
+All steps below were completed prior to this runbook being updated. Notes kept for reference.
 
-On your local machine:
+### 1. Cloudflare API token ✅
+
+- `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` added as GitHub repository secrets.
+
+### 2. Neon Postgres ✅
+
+- Project `marrow-prod` created. Pooled `DATABASE_URL` saved.
+
+### 3. R2 bucket ✅
+
+- Bucket `marrow-attachments` created. `R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` saved.
+
+### 4. Auth0 ✅
+
+- Application `Marrow` created (Regular Web Application).
+- Callback URL: `https://api.marrow.so/api/auth/callback`
+- Logout URL: `https://app.marrow.so`
+- GitHub OAuth connection enabled.
+- Google OAuth connection enabled (Auth0 dev keys for now; swap for production Google OAuth app before public launch).
+- `OIDC_ISSUER` and `OIDC_CLIENT_ID` committed to `api/wrangler.toml`. `OIDC_CLIENT_SECRET` saved.
+
+### 5. Stripe ✅
+
+- Products created: Starter, Business, Growth (cloud + self-hosted).
+- All `STRIPE_*_PRICE_*` IDs committed to `api/wrangler.toml`.
+- `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (test) saved.
+- Webhook secret (`STRIPE_WEBHOOK_SECRET`) must be re-registered after first production deploy (Step 13).
+
+---
+
+## Phase 2 — Wire up Cloudflare config
+
+### 6. Install wrangler and log in ✅
 
 ```bash
 npm i -g wrangler
 wrangler login
-# This opens a browser — authorize with your Cloudflare account.
 ```
 
-### 7. Configure API wrangler secrets
+### 7. Set API wrangler secrets
 
-From the `api/` directory, run each of these. `wrangler` will prompt you to paste the value:
+**Important:** For Cloudflare Containers, `wrangler secret put` may require the Worker to already exist. Try the commands below — if any fail with "Worker not found", skip to Step 9 (create Pages projects), then Step 12 (first deploy), then come back and run these.
+
+Run from `api/`:
 
 ```bash
 cd /home/spmcgraw/dev/marrow/api
 
 wrangler secret put SECRET_KEY
-# Paste a long random string — run: openssl rand -hex 32
+# Run: openssl rand -hex 32 — paste the output
 
 wrangler secret put DATABASE_URL
-# Paste your Neon pooled connection string from Step 2
+# Paste Neon pooled connection string (Step 2)
 
 wrangler secret put R2_ENDPOINT_URL
-# Paste: https://<account-id>.r2.cloudflarestorage.com (from Step 3)
+# https://<account-id>.r2.cloudflarestorage.com (Step 3)
 
 wrangler secret put R2_ACCESS_KEY_ID
-# Paste from Step 3
+# From Step 3
 
 wrangler secret put R2_SECRET_ACCESS_KEY
-# Paste from Step 3
+# From Step 3
 
 wrangler secret put R2_BUCKET
-# Type: marrow-attachments
+# marrow-attachments
 
 wrangler secret put OIDC_CLIENT_SECRET
-# Paste the Auth0 Client Secret from Step 4
+# Auth0 Client Secret (Step 4)
 
 wrangler secret put STRIPE_SECRET_KEY
-# Paste from Step 5
+# sk_test_... from .env (swap for sk_live_... when going live)
+
+wrangler secret put LICENSE_SIGNING_KEY
+# Run: openssl rand -hex 32 — paste the output
 ```
 
-**STRIPE_WEBHOOK_SECRET** — skip for now; you'll add it after the first deploy (Step 12).
+`STRIPE_WEBHOOK_SECRET` — skip; set after first deploy (Step 13).
 
-### 8. Fill in api/wrangler.toml non-secret vars
+### 8. wrangler.toml non-secret vars ✅ DONE
 
-Open `api/wrangler.toml` and replace the placeholder values in the `[vars]` section:
+All non-secret vars (`OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_REDIRECT_URI`, `SAAS_MODE`, all `STRIPE_*_PRICE_*` IDs, `CORS_ORIGINS`, `FRONTEND_URL`, `COOKIE_DOMAIN`, `STORAGE_BACKEND`) are committed in `api/wrangler.toml`. Nothing to do here.
 
-```toml
-OIDC_ISSUER       = "https://<your-auth0-domain>/"  # from Step 4, trailing slash!
-OIDC_CLIENT_ID    = "<auth0-client-id>"              # from Step 4
-# All other vars (CORS_ORIGINS, COOKIE_DOMAIN, etc.) are already set correctly.
-# Fill in the Stripe price IDs from Step 5:
-STRIPE_STARTER_PRICE_MONTHLY  = "price_..."
-STRIPE_STARTER_PRICE_YEARLY   = "price_..."
-# ... etc
-```
+### 9. Create Cloudflare Pages projects
 
-### 9. Create the Cloudflare Pages projects
-
-These are one-time registrations that tell Cloudflare the project names exist. The actual content gets pushed by CI.
+One-time registration so Cloudflare knows these project names. The actual content is pushed by CI on first deploy.
 
 ```bash
 # Marketing site
@@ -196,73 +127,74 @@ In Cloudflare dashboard → **marrow.so** zone → **DNS → Records → Add rec
 | ------ | ------ | -------- | -------------- |
 | CNAME | `@` | `marrow-marketing.pages.dev` | Proxied (orange cloud) |
 | CNAME | `www` | `marrow-marketing.pages.dev` | Proxied |
-| CNAME | `app` | *(leave blank for now — fill in after first web Worker deploy)* | Proxied |
 | CNAME | `docs` | `marrow-docs.pages.dev` | Proxied |
 
-The `api` subdomain gets a CNAME added automatically when you deploy the Container via `wrangler deploy`. Verify it appeared after the first deploy.
-
-After CI deploys `marrow-web`, find your Workers subdomain in the Cloudflare dashboard → **Workers & Pages → marrow-web → Settings → Domains & Routes** — it'll show something like `marrow-web.<account>.workers.dev`. Add that as the CNAME target for `app.marrow.so`.
-
-### 11. Add custom domains in Cloudflare dashboards
-
-After the first successful CI deploy, for each project:
-
-- **marrow-marketing**: Cloudflare → Workers & Pages → marrow-marketing → Custom Domains → Add `marrow.so` and `www.marrow.so`
-- **marrow-docs**: Custom Domains → Add `docs.marrow.so`
-- **marrow-web (Worker)**: Settings → Domains & Routes → Add Route → `app.marrow.so/*`
-- **marrow-api (Container)**: Already configured by `wrangler deploy` via `api/wrangler.toml`
+Leave `app` and `api` for now — their targets aren't known until after first deploy.
 
 ---
 
-## Phase 3 — Deploy
+## Phase 3 — First deploy
 
-### 12. Commit, merge, and tag
+### 11. Merge the v0.2 PR and tag
 
-Make sure `api/wrangler.toml` changes (the `[vars]` section you filled in) are committed:
+Everything needed is already committed on `v0.2`. Open the PR (already open at github.com/spmcgraw/marrow/pull/202) → let CI pass → merge to `main`.
 
-```bash
-git add api/wrangler.toml
-git commit -m "chore: configure prod wrangler vars for v0.2 launch"
-```
-
-Then open a PR from `v0.2` → `main`, let CI pass, and merge. Tag the release:
+Then tag the release:
 
 ```bash
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-Watch the **Actions** tab in GitHub. Two workflows run:
+Watch the **Actions** tab in GitHub. These workflows fire:
 
-- **Release** — builds API image → pushes to GHCR → deploys API Container → builds web Worker → deploys Worker
-- **CI** (triggered by push to main) — runs tests + deploys docs
+- **Release** (`release.yml`) — builds Docker image → pushes to GHCR → deploys API Container → builds OpenNext → deploys web Worker
+- **CI** (triggered by push to main) — runs tests + deploys docs to Cloudflare Pages
+- **Marketing site** (`marketing.yml`) — builds static export → deploys to Cloudflare Pages
 
-Marketing deploys via **Marketing site** workflow (also triggered by the merge).
+### 12. If Step 7 secrets failed earlier — set them now
 
-### 13. Register the Stripe webhook
+After the first deploy the Worker exists. Re-run any `wrangler secret put` commands that failed in Step 7, then re-deploy:
 
-Once the API is live:
+```bash
+cd /home/spmcgraw/dev/marrow/api
+# Run any wrangler secret put commands that failed earlier
+wrangler deploy
+```
+
+### 13. Add DNS records for app and api
+
+Once the first deploy succeeds:
+
+- **api subdomain:** Cloudflare dashboard → Workers & Pages → `marrow-api` → Settings → Domains & Routes — note the `.workers.dev` URL. Add a DNS CNAME for `api` pointing there (or it may auto-configure via the Container wrangler.toml).
+- **app subdomain:** Workers & Pages → `marrow-web` → Settings → Domains & Routes — shows `marrow-web.<account>.workers.dev`. Add DNS CNAME for `app` pointing there.
+
+### 14. Add custom domains in Cloudflare dashboards
+
+For each project in Workers & Pages:
+
+- **marrow-marketing**: Custom Domains → Add `marrow.so` and `www.marrow.so`
+- **marrow-docs**: Custom Domains → Add `docs.marrow.so`
+- **marrow-web (Worker)**: Settings → Domains & Routes → Add Route → `app.marrow.so/*`
+- **marrow-api (Container)**: Add custom domain `api.marrow.so`
+
+### 15. Register the Stripe webhook
+
+Once `https://api.marrow.so` is live:
 
 1. Stripe dashboard → **Developers → Webhooks → Add endpoint**.
 2. Endpoint URL: `https://api.marrow.so/api/billing/webhook`
-3. Events to listen to:
-
+3. Events:
    - `checkout.session.completed`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
    - `invoice.payment_failed`
-
 4. Click **Add endpoint** → reveal and copy the **Signing secret** (`whsec_...`).
-5. Add it as a wrangler secret:
+5. Add it as a secret and re-deploy:
 
    ```bash
-   cd api
+   cd /home/spmcgraw/dev/marrow/api
    wrangler secret put STRIPE_WEBHOOK_SECRET
-   ```
-
-6. Re-deploy the API so it picks up the new secret:
-
-   ```bash
    wrangler deploy
    ```
 
@@ -270,18 +202,18 @@ Once the API is live:
 
 ## Phase 4 — Smoke test and go live
 
-### 14. Verify each URL
+### 16. Verify each URL
 
 - [ ] `https://marrow.so` — marketing homepage loads
-- [ ] `https://www.marrow.so` — redirects or loads (same as above)
-- [ ] `https://app.marrow.so` — redirects to the Auth0 login page
+- [ ] `https://www.marrow.so` — same
+- [ ] `https://app.marrow.so` — redirects to Auth0 login page
 - [ ] `https://api.marrow.so/health` — returns `{"status":"ok"}`
 - [ ] `https://docs.marrow.so` — Starlight docs site loads
 
-### 15. Sign in and set up the owner org
+### 17. Sign in and set up the owner org
 
 1. Go to `https://app.marrow.so` → sign in with GitHub.
-2. Your personal org is auto-created. Note your org slug (visible in the URL: `/orgs/<slug>/...` or in org settings).
+2. Your personal org is auto-created. Note your org slug (visible in the URL or org settings).
 3. In the Neon dashboard → **SQL Editor**, run:
 
    ```sql
@@ -290,28 +222,28 @@ Once the API is live:
 
    This gives the Marrow org all features with no billing requirement.
 
-### 16. End-to-end test
+### 18. End-to-end test
 
-1. Create a workspace → create a space → create a folder → create a page.
-2. Type some content, wait 2 seconds — check the "Saved" indicator appears.
+1. Create a workspace → space → folder → page.
+2. Type some content, wait 2 seconds — confirm "Saved" indicator appears.
 3. Add a comment on the page.
-4. Share the page via the share button → copy the link → open it in an incognito window (should load without login).
-5. Run the export/restore round-trip from your machine:
+4. Share the page via the share button → copy the link → open in an incognito window (loads without login).
+5. Export/restore round-trip:
 
    ```bash
    cd api
    source .venv/bin/activate
    API_KEY=<your-api-key> marrow export --workspace <slug> --output /tmp/test-bundle.zip
-   # inspect /tmp/test-bundle.zip
    ```
 
 ---
 
 ## Ongoing ops notes
 
-- **Logs:** Cloudflare dashboard → Workers & Pages → select app → Logs (real-time) or use `wrangler tail`.
-- **DB migrations:** future schema migrations run automatically via the `alembic upgrade head` command in the API Container's start command (see `docker-compose.prod.yml` → `api.command`). The Container wrangler.toml runs the same on deploy.
-- **Updating:** push to `main` (or push a new tag) — CI handles the rest.
-- **Rollback:** push a prior tag or revert the merge commit and re-tag.
-- **R2 storage cost:** free up to 10 GB storage + 1M Class A ops/month. Monitor usage in Cloudflare → R2 dashboard.
-- **Auth0 MAU limit:** 7,500/month on free tier. Watch the Auth0 dashboard → Monitoring → Active Users. Upgrade to Developer Pro ($23/mo) when you approach the limit.
+- **Logs:** Cloudflare dashboard → Workers & Pages → select app → Logs, or `wrangler tail`.
+- **DB migrations:** `alembic upgrade head` runs automatically in the Container start command on each deploy (see `docker-compose.prod.yml`).
+- **Updating:** push to `main` or push a new tag — CI handles the rest.
+- **Rollback:** revert the merge commit and re-tag, or push a prior tag.
+- **R2 storage cost:** free up to 10 GB storage + 1M Class A ops/month.
+- **Auth0 MAU limit:** 7,500/month on free tier. Watch Auth0 → Monitoring → Active Users. Upgrade to Developer Pro ($23/mo) when approaching the limit.
+- **Swap Stripe to live mode:** replace `sk_test_...` with `sk_live_...` via `wrangler secret put STRIPE_SECRET_KEY`, re-register the webhook pointing at the live endpoint, set `STRIPE_WEBHOOK_SECRET` to the live signing secret, redeploy.
