@@ -15,13 +15,18 @@ compatibility_date = "2025-10-01"
 main = "container-entrypoint.js"
 
 [[containers]]
-name = "marrow-api"
+class_name = "MarrowAPI"
 image = "ghcr.io/spmcgraw/marrow-api:latest"
-instance_type = "standard"
+instance_type = "standard-1"
 max_instances = 5
 
-[containers.configuration]
-port = 8000
+[[durable_objects.bindings]]
+name = "MARROW_API"
+class_name = "MarrowAPI"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MarrowAPI"]
 
 [vars]
 CORS_ORIGINS = "https://app.marrow.so"
