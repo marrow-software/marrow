@@ -26,8 +26,19 @@ Current status: **v0.1 MVP** — core hierarchy, append-only revisions, export/r
 - **Frontend**: Next.js 16 (React 19), located in `web/` (app) and `web-marketing/` (public marketing site — Landing/Product/Pricing, shared chrome)
 - **Frontend (product app)**: Next.js 16 (React 19), located in `web/` — serves `app.marrow.so`
 - **Frontend (marketing site)**: Next.js 16, located in `web-marketing/` — serves `marrow.so` + `www.marrow.so` via Cloudflare Pages
-- **Storage**: Pluggable adapter interface — local filesystem is the only current implementation
+- **Storage**: Pluggable adapter interface — local filesystem and Cloudflare R2 are implemented
 - **CLI**: Typer (`marrow export` / `marrow restore`)
+
+### Deployment paths — two distinct targets
+
+| Target | `web/` deploy | `api/` deploy | Triggered by |
+|--------|--------------|---------------|--------------|
+| **Cloudflare SaaS** (`marrow.so`) | OpenNext → Cloudflare Worker (`wrangler deploy`) | Docker image → Cloudflare Containers (`wrangler deploy`) | `v*` git tag |
+| **Self-hosted Docker** | `web/Dockerfile` → standalone Next.js image | `api/Dockerfile` → FastAPI image | manual / `docker-compose.prod.yml` |
+
+**Critical:** `web/Dockerfile` is **not** part of the Cloudflare deployment path and is **not** built by `release.yml`. It exists solely for self-hosted Docker Compose users. Never add it back to `release.yml`'s image build job — `@opennextjs/cloudflare` devDependencies pull in platform-specific Cloudflare/esbuild binaries that cause `npm ci` to fail in the Node 20 Docker build environment.
+
+**npm version constraint:** `web/Dockerfile` uses `node:20-alpine` (npm v10). If `web/package-lock.json` must be regenerated, use `node:20` / npm v10 — or switch the Dockerfile base to match your local node version. Lock files generated with npm v11+ may omit optional platform-specific packages that npm v10 `npm ci` expects to find.
 
 ---
 
@@ -256,17 +267,19 @@ marrow/
 ├── references/                       # Internal-only reference docs (PRDs, brand)
 │   └── design-tokens.md              # Marrow's brand reference — NOT published
 │
-├── api/Dockerfile                    # Multi-stage Python 3.12 image
-├── web/Dockerfile                    # Multi-stage Node 20 image (Next.js standalone)
+├── api/Dockerfile                    # Multi-stage Python 3.12 image — built by release.yml for Cloudflare Containers
+├── web/Dockerfile                    # Multi-stage Node 20 image (Next.js standalone) — self-hosted Docker Compose ONLY
+│                                     # NOT built by release.yml; web SaaS deploy uses OpenNext → Cloudflare Workers
+├── api/container-entrypoint.js       # Cloudflare Worker wrapper: forwards all env vars to the FastAPI container
 ├── api/wrangler.toml                 # Cloudflare Containers config for the API
-├── web/wrangler.toml                 # Cloudflare Pages config for the web app
+├── web/wrangler.toml                 # Cloudflare Workers config for the web app (OpenNext)
 ├── docker-compose.yml                # Dev: PostgreSQL 16 only (port 5433)
-├── docker-compose.prod.yml           # Prod: db + api + web stack
+├── docker-compose.prod.yml           # Prod: db + api + web stack (self-hosted path)
 ├── .env.prod.example                 # Prod env vars (root, used by compose)
 ├── .github/workflows/
 │   ├── ci.yml                        # PR + push: api lint+test, web build, docs build
 │   ├── marketing.yml                 # web-marketing/ path-filtered CI + Cloudflare Pages deploy
-│   ├── release.yml                   # main + tags: build/push GHCR, deploy to Cloudflare
+│   ├── release.yml                   # tags only: build/push API image to GHCR, deploy API Container + web Worker
 │   └── codeql.yml                    # Weekly CodeQL analysis
 ├── CLAUDE.md                         # This file
 ├── README.md
