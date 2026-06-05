@@ -36,6 +36,7 @@
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1",
+    "esbuild": "^0.25.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24",
     "@types/react": "^19",
