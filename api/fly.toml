@@ -2,7 +2,7 @@ app = "marrow-api"
 primary_region = "iad"   # US East — closest to Neon's default region
 
 [build]
-image = "ghcr.io/spmcgraw/marrow-api:latest"   # overridden to the exact tag at deploy time
+image = "ghcr.io/marrow-software/marrow-api:latest"   # overridden to the exact tag at deploy time
 
 [http_service]
 internal_port = 8000

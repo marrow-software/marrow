@@ -36,7 +36,7 @@ Current status: **v0.1 MVP** — core hierarchy, append-only revisions, export/r
 | **SaaS** (`marrow.so`) | OpenNext → Cloudflare Worker (`wrangler deploy`) | Docker image → Fly.io (`flyctl deploy`) | `v*` git tag |
 | **Self-hosted Docker** | `web/Dockerfile` → standalone Next.js image | `api/Dockerfile` → FastAPI image | manual / `docker-compose.prod.yml` |
 
-**API deployment (SaaS):** The API runs on Fly.io (`marrow-api` app, `iad` region, `shared-cpu-1x` 256MB). Config lives in `api/fly.toml`. Non-secret env vars are in `[env]`; secrets are set via `flyctl secrets set -a marrow-api`. CI deploys with `flyctl deploy --image ghcr.io/spmcgraw/marrow-api:<tag> --strategy rolling` using the `FLY_API_TOKEN` GitHub secret.
+**API deployment (SaaS):** The API runs on Fly.io (`marrow-api` app, `iad` region, `shared-cpu-1x` 256MB). Config lives in `api/fly.toml`. Non-secret env vars are in `[env]`; secrets are set via `flyctl secrets set -a marrow-api`. CI deploys with `flyctl deploy --image ghcr.io/marrow-software/marrow-api:<tag> --strategy rolling` using the `FLY_API_TOKEN` GitHub secret.
 
 **Critical:** `web/Dockerfile` is **not** part of the SaaS deployment path and is **not** built by `release.yml`. It exists solely for self-hosted Docker Compose users. Never add it back to `release.yml`'s image build job — `@opennextjs/cloudflare` devDependencies pull in platform-specific Cloudflare/esbuild binaries that cause `npm ci` to fail in the Node 20 Docker build environment.
 
