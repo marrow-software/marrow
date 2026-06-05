@@ -86,8 +86,7 @@ def get_default_adapter() -> StorageAdapter:
             account_id = (os.getenv("R2_ACCOUNT_ID") or "").strip()
             if not account_id:
                 raise RuntimeError(
-                    "STORAGE_BACKEND=r2 requires R2_ENDPOINT_URL "
-                    "(or R2_ACCOUNT_ID to derive it)."
+                    "STORAGE_BACKEND=r2 requires R2_ENDPOINT_URL (or R2_ACCOUNT_ID to derive it)."
                 )
             endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
         return R2StorageAdapter(
