@@ -38,8 +38,9 @@ class LocalFilesystemAdapter(StorageAdapter):
 class R2StorageAdapter(StorageAdapter):
     """Reads/writes attachments in a Cloudflare R2 bucket (S3-compatible API).
 
-    Set STORAGE_BACKEND=r2 plus R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
-    R2_SECRET_ACCESS_KEY, and R2_BUCKET to use this adapter.
+    Set STORAGE_BACKEND=r2 plus R2_ENDPOINT_URL (or R2_ACCOUNT_ID to derive
+    it), R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET to use this
+    adapter.
     """
 
     def __init__(
@@ -76,8 +77,19 @@ class R2StorageAdapter(StorageAdapter):
 def get_default_adapter() -> StorageAdapter:
     backend = os.getenv("STORAGE_BACKEND", "local").lower()
     if backend == "r2":
-        account_id = os.environ["R2_ACCOUNT_ID"]
-        endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
+        # The endpoint may be given directly (R2_ENDPOINT_URL — the standard
+        # S3-compatible form) or derived from the Cloudflare account id
+        # (R2_ACCOUNT_ID). Prefer the explicit endpoint. Raise a clear error
+        # rather than a bare KeyError, which would crash app import.
+        endpoint_url = (os.getenv("R2_ENDPOINT_URL") or "").strip()
+        if not endpoint_url:
+            account_id = (os.getenv("R2_ACCOUNT_ID") or "").strip()
+            if not account_id:
+                raise RuntimeError(
+                    "STORAGE_BACKEND=r2 requires R2_ENDPOINT_URL "
+                    "(or R2_ACCOUNT_ID to derive it)."
+                )
+            endpoint_url = f"https://{account_id}.r2.cloudflarestorage.com"
         return R2StorageAdapter(
             endpoint_url=endpoint_url,
             access_key_id=os.environ["R2_ACCESS_KEY_ID"],

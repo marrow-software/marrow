@@ -80,7 +80,8 @@ CORS_ORIGINS=http://localhost:3000
 
 # Cloudflare R2 storage (optional — set STORAGE_BACKEND=r2 to use R2 instead of local disk)
 # STORAGE_BACKEND=r2
-# R2_ACCOUNT_ID=             # your Cloudflare account ID
+# R2_ENDPOINT_URL=           # https://<account-id>.r2.cloudflarestorage.com (preferred)
+# R2_ACCOUNT_ID=             # alternative to R2_ENDPOINT_URL — endpoint is derived from it
 # R2_ACCESS_KEY_ID=
 # R2_SECRET_ACCESS_KEY=
 # R2_BUCKET=
