@@ -10,8 +10,8 @@ export default async function Home() {
       redirect(`/w/${workspaces[0].id}`);
     }
   } catch {
-    // Unauthenticated or API unavailable — proxy will redirect to /login if OIDC
-    // is enabled; otherwise fall through to the workspaces list.
+    // Unauthenticated or API unavailable — fall through to /workspaces, which
+    // self-gates: a 401 there triggers the OIDC login redirect in lib/api.ts.
   }
   redirect("/workspaces");
 }

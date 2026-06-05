@@ -42,6 +42,8 @@ Current status: **v0.1 MVP** — core hierarchy, append-only revisions, export/r
 
 **npm version constraint:** `web/Dockerfile` uses `node:20-alpine` (npm v10). If `web/package-lock.json` must be regenerated, use `node:20` / npm v10 — or switch the Dockerfile base to match your local node version. Lock files generated with npm v11+ may omit optional platform-specific packages that npm v10 `npm ci` expects to find.
 
+**OpenNext build constraints (web SaaS):** `web/open-next.config.ts` must exist — `opennextjs-cloudflare build` errors without it. `esbuild` and `wrangler` are peer deps of `@opennextjs/cloudflare` and must stay listed as explicit `devDependencies` in `web/package.json` (they are not auto-installed by `npm ci`). **No Next.js middleware:** Next 16's `proxy.ts` (renamed middleware) runs only on the Node.js runtime, which OpenNext's Cloudflare adapter rejects — so there is intentionally no `proxy.ts`. Route protection is handled without it: server layouts `redirect("/login")` on a 401 (e.g. `app/w/[workspaceId]/layout.tsx`), and `lib/api.ts` redirects to the OIDC login endpoint on any client-side 401. Do not reintroduce `proxy.ts`/`middleware.ts` — it breaks `npm run pages:build`.
+
 ---
 
 ## Development Setup
@@ -211,7 +213,7 @@ marrow/
 │   └── storage/                      # Default local attachment storage (gitignored)
 │
 ├── web/                              # Next.js frontend
-│   ├── proxy.ts                      # Route protection (redirects to /login when OIDC enabled)
+│   ├── open-next.config.ts           # OpenNext Cloudflare adapter config (required by pages:build)
 │   ├── app/
 │   │   ├── page.tsx                  # Root → redirects to /workspaces
 │   │   ├── layout.tsx                # Root layout with theme provider

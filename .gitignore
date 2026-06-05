@@ -18,6 +18,7 @@ dist/
 build/
 *.egg-info/
 .next/
+.open-next/
 node_modules/
 
 *.db
