@@ -31,5 +31,7 @@ node_modules/
 # Swarm coordinator runtime artifacts
 .swarm/
 
+.wrangler/
+
 # Internal-only references (PRDs, runbooks, brand docs) — Marrow org use only
 references/

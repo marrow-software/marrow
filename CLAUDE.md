@@ -33,10 +33,12 @@ Current status: **v0.1 MVP** — core hierarchy, append-only revisions, export/r
 
 | Target | `web/` deploy | `api/` deploy | Triggered by |
 |--------|--------------|---------------|--------------|
-| **Cloudflare SaaS** (`marrow.so`) | OpenNext → Cloudflare Worker (`wrangler deploy`) | Docker image → Cloudflare Containers (`wrangler deploy`) | `v*` git tag |
+| **SaaS** (`marrow.so`) | OpenNext → Cloudflare Worker (`wrangler deploy`) | Docker image → Fly.io (`flyctl deploy`) | `v*` git tag |
 | **Self-hosted Docker** | `web/Dockerfile` → standalone Next.js image | `api/Dockerfile` → FastAPI image | manual / `docker-compose.prod.yml` |
 
-**Critical:** `web/Dockerfile` is **not** part of the Cloudflare deployment path and is **not** built by `release.yml`. It exists solely for self-hosted Docker Compose users. Never add it back to `release.yml`'s image build job — `@opennextjs/cloudflare` devDependencies pull in platform-specific Cloudflare/esbuild binaries that cause `npm ci` to fail in the Node 20 Docker build environment.
+**API deployment (SaaS):** The API runs on Fly.io (`marrow-api` app, `iad` region, `shared-cpu-1x` 256MB). Config lives in `api/fly.toml`. Non-secret env vars are in `[env]`; secrets are set via `flyctl secrets set -a marrow-api`. CI deploys with `flyctl deploy --image ghcr.io/marrow-software/marrow-api:<tag> --strategy rolling` using the `FLY_API_TOKEN` GitHub secret.
+
+**Critical:** `web/Dockerfile` is **not** part of the SaaS deployment path and is **not** built by `release.yml`. It exists solely for self-hosted Docker Compose users. Never add it back to `release.yml`'s image build job — `@opennextjs/cloudflare` devDependencies pull in platform-specific Cloudflare/esbuild binaries that cause `npm ci` to fail in the Node 20 Docker build environment.
 
 **npm version constraint:** `web/Dockerfile` uses `node:20-alpine` (npm v10). If `web/package-lock.json` must be regenerated, use `node:20` / npm v10 — or switch the Dockerfile base to match your local node version. Lock files generated with npm v11+ may omit optional platform-specific packages that npm v10 `npm ci` expects to find.
 
@@ -267,11 +269,10 @@ marrow/
 ├── references/                       # Internal-only reference docs (PRDs, brand)
 │   └── design-tokens.md              # Marrow's brand reference — NOT published
 │
-├── api/Dockerfile                    # Multi-stage Python 3.12 image — built by release.yml for Cloudflare Containers
+├── api/Dockerfile                    # Multi-stage Python 3.12 image — built by release.yml, deployed to Fly.io
+├── api/fly.toml                      # Fly.io config for the API (SaaS deploy path)
 ├── web/Dockerfile                    # Multi-stage Node 20 image (Next.js standalone) — self-hosted Docker Compose ONLY
 │                                     # NOT built by release.yml; web SaaS deploy uses OpenNext → Cloudflare Workers
-├── api/container-entrypoint.js       # Cloudflare Worker wrapper: forwards all env vars to the FastAPI container
-├── api/wrangler.toml                 # Cloudflare Containers config for the API
 ├── web/wrangler.toml                 # Cloudflare Workers config for the web app (OpenNext)
 ├── docker-compose.yml                # Dev: PostgreSQL 16 only (port 5433)
 ├── docker-compose.prod.yml           # Prod: db + api + web stack (self-hosted path)
@@ -279,7 +280,7 @@ marrow/
 ├── .github/workflows/
 │   ├── ci.yml                        # PR + push: api lint+test, web build, docs build
 │   ├── marketing.yml                 # web-marketing/ path-filtered CI + Cloudflare Pages deploy
-│   ├── release.yml                   # tags only: build/push API image to GHCR, deploy API Container + web Worker
+│   ├── release.yml                   # tags only: build/push API image to GHCR, deploy API → Fly.io + web → Cloudflare Workers
 │   └── codeql.yml                    # Weekly CodeQL analysis
 ├── CLAUDE.md                         # This file
 ├── README.md

@@ -1,0 +1,53 @@
+app = "marrow-api"
+primary_region = "iad"   # US East — closest to Neon's default region
+
+[build]
+image = "ghcr.io/marrow-software/marrow-api:latest"   # overridden to the exact tag at deploy time
+
+[http_service]
+internal_port = 8000
+force_https = true
+auto_stop_machines = "stop"
+auto_start_machines = true
+min_machines_running = 1   # keep one warm; avoids cold-start latency for users
+
+  [[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  path = "/health"
+  timeout = "5s"
+
+[[vm]]
+size = "shared-cpu-1x"
+memory = "256mb"
+
+[env]
+CORS_ORIGINS      = "https://app.marrow.so"
+FRONTEND_URL      = "https://app.marrow.so"
+COOKIE_DOMAIN     = ".marrow.so"
+STORAGE_BACKEND   = "r2"
+SAAS_MODE         = "true"
+OIDC_ISSUER       = "https://dev-cjafzt7x7ozoltln.us.auth0.com/"
+OIDC_CLIENT_ID    = "ZKCgLWAHJShCpA4eqpoyCRj0rH13HC42"
+OIDC_REDIRECT_URI = "https://api.marrow.so/api/auth/callback"
+STRIPE_STARTER_PRICE_MONTHLY      = "price_1TeUDEBpYG35ummTRMdkOIrz"
+STRIPE_STARTER_PRICE_YEARLY       = "price_1TeUDEBpYG35ummTh0kFQOLm"
+STRIPE_BUSINESS_PRICE_MONTHLY     = "price_1TeUFtBpYG35ummTHn4EP5VF"
+STRIPE_BUSINESS_PRICE_YEARLY      = "price_1TeUFtBpYG35ummTFf8Scugv"
+STRIPE_GROWTH_PRICE_MONTHLY       = "price_1TeUHfBpYG35ummTx8M7M4YN"
+STRIPE_GROWTH_PRICE_YEARLY        = "price_1TeUHfBpYG35ummTAfE3MRTp"
+STRIPE_SH_BUSINESS_PRICE_YEARLY   = "price_1TeUR8BpYG35ummT2xIp1wCi"
+STRIPE_SH_ENTERPRISE_PRICE_YEARLY = "price_1TeUQ7BpYG35ummTNQIKkm5x"
+
+# Secrets — configure via `flyctl secrets set -a marrow-api` (never store values here):
+#   SECRET_KEY                 # 64-char random string
+#   DATABASE_URL               # Neon pooled connection URL
+#   R2_ENDPOINT_URL            # https://<account-id>.r2.cloudflarestorage.com
+#   R2_ACCESS_KEY_ID
+#   R2_SECRET_ACCESS_KEY
+#   R2_BUCKET                  # marrow-attachments
+#   OIDC_CLIENT_SECRET         # Auth0 client secret
+#   STRIPE_SECRET_KEY          # sk_live_ or sk_test_
+#   STRIPE_WEBHOOK_SECRET      # whsec_... (set after first deploy)
+#   LICENSE_SIGNING_KEY        # 64-char random string
