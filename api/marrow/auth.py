@@ -41,7 +41,9 @@ def get_oidc_config() -> OIDCConfig:
     global _oidc_config
     if _oidc_config is None:
         _oidc_config = OIDCConfig(
-            issuer=os.getenv("OIDC_ISSUER") or None,
+            # Strip any trailing slash so f"{issuer}/.well-known/..." never
+            # produces a double slash (Auth0 404s on the doubled path).
+            issuer=(os.getenv("OIDC_ISSUER") or "").rstrip("/") or None,
             client_id=os.getenv("OIDC_CLIENT_ID", ""),
             client_secret=os.getenv("OIDC_CLIENT_SECRET", ""),
             redirect_uri=os.getenv("OIDC_REDIRECT_URI", "http://localhost:8000/api/auth/callback"),

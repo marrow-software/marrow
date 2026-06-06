@@ -36,6 +36,29 @@ def _clean_env(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# OIDC config tests
+# ---------------------------------------------------------------------------
+
+
+class TestOIDCConfig:
+    def test_issuer_trailing_slash_stripped(self, monkeypatch):
+        # A trailing slash would make f"{issuer}/.well-known/..." double-slash,
+        # which Auth0 404s. The config must normalize it away.
+        monkeypatch.setenv("OIDC_ISSUER", "https://tenant.us.auth0.com/")
+        reset_oidc_config()
+        config = get_oidc_config()
+        assert config.issuer == "https://tenant.us.auth0.com"
+        assert f"{config.issuer}/.well-known/openid-configuration" == (
+            "https://tenant.us.auth0.com/.well-known/openid-configuration"
+        )
+
+    def test_issuer_unset_is_none(self, monkeypatch):
+        monkeypatch.delenv("OIDC_ISSUER", raising=False)
+        reset_oidc_config()
+        assert get_oidc_config().issuer is None
+
+
+# ---------------------------------------------------------------------------
 # Session JWT tests
 # ---------------------------------------------------------------------------
 
