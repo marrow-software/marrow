@@ -11,9 +11,6 @@
 #
 # Custom domain is configured in the Cloudflare Workers dashboard after first deploy.
 #
-# NEXT_PUBLIC_* vars must be set as env vars at build time in CI (not as wrangler [vars],
-# which are runtime-only). Set them in the release.yml build step or Pages dashboard env.
-
 name = "marrow-web"
 compatibility_date = "2025-10-01"
 compatibility_flags = ["nodejs_compat"]
@@ -22,3 +19,11 @@ main = ".open-next/worker.js"
 [assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
+
+# Runtime config. OpenNext exposes wrangler [vars] as process.env in the worker,
+# which feeds both SSR (lib/runtime-config.ts server path) and the /config.js
+# route handler (browser path). runtime-config.ts reads MARROW_* — not
+# NEXT_PUBLIC_* — so config lives here, not in the CI build env.
+[vars]
+MARROW_API_URL = "https://api.marrow.so"
+MARROW_OIDC_ENABLED = "true"

@@ -81,10 +81,10 @@ jobs:
         working-directory: web
         run: npm ci
       - name: Build for Cloudflare Workers
+        # Runtime config (API URL, OIDC flag) is supplied at runtime via wrangler
+        # [vars] in web/wrangler.toml + the /config.js route handler — not baked in
+        # at build. runtime-config.ts does not read NEXT_PUBLIC_* vars.
         working-directory: web
-        env:
-          NEXT_PUBLIC_API_URL: "https://api.marrow.so"
-          NEXT_PUBLIC_OIDC_ENABLED: "true"
         run: npm run pages:build
       - name: Deploy web to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
