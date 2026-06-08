@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Keep this file up to date.** Whenever a meaningful change is made — new routes, schema changes, new components, new environment variables, new constraints, or architectural decisions — update the relevant section here before closing out the task. Treat CLAUDE.md as living documentation.
 
+**When cutting a release:** add a `CHANGELOG.md` entry (Keep a Changelog format) for the new version, and draft the fuller narrative notes on the GitHub release.
+
 **For every feature request:** create a GitHub issue to track it, then create a dedicated git branch off `main` before writing any code. Branch names should follow the pattern `feature/<short-description>` or `fix/<short-description>`. Never implement features directly on `main`.
 
 ---
