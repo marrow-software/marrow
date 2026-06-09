@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
   title: "Marrow — Self-hosted knowledge base",
@@ -14,10 +15,26 @@ export const metadata: Metadata = {
   },
 };
 
+// Set data-theme from localStorage before first paint to avoid a flash of the
+// wrong theme (FOUC). Static-export safe: runs inline in <head>.
+const themeInitScript = `(function () {
+  try {
+    var t = localStorage.getItem("marrow-theme");
+    document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+  } catch (e) {
+    document.documentElement.setAttribute("data-theme", "dark");
+  }
+})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body>
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

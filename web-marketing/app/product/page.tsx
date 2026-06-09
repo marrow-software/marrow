@@ -54,7 +54,7 @@ export default function ProductPage() {
         <section className="max-w-[1440px] mx-auto px-6 pt-20 pb-16 text-center">
           <p
             className="text-sm font-medium tracking-widest uppercase mb-4"
-            style={{ color: "var(--color-accent-brand)" }}
+            style={{ color: "var(--color-accent)" }}
           >
             Product tour
           </p>
@@ -96,7 +96,7 @@ export default function ProductPage() {
                 <div className="flex-1 max-w-md">
                   <p
                     className="text-xs font-semibold tracking-widest uppercase mb-3"
-                    style={{ color: "var(--color-accent-brand)" }}
+                    style={{ color: "var(--color-accent)" }}
                   >
                     {section.label}
                   </p>
@@ -161,7 +161,7 @@ export default function ProductPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium transition-colors"
               style={{
-                backgroundColor: "var(--color-accent-brand)",
+                backgroundColor: "var(--color-accent)",
                 color: "var(--color-accent-ink)",
               }}
             >
