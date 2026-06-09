@@ -1,15 +1,14 @@
-import Nav from "@/components/nav";
-import Hero from "@/components/hero";
-import Features from "@/components/features";
-import Footer from "@/components/footer";
+import { SiteNav, SiteFooter } from "@/components/chrome";
+import { Landing } from "@/components/landing/landing";
 
 export default function Home() {
   return (
-    <main>
-      <Nav />
-      <Hero />
-      <Features />
-      <Footer />
-    </main>
+    <>
+      <SiteNav />
+      <main>
+        <Landing />
+      </main>
+      <SiteFooter />
+    </>
   );
 }

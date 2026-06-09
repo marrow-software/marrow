@@ -256,17 +256,22 @@ marrow/
 │
 ├── web-marketing/                    # Next.js marketing site (marrow.so + www)
 │   ├── wrangler.toml                 # Cloudflare Pages config (project: marrow-marketing)
-│   ├── next.config.ts                # Standard Next.js config (Docker / local)
-│   ├── next.config.pages.ts          # Cloudflare Pages build config (next-on-pages)
+│   ├── next.config.ts                # output:'export' static export → out/
+│   ├── playwright.config.ts          # Smoke tests vs built out/ (served by `serve`)
 │   ├── app/
-│   │   ├── layout.tsx                # Root layout + metadata
-│   │   ├── page.tsx                  # Homepage (Nav + Hero + Features + Footer)
-│   │   └── globals.css               # Design tokens + Google Fonts import
-│   └── components/
-│       ├── nav.tsx                   # Top nav with GitHub + Docs + "Open app" links
-│       ├── hero.tsx                  # Above-the-fold hero section
-│       ├── features.tsx              # Feature grid (only existing features)
-│       └── footer.tsx                # Footer with links
+│   │   ├── layout.tsx                # Root layout: ThemeProvider + pre-hydration data-theme script (no FOUC)
+│   │   ├── page.tsx                  # Homepage = SiteNav + <Landing/> + SiteFooter
+│   │   ├── product/page.tsx          # Product tour (chrome SiteNav/SiteFooter)
+│   │   ├── pricing/                  # Pricing page + tiers.ts (Cloud CTA → app.marrow.so)
+│   │   └── globals.css               # Handoff token system (light+dark) + Fraunces/Inter/JetBrains Mono
+│   ├── components/
+│   │   ├── chrome.tsx                # SiteNav (dual CTA: Sign in + Open Marrow, both → app.marrow.so) + SiteFooter + Button/Eyebrow
+│   │   ├── icons.tsx                 # MarrowGlyph (viewBox 0 0 32 32) + MarrowWordmark + feather icon set
+│   │   ├── theme-provider.tsx        # data-theme + localStorage("marrow-theme") toggle
+│   │   ├── landing/landing.tsx       # Full landing port (hero, manifesto, features, editor peek, comparison, terminal, CTA)
+│   │   └── product-demos.tsx         # Static product-tour mocks
+│   └── tests/
+│       └── landing.spec.ts           # Assertion smoke tests (nav hrefs, glyph, CTA dests, no /signup) — run in marketing.yml
 │
 ├── docs/                             # Astro Starlight docs site (user-facing)
 │   ├── astro.config.mjs              # Sidebar nav + site metadata

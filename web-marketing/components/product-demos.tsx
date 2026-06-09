@@ -81,7 +81,7 @@ export function EditorDemo() {
             style={{
               fontFamily: "var(--font-mono)",
               backgroundColor: "var(--muted)",
-              color: "var(--color-accent-brand)",
+              color: "var(--color-accent)",
             }}
           >
             /
@@ -117,7 +117,7 @@ export function EditorDemo() {
           >
             <code>
               <span style={{ color: "var(--muted-foreground)" }}>$</span>{" "}
-              <span style={{ color: "var(--color-accent-brand)" }}>docker</span>{" "}
+              <span style={{ color: "var(--color-accent)" }}>docker</span>{" "}
               compose up -d
             </code>
           </pre>
@@ -129,8 +129,8 @@ export function EditorDemo() {
           <span
             className="inline-flex items-baseline px-1.5 rounded text-xs font-mono uppercase tracking-wide"
             style={{
-              backgroundColor: `color-mix(in oklab, var(--color-accent-brand) 12%, transparent)`,
-              color: "var(--color-accent-brand)",
+              backgroundColor: `color-mix(in oklab, var(--color-accent) 12%, transparent)`,
+              color: "var(--color-accent)",
             }}
           >
             @sean
@@ -204,10 +204,10 @@ function TreeItem({ node, depth = 0 }: { node: TreeNode; depth?: number }) {
         style={{
           paddingLeft: `${8 + indent}px`,
           backgroundColor: isActive
-            ? `color-mix(in oklab, var(--color-accent-brand) 10%, transparent)`
+            ? `color-mix(in oklab, var(--color-accent) 10%, transparent)`
             : "transparent",
           color: isActive
-            ? "var(--color-accent-brand)"
+            ? "var(--color-accent)"
             : isSpace
               ? "var(--foreground)"
               : "var(--muted-foreground)",
@@ -398,7 +398,7 @@ export function SearchDemo() {
               style={{
                 backgroundColor:
                   i === 0
-                    ? `color-mix(in oklab, var(--color-accent-brand) 6%, transparent)`
+                    ? `color-mix(in oklab, var(--color-accent) 6%, transparent)`
                     : "transparent",
               }}
             >
@@ -416,7 +416,7 @@ export function SearchDemo() {
                   className="text-sm font-medium"
                   style={{
                     color:
-                      i === 0 ? "var(--color-accent-brand)" : "var(--foreground)",
+                      i === 0 ? "var(--color-accent)" : "var(--foreground)",
                   }}
                 >
                   {result.title}
@@ -494,17 +494,17 @@ export function HistoryDemo() {
               className="w-6 h-6 rounded-full border-2 shrink-0 flex items-center justify-center mt-0.5"
               style={{
                 borderColor: rev.current
-                  ? "var(--color-accent-brand)"
+                  ? "var(--color-accent)"
                   : "var(--border)",
                 backgroundColor: rev.current
-                  ? `color-mix(in oklab, var(--color-accent-brand) 15%, transparent)`
+                  ? `color-mix(in oklab, var(--color-accent) 15%, transparent)`
                   : "var(--card)",
               }}
             >
               {rev.current && (
                 <div
                   className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: "var(--color-accent-brand)" }}
+                  style={{ backgroundColor: "var(--color-accent)" }}
                 />
               )}
             </div>
@@ -516,7 +516,7 @@ export function HistoryDemo() {
                   className="text-xs font-semibold"
                   style={{
                     color: rev.current
-                      ? "var(--color-accent-brand)"
+                      ? "var(--color-accent)"
                       : "var(--foreground)",
                   }}
                 >
@@ -531,7 +531,7 @@ export function HistoryDemo() {
                 {!rev.current && (
                   <button
                     className="text-xs ml-auto"
-                    style={{ color: "var(--color-accent-brand)" }}
+                    style={{ color: "var(--color-accent)" }}
                   >
                     Restore
                   </button>

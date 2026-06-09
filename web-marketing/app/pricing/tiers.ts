@@ -62,7 +62,7 @@ export const tiers: Tier[] = [
     tagline: "Managed hosting, zero ops.",
     price: { monthly: 12, yearly: 10 },
     cta: "Start free trial",
-    ctaHref: "https://marrow.so/signup",
+    ctaHref: "https://app.marrow.so",
     highlighted: true,
     features: [
       "Everything in Self-host",
