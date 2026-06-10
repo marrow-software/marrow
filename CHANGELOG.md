@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Each release also has fuller narrative notes (highlights, breaking changes, upgrade
 steps) on its [GitHub release](https://github.com/marrow-software/marrow/releases).
 
-## [Unreleased]
+## [0.3.0] — 2026-06-09
 
 ### Added
 - Unified post-login flow: **login → subscription gate → global Home/For You**.
