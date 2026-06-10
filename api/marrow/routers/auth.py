@@ -23,6 +23,7 @@ from ..auth import (
 from ..dependencies import get_db
 from ..models import Organization, OrgMembership, OrgRole, User
 from ..schemas import AuthStatus, UserRead
+from ..subscriptions import is_org_active, is_saas_mode
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -168,6 +169,7 @@ async def me(request: Request) -> AuthStatus:
                 user=user,
                 method="session",
                 oidc_enabled=config.is_enabled,
+                has_payable_unsubscribed_org=_user_has_payable_unsubscribed_org(user.id),
             )
         except Exception:
             pass
@@ -178,6 +180,30 @@ async def me(request: Request) -> AuthStatus:
         method="anonymous",
         oidc_enabled=config.is_enabled,
     )
+
+
+def _user_has_payable_unsubscribed_org(user_id: uuid.UUID) -> bool:
+    """Whether the user owns >=1 org that lacks an active subscription.
+
+    Drives the post-login subscription gate. Returns False in self-hosted mode
+    (``is_org_active`` short-circuits to active when SaaS mode is off).
+    """
+    if not is_saas_mode():
+        return False
+    db = next(get_db())
+    try:
+        owned_orgs = (
+            db.query(Organization)
+            .join(OrgMembership, OrgMembership.org_id == Organization.id)
+            .filter(
+                OrgMembership.user_id == user_id,
+                OrgMembership.role == OrgRole.OWNER.value,
+            )
+            .all()
+        )
+        return any(not is_org_active(org.tier, org.subscription_status) for org in owned_orgs)
+    finally:
+        db.close()
 
 
 @router.post("/logout")

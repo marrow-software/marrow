@@ -49,6 +49,8 @@ class Organization(Base):
     # Billing
     tier: Mapped[str] = mapped_column(Text, nullable=False, server_default="starter")
     billing_interval: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Explicit subscription state: none | trialing | active | past_due | canceled
+    subscription_status: Mapped[str] = mapped_column(Text, nullable=False, server_default="none")
     stripe_customer_id: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
     self_hosted_license: Mapped[str | None] = mapped_column(Text, nullable=True)

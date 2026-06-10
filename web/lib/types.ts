@@ -1,11 +1,21 @@
 // TypeScript types mirroring the Marrow API Pydantic schemas.
 
+export type SubscriptionStatus =
+  | "none"
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled";
+
 export interface Organization {
   id: string;
   slug: string;
   name: string;
   created_at: string;
   members_can_create_spaces: boolean;
+  tier: string;
+  subscription_status: SubscriptionStatus;
+  has_active_subscription: boolean;
 }
 
 export interface OrgMembership {
@@ -180,6 +190,18 @@ export interface WorkspaceHome {
   recent: RecentNodeItem[];
 }
 
+// Cross-workspace recent page (global Home / For You)
+export interface MyRecentItem {
+  node_id: string;
+  name: string;
+  space_id: string;
+  space_name: string;
+  workspace_id: string;
+  workspace_name: string;
+  node_path: string[]; // ancestor folder names, root -> leaf
+  updated_at: string;
+}
+
 
 // Node views (table / board / list over a folder of page nodes)
 export type ViewType = "table" | "board" | "list";
@@ -225,6 +247,7 @@ export interface AuthStatus {
   user: User | null;
   method: string;
   oidc_enabled: boolean;
+  has_payable_unsubscribed_org: boolean;
 }
 
 // View-only sharing links (#40)

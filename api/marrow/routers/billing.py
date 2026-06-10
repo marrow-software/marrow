@@ -6,10 +6,12 @@ from uuid import UUID
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db
+from ..email import send_email, subscription_confirmation_html
 from ..models import Organization, OrgRole
 from ..rbac import require_org_role
 
@@ -60,6 +62,32 @@ TIER_SEAT_LIMITS: dict[str, int | None] = {
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 
+class CheckoutRequest(BaseModel):
+    tier: str
+    interval: str = "monthly"
+    quantity: int = 1
+
+
+# Map Stripe subscription.status -> our subscription_status enum.
+_STRIPE_STATUS_MAP: dict[str, str] = {
+    "trialing": "trialing",
+    "active": "active",
+    "past_due": "past_due",
+    "unpaid": "past_due",
+    "incomplete": "past_due",
+    "paused": "past_due",
+    "canceled": "canceled",
+    "incomplete_expired": "canceled",
+}
+
+
+def _map_stripe_status(status: str | None) -> str:
+    """Translate a Stripe subscription status to our enum (default ``none``)."""
+    if not status:
+        return "none"
+    return _STRIPE_STATUS_MAP.get(status, "none")
+
+
 def _get_or_create_customer(org: Organization) -> str:
     """Return the Stripe customer ID for an org, creating one if needed."""
     if org.stripe_customer_id:
@@ -74,17 +102,17 @@ def _get_or_create_customer(org: Organization) -> str:
 @router.post("/{org_id}/checkout")
 def create_checkout_session(
     org_id: UUID,
-    tier: str,
-    interval: str = "monthly",
-    quantity: int = 1,
+    body: CheckoutRequest,
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_org_role(OrgRole.OWNER)),
 ):
-    """Create a Stripe Checkout session for a Cloud or self-hosted plan."""
+    """Create a Stripe Checkout session (with a 14-day trial) for a plan."""
     org = db.get(Organization, org_id)
     if org is None:
         raise HTTPException(404, "Organization not found")
 
+    tier = body.tier
+    interval = body.interval
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
     # Determine price ID
@@ -95,7 +123,7 @@ def create_checkout_session(
         line_quantity = 1  # flat rate
     elif tier in _SH_PRICES:
         price_id = _SH_PRICES[tier]
-        line_quantity = max(1, quantity)  # per-seat
+        line_quantity = max(1, body.quantity)  # per-seat
     else:
         raise HTTPException(422, f"Unknown tier: {tier}")
 
@@ -110,8 +138,9 @@ def create_checkout_session(
         customer=customer_id,
         line_items=[{"price": price_id, "quantity": line_quantity}],
         mode="subscription",
-        success_url=f"{frontend_url}/orgs/{org_id}/billing?success=1",
-        cancel_url=f"{frontend_url}/orgs/{org_id}/billing?canceled=1",
+        subscription_data={"trial_period_days": 14},
+        success_url=f"{frontend_url}/subscribe/success?org={org_id}",
+        cancel_url=f"{frontend_url}/subscribe?org={org_id}&canceled=1",
         metadata={"org_id": str(org_id)},
     )
     return {"url": session.url}
@@ -133,7 +162,7 @@ def create_portal_session(
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
     session = stripe.billing_portal.Session.create(
         customer=org.stripe_customer_id,
-        return_url=f"{frontend_url}/orgs/{org_id}/billing",
+        return_url=f"{frontend_url}/home",
     )
     return {"url": session.url}
 
@@ -156,8 +185,7 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     elif event["type"] == "customer.subscription.deleted":
         _handle_subscription_deleted(event["data"]["object"], db)
     elif event["type"] == "invoice.payment_failed":
-        # Log only — do not downgrade on first failure; Stripe retries
-        pass
+        _handle_payment_failed(event["data"]["object"], db)
 
     return JSONResponse({"received": True})
 
@@ -204,7 +232,19 @@ def _handle_checkout_completed(session: dict, db: Session) -> None:
     org.stripe_subscription_id = subscription_id
     org.tier = tier
     org.billing_interval = billing_interval
+    # StripeObject supports .get(); falls back to 'trialing' since checkout
+    # created the subscription with a trial period.
+    org.subscription_status = _map_stripe_status(subscription.get("status") or "trialing")
     db.commit()
+
+    # Best-effort confirmation email — never blocks the webhook 200.
+    recipient = session.get("customer_details", {}).get("email") or session.get("customer_email")
+    if recipient:
+        send_email(
+            to=recipient,
+            subject="Your Marrow subscription is active",
+            html=subscription_confirmation_html(org.name, tier),
+        )
 
 
 def _handle_subscription_updated(subscription: dict, db: Session) -> None:
@@ -222,6 +262,7 @@ def _handle_subscription_updated(subscription: dict, db: Session) -> None:
     org.stripe_subscription_id = subscription_id
     org.tier = tier
     org.billing_interval = billing_interval
+    org.subscription_status = _map_stripe_status(subscription.get("status"))
     db.commit()
 
 
@@ -234,4 +275,15 @@ def _handle_subscription_deleted(subscription: dict, db: Session) -> None:
     org.tier = "starter"
     org.stripe_subscription_id = None
     org.billing_interval = None
+    org.subscription_status = "canceled"
+    db.commit()
+
+
+def _handle_payment_failed(invoice: dict, db: Session) -> None:
+    """Mark the org past_due on a failed invoice payment. Stripe keeps retrying."""
+    customer_id = invoice.get("customer")
+    org = _org_by_customer(customer_id, db)
+    if org is None:
+        return
+    org.subscription_status = "past_due"
     db.commit()
