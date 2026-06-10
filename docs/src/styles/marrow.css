@@ -1,0 +1,67 @@
+/* Marrow brand layer for Starlight.
+ *
+ * Maps the brand tokens shared with web/ and web-marketing/ onto Starlight's
+ * theme variables: orange accent, the Fraunces / Inter / JetBrains Mono type
+ * system, and the Marrow base surfaces. Starlight's default dark gray scale is
+ * already slate-compatible, so we only retune the accent, fonts, and surfaces.
+ *
+ * Reference: https://starlight.astro.build/guides/css-and-tailwind/
+ */
+
+:root {
+  /* Type system */
+  --sl-font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --sl-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --marrow-font-display: "Fraunces", ui-serif, Georgia, serif;
+
+  /* Accent — Marrow orange (dark theme is the default) */
+  --sl-color-accent-low: #3a1d10;
+  --sl-color-accent: #e8805c;
+  --sl-color-accent-high: #f3b39c;
+
+  /* Surfaces — Marrow dark base */
+  --sl-color-bg: #111318;
+  --sl-color-bg-nav: #1a1d27;
+  --sl-color-bg-sidebar: #14171f;
+  --sl-color-bg-inline-code: #222636;
+  --sl-color-hairline-light: #2d3348;
+  --sl-color-hairline: #2d3348;
+}
+
+:root[data-theme="light"] {
+  /* Accent — darker orange for contrast on light surfaces */
+  --sl-color-accent-low: #f1d6c8;
+  --sl-color-accent: #9a3412;
+  --sl-color-accent-high: #7c2d12;
+
+  /* Surfaces — Marrow light base */
+  --sl-color-bg: #dde3ee;
+  --sl-color-bg-nav: #eaeff7;
+  --sl-color-bg-sidebar: #eaeff7;
+  --sl-color-bg-inline-code: #f4f6fb;
+  --sl-color-hairline-light: #c8d0e0;
+  --sl-color-hairline: #c8d0e0;
+}
+
+/* Fraunces for the site title and all content headings, with the editorial
+   SOFT axis used across the brand. */
+.site-title,
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+.sl-markdown-content h4,
+.sl-markdown-content h5,
+.sl-markdown-content h6,
+h1#_top,
+.content-panel h1 {
+  font-family: var(--marrow-font-display);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  font-variation-settings: "SOFT" 40, "WONK" 0;
+}
+
+/* Selection matches the brand accent. */
+::selection {
+  background: var(--sl-color-accent);
+  color: #1a0f0a;
+}

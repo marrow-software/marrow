@@ -8,6 +8,28 @@ export default defineConfig({
       title: "Marrow",
       description:
         "Self-hosted, open-source knowledge base built around a non-negotiable restore guarantee.",
+      logo: {
+        src: "./src/assets/marrow-glyph.svg",
+        alt: "Marrow",
+      },
+      customCss: ["./src/styles/marrow.css"],
+      head: [
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        },
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: true },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..900,0..100,0..1&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap",
+          },
+        },
+      ],
       editLink: {
         baseUrl: "https://github.com/spmcgraw/marrow/edit/main/docs/",
       },
