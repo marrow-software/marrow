@@ -60,6 +60,14 @@ h1#_top,
   font-variation-settings: "SOFT" 40, "WONK" 0;
 }
 
+/* Site title reads as the lowercase "marrow" wordmark (matches web-marketing),
+   while the document <title> stays "Marrow" for SEO. */
+.site-title {
+  text-transform: lowercase;
+  letter-spacing: -0.02em;
+  font-variation-settings: "SOFT" 30, "WONK" 0;
+}
+
 /* Selection matches the brand accent. */
 ::selection {
   background: var(--sl-color-accent);
