@@ -49,6 +49,9 @@ export default function WorkspacesPage() {
           </div>
           {auth?.authenticated && (
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <Link href="/home" className="hover:text-foreground transition-colors">
+                Home
+              </Link>
               <span>{auth.user?.name}</span>
               <Button
                 variant="ghost"

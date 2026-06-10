@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 
 class _ReadBase(BaseModel):
@@ -185,6 +185,20 @@ class WorkspaceHome(_ReadBase):
     space_count: int
     page_count: int
     recent: list[RecentNodeItem] = []
+
+
+class MyRecentItem(_ReadBase):
+    """A recently-edited page, carrying its workspace for cross-workspace linking."""
+
+    node_id: UUID
+    name: str
+    space_id: UUID
+    space_name: str
+    workspace_id: UUID
+    workspace_name: str
+    # Ancestor folder names, root -> leaf (empty when page sits at space root).
+    node_path: list[str]
+    updated_at: datetime
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +403,15 @@ class OrganizationRead(_ReadBase):
     name: str
     created_at: datetime
     members_can_create_spaces: bool = True
+    tier: str = "starter"
+    subscription_status: str = "none"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def has_active_subscription(self) -> bool:
+        from .subscriptions import is_org_active
+
+        return is_org_active(self.tier, self.subscription_status)
 
 
 class OrganizationUpdate(BaseModel):
@@ -434,6 +457,9 @@ class AuthStatus(BaseModel):
     user: UserRead | None = None
     method: str
     oidc_enabled: bool
+    # True when the user owns >=1 org with no active subscription (SaaS only).
+    # Lets the post-login callback decide the subscription gate in one round trip.
+    has_payable_unsubscribed_org: bool = False
 
 
 class WatchStatus(BaseModel):

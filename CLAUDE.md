@@ -97,6 +97,13 @@ CORS_ORIGINS=http://localhost:3000
 # OIDC_REDIRECT_URI=http://localhost:8000/api/auth/callback
 # FRONTEND_URL=http://localhost:3000
 # COOKIE_DOMAIN=localhost    # shared domain for session cookie (dev: localhost)
+
+# Billing / subscriptions (SaaS only — set SAAS_MODE=true to enforce the gate)
+# SAAS_MODE=true
+# STRIPE_SECRET_KEY=, STRIPE_WEBHOOK_SECRET=, STRIPE_*_PRICE_* (see api/.env.example)
+# Transactional email (Resend) — confirmation emails on checkout; best-effort.
+# RESEND_API_KEY=re_...
+# EMAIL_FROM="Marrow <hello@marrow.so>"
 ```
 
 **Frontend (`web/.env.local`)**:
@@ -176,13 +183,16 @@ marrow/
 │   │       ├── 5441fe9ca011_add_share_links_table.py
 │   │       ├── ac1e5d8ab0f8_add_node_links_backlink_index.py
 │   │       ├── cd990242773c_add_user_stars_table.py
-│   │       └── 70645242437d_merge_swarm_v0_2_migrations.py
+│   │       ├── 70645242437d_merge_swarm_v0_2_migrations.py
+│   │       └── a1b2c3d4e5f6_add_subscription_status_to_organizations.py  # #208
 │   ├── marrow/                       # Main package
 │   │   ├── app.py                    # FastAPI app factory, CORS + session middleware
 │   │   ├── auth.py                   # OIDC config, session JWT helpers, cookie params
 │   │   ├── db.py                     # SQLAlchemy session management
 │   │   ├── dependencies.py           # FastAPI dependency providers (auth, db session, search)
 │   │   ├── rbac.py                   # Role-based access control dependency factories
+│   │   ├── subscriptions.py          # Subscription gate helpers (is_org_active / is_saas_mode) — #208
+│   │   ├── email.py                  # Resend transactional email (send_email) — #208
 │   │   ├── models.py                 # SQLAlchemy ORM models (incl. User)
 │   │   ├── schemas.py                # Pydantic request/response schemas (incl. AuthStatus)
 │   │   ├── fractional_index.py       # Fractional index helpers: between(a,b), after(a)
@@ -384,6 +394,10 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | PATCH | /api/comments/{cid} | Edit body and/or resolve/unresolve (`{"resolved": true\|false}`) | editor |
 | DELETE | /api/comments/{cid} | Delete a comment | editor + (author or org owner) |
 | GET | /api/users/me/starred | List current user's starred nodes (trashed excluded) | session |
+| GET | /api/users/me/recent | Recently edited pages across all the caller's workspaces (#208) | session |
+| POST | /api/billing/{oid}/checkout | Create a Stripe Checkout session (JSON body `{tier, interval}`, 14-day trial) | owner |
+| POST | /api/billing/{oid}/portal | Create a Stripe Customer Portal session | owner |
+| POST | /api/billing/webhook | Stripe webhook — writes `subscription_status`, sends confirmation email | — |
 | POST | /api/nodes/{nid}/star | Star a node (idempotent) | viewer |
 | DELETE | /api/nodes/{nid}/star | Unstar a node | viewer |
 | GET | /api/nodes/{nid}/watching | Whether the current user watches this node | viewer |
@@ -480,6 +494,16 @@ Marrow supports three authentication methods, checked in priority order:
 
 **Key files**: `auth.py` (config, JWT helpers), `dependencies.py` (`verify_auth` + `AuthContext`), `rbac.py` (role enforcement dependencies), `routers/auth.py` (login/callback/me/logout), `routers/organizations.py` (org CRUD + member management).
 
+### Subscriptions & Billing (#208)
+
+Post-login flow: **login → subscription gate → global `/home`**.
+
+- **Gate model** — "active subscription" is a property of the **org** (`marrow/subscriptions.py`, the single source of truth). `is_org_active(tier, subscription_status)` is True when `SAAS_MODE` is off (self-hosted is never gated), the tier is `enterprise`, or `subscription_status ∈ {trialing, active}`. `is_saas_mode()` reads `SAAS_MODE` dynamically.
+- **`organizations.subscription_status`** (`none | trialing | active | past_due | canceled`, default `none`) is written **only** by the Stripe webhook. `OrganizationRead` exposes `tier`, `subscription_status`, and the computed `has_active_subscription`. `AuthStatus.has_payable_unsubscribed_org` (computed in `/api/auth/me` over the user's *owned* orgs) lets the post-login gate be one round trip. **Billing fields are never exported** (the restore round-trip is unaffected).
+- **Webhook** (`routers/billing.py`): `checkout.session.completed` → status from the Stripe subscription (trial → `trialing`) + confirmation email; `customer.subscription.updated` → mapped status; `…deleted` → `canceled`; `invoice.payment_failed` → `past_due`. `/checkout` takes a **JSON body** (`{tier, interval}`), adds a 14-day trial, and redirects to `/subscribe/success?org=` / `/subscribe?org=&canceled=1`.
+- **Email** (`marrow/email.py`): `send_email(to, subject, html)` via the Resend REST API, sender `hello@marrow.so`. Best-effort — never raises, never blocks the webhook 200; skipped when `RESEND_API_KEY` is unset.
+- **Gate enforcement (frontend)**: `app/auth/callback` routes only to `/subscribe` (owner of an unsubscribed org) or `/home`; `app/home/layout.tsx` re-asserts it (defense in depth); `app/w/[workspaceId]/layout.tsx` gates on *that* workspace's org (owner → `/subscribe?org=`, member → notice).
+
 ### Frontend Patterns
 
 - **API client** (`lib/api.ts`): all server calls go through `apiFetch<T>()` which injects auth headers and handles errors
@@ -490,6 +514,7 @@ Marrow supports three authentication methods, checked in priority order:
 - **Sidebar drag-and-drop**: `@dnd-kit/core` drives reparenting and reordering of folders/pages. New positions are computed via `fractional-indexing.generateKeyBetween()` and PATCHed to `/api/nodes/{id}` with `parent_id` + `position`. Cross-workspace drops and descendant-cycle drops are rejected with a `sonner` toast. Server is the source of truth — failures rollback via `router.refresh()`.
 - **Comments**: `useComments(nodeId)` hook (`hooks/use-comments.ts`) owns thread state; `CommentsDrawer` renders threads/composer/resolve and `CommentBubbleFab` shows the unread badge. Unread = comments created after the viewer's last drawer visit, tracked client-side in `localStorage` (`marrow:comment-visit:<nodeId>`) — deliberately simple v1 heuristic, no backend visit table
 - **Inbox**: `rail-panels/inbox-panel.tsx` lists notifications with kind-specific icons/copy and an empty state; `WorkspaceShell` fetches the unread count on mount and `AppRail` renders an unread badge on the Inbox tab. Backend delivery lives in `api/marrow/notifications.py` — `@`-mention saves on page nodes notify newly-mentioned users (only mentions new vs. the prior revision; the actor is never self-notified). Notifications are user-scoped and deliberately excluded from export/restore.
+- **Global Home (#208)**: `app/home/` is the post-login default — `layout.tsx` enforces the auth + subscription gate and renders `components/global-chrome.tsx` (a slim top bar with workspace switcher + user menu, **not** `WorkspaceShell`); `page.tsx` composes self-contained widgets in `components/home/widgets.tsx` (Recently edited via `getMyRecent`, Starred, Inbox summary, Workspace switcher) — each kept standalone for the future widgets-dashboard backlog. The `/workspaces` picker is a switcher, not the landing. `/subscribe` + `/subscribe/success` drive checkout (`createCheckoutSession`).
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 

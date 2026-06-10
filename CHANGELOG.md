@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Each release also has fuller narrative notes (highlights, breaking changes, upgrade
 steps) on its [GitHub release](https://github.com/marrow-software/marrow/releases).
 
+## [Unreleased]
+
+### Added
+- Unified post-login flow: **login → subscription gate → global Home/For You**.
+- Subscription checkout — in-app `/subscribe` page (Starter/Business/Growth, monthly↔yearly,
+  Enterprise "Contact sales") starts a Stripe Checkout session with a 14-day trial; a
+  `/subscribe/success` page polls until the subscription is active, then lands you in the app.
+- Global **Home/For You** (`/home`) — the new post-login default, aggregating recently edited
+  pages, starred items, and Inbox unread across *all* workspaces, plus a workspace switcher in
+  a lightweight global chrome. The `/workspaces` picker is demoted to a switcher.
+- `organizations.subscription_status` (`none | trialing | active | past_due | canceled`) — set
+  by the Stripe webhook; an org is "active" when status ∈ {trialing, active}, tier is
+  enterprise, or self-hosted (`SAAS_MODE` off).
+- Subscription confirmation email via Resend (`hello@marrow.so`), best-effort on
+  `checkout.session.completed`.
+- `GET /api/users/me/recent` — recently edited pages across every workspace the caller can access.
+
+### Changed
+- `POST /api/billing/{org}/checkout` now takes a JSON body (`tier`/`interval`) instead of query
+  params, adds a 14-day trial, and uses real `/subscribe/success` + `/subscribe` redirect URLs.
+- `OrganizationRead` exposes `tier`, `subscription_status`, and `has_active_subscription`;
+  `AuthStatus` adds `has_payable_unsubscribed_org` so the post-login gate is a single round trip.
+
 ## [0.2.9] — 2026-06-06
 
 The v0.2 milestone: the collections/pages model collapses into a unified node tree, a

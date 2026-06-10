@@ -13,6 +13,7 @@ import type {
   Comment,
   EffectiveProperty,
   EffectivePropertiesResponse,
+  MyRecentItem,
   Node,
   NodeType,
   NodeView,
@@ -110,6 +111,11 @@ export function getWorkspaceTree(id: string): Promise<WorkspaceTree> {
 
 export function getWorkspaceHome(id: string): Promise<WorkspaceHome> {
   return apiFetch(`/api/workspaces/${id}/home`);
+}
+
+// Recently-edited pages across every workspace the current user can access.
+export function getMyRecent(limit = 12): Promise<MyRecentItem[]> {
+  return apiFetch(`/api/users/me/recent?limit=${limit}`);
 }
 
 export function getExportSizeEstimate(
@@ -351,6 +357,25 @@ export async function logout(): Promise<string | null> {
     method: "POST",
   });
   return data.logout_url ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+
+export function createCheckoutSession(
+  orgId: string,
+  tier: string,
+  interval: "monthly" | "yearly" = "monthly"
+): Promise<{ url: string }> {
+  return apiFetch(`/api/billing/${orgId}/checkout`, {
+    method: "POST",
+    body: JSON.stringify({ tier, interval }),
+  });
+}
+
+export function createPortalSession(orgId: string): Promise<{ url: string }> {
+  return apiFetch(`/api/billing/${orgId}/portal`, { method: "POST" });
 }
 
 // ---------------------------------------------------------------------------
