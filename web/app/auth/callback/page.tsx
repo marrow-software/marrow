@@ -14,9 +14,12 @@ export default function AuthCallbackPage() {
           router.replace("/login");
           return;
         }
-        // Subscription gate: an owner of an unsubscribed org (SaaS only) is sent
-        // to checkout. Otherwise land on the global Home. Never the picker.
-        if (status.has_payable_unsubscribed_org) {
+        // Gate order: onboarding → subscription → home. A first-run owner names
+        // their org before anything else; an owner of an unsubscribed org (SaaS
+        // only) is sent to checkout. Otherwise the global Home. Never the picker.
+        if (status.needs_onboarding) {
+          router.replace("/onboarding");
+        } else if (status.has_payable_unsubscribed_org) {
           router.replace("/subscribe");
         } else {
           router.replace("/home");

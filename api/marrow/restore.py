@@ -14,6 +14,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
 from .links import rebuild_node_links
@@ -98,6 +99,8 @@ def restore_workspace(
                         slug=org_meta["slug"],
                         name=org_meta["name"],
                         created_at=_dt(org_meta["created_at"]),
+                        # Restored orgs are already named — never re-onboard.
+                        onboarded_at=_dt(org_meta["created_at"]),
                     )
                 )
                 session.flush()
@@ -115,6 +118,7 @@ def restore_workspace(
                     id=org_id,
                     slug=slug,
                     name=f"{ws_meta['name']} (imported)",
+                    onboarded_at=sa_func.now(),
                 )
             )
             session.flush()

@@ -164,12 +164,14 @@ async def me(request: Request) -> AuthStatus:
                 email=claims["email"],
                 name=claims["name"],
             )
+            has_payable, needs_onboarding = _owner_gate_flags(user.id)
             return AuthStatus(
                 authenticated=True,
                 user=user,
                 method="session",
                 oidc_enabled=config.is_enabled,
-                has_payable_unsubscribed_org=_user_has_payable_unsubscribed_org(user.id),
+                has_payable_unsubscribed_org=has_payable,
+                needs_onboarding=needs_onboarding,
             )
         except Exception:
             pass
@@ -182,14 +184,15 @@ async def me(request: Request) -> AuthStatus:
     )
 
 
-def _user_has_payable_unsubscribed_org(user_id: uuid.UUID) -> bool:
-    """Whether the user owns >=1 org that lacks an active subscription.
+def _owner_gate_flags(user_id: uuid.UUID) -> tuple[bool, bool]:
+    """Post-login gate flags over the orgs the user owns.
 
-    Drives the post-login subscription gate. Returns False in self-hosted mode
-    (``is_org_active`` short-circuits to active when SaaS mode is off).
+    Returns ``(has_payable_unsubscribed_org, needs_onboarding)``. Both drive
+    the post-login flow (onboarding → subscription → home) and are always
+    False in self-hosted mode (``SAAS_MODE`` off skips both gates).
     """
     if not is_saas_mode():
-        return False
+        return False, False
     db = next(get_db())
     try:
         owned_orgs = (
@@ -201,7 +204,11 @@ def _user_has_payable_unsubscribed_org(user_id: uuid.UUID) -> bool:
             )
             .all()
         )
-        return any(not is_org_active(org.tier, org.subscription_status) for org in owned_orgs)
+        has_payable = any(
+            not is_org_active(org.tier, org.subscription_status) for org in owned_orgs
+        )
+        needs_onboarding = any(org.onboarded_at is None for org in owned_orgs)
+        return has_payable, needs_onboarding
     finally:
         db.close()
 

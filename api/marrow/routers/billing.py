@@ -1,5 +1,6 @@
-"""Stripe billing — checkout, portal, and webhook endpoints."""
+"""Stripe billing — checkout, portal, webhook, and reconcile endpoints."""
 
+import logging
 import os
 from uuid import UUID
 
@@ -14,6 +15,9 @@ from ..dependencies import AuthContext, get_db
 from ..email import send_email, subscription_confirmation_html
 from ..models import Organization, OrgRole
 from ..rbac import require_org_role
+from ..subscriptions import is_org_active
+
+logger = logging.getLogger(__name__)
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 _webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET", "")
@@ -167,6 +171,49 @@ def create_portal_session(
     return {"url": session.url}
 
 
+@router.post("/{org_id}/reconcile")
+def reconcile_subscription(
+    org_id: UUID,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_org_role(OrgRole.OWNER)),
+):
+    """Pull the org's subscription truth from Stripe and persist it.
+
+    Webhook-independent self-heal: makes a completed Checkout land even when
+    the `checkout.session.completed` webhook never arrives.
+    """
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise HTTPException(404, "Organization not found")
+
+    def _result(reconciled: bool, reason: str | None = None):
+        return {
+            "reconciled": reconciled,
+            "reason": reason,
+            "tier": org.tier,
+            "subscription_status": org.subscription_status,
+            "has_active_subscription": is_org_active(org.tier, org.subscription_status),
+        }
+
+    if not org.stripe_customer_id:
+        logger.warning("billing: reconcile for org %s skipped — no Stripe customer", org.id)
+        return _result(False, "no_customer")
+
+    subscriptions = stripe.Subscription.list(customer=org.stripe_customer_id, status="all", limit=1)
+    data = subscriptions.get("data") or []
+    if not data:
+        logger.warning(
+            "billing: reconcile for org %s found no subscriptions (customer=%s)",
+            org.id,
+            org.stripe_customer_id,
+        )
+        return _result(False, "no_subscription")
+
+    if not _apply_subscription(org, data[0], db):
+        return _result(False, "unknown_price")
+    return _result(True)
+
+
 @router.post("/webhook", include_in_schema=False)
 async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     """Handle Stripe webhook events. Signature verified before processing."""
@@ -211,31 +258,70 @@ def _tier_from_subscription(subscription: dict) -> tuple[str, str] | None:
     return tier, billing_interval
 
 
+def _apply_subscription(
+    org: Organization,
+    subscription: dict,
+    db: Session,
+    *,
+    subscription_id: str | None = None,
+    default_status: str | None = None,
+) -> bool:
+    """Persist a Stripe subscription's tier/interval/status onto an org.
+
+    Single write path shared by the webhook handlers and the reconcile
+    endpoint. Returns False (after logging) when the subscription's price
+    isn't one of ours.
+    """
+    result = _tier_from_subscription(subscription)
+    if result is None:
+        logger.warning(
+            "billing: subscription %s for org %s has an unrecognized price; "
+            "check STRIPE_*_PRICE_* configuration",
+            subscription_id or subscription.get("id"),
+            org.id,
+        )
+        return False
+    tier, billing_interval = result
+
+    org.stripe_subscription_id = subscription_id or subscription.get("id")
+    org.tier = tier
+    org.billing_interval = billing_interval
+    # StripeObject supports .get(); default_status covers checkout, where the
+    # subscription was just created with a trial period.
+    org.subscription_status = _map_stripe_status(subscription.get("status") or default_status)
+    db.commit()
+    return True
+
+
 def _handle_checkout_completed(session: dict, db: Session) -> None:
     customer_id = session.get("customer")
     subscription_id = session.get("subscription")
     org_id = session.get("metadata", {}).get("org_id")
     if not (customer_id and subscription_id and org_id):
+        logger.warning(
+            "billing: checkout.session.completed missing fields "
+            "(customer=%s subscription=%s org_id=%s); org not updated",
+            customer_id,
+            subscription_id,
+            org_id,
+        )
         return
 
     org = db.get(Organization, org_id) or _org_by_customer(customer_id, db)
     if org is None:
+        logger.warning(
+            "billing: checkout.session.completed matched no org (org_id=%s customer=%s)",
+            org_id,
+            customer_id,
+        )
         return
 
     subscription = stripe.Subscription.retrieve(subscription_id)
-    result = _tier_from_subscription(subscription)
-    if result is None:
-        return
-    tier, billing_interval = result
-
     org.stripe_customer_id = customer_id
-    org.stripe_subscription_id = subscription_id
-    org.tier = tier
-    org.billing_interval = billing_interval
-    # StripeObject supports .get(); falls back to 'trialing' since checkout
-    # created the subscription with a trial period.
-    org.subscription_status = _map_stripe_status(subscription.get("status") or "trialing")
-    db.commit()
+    if not _apply_subscription(
+        org, subscription, db, subscription_id=subscription_id, default_status="trialing"
+    ):
+        return
 
     # Best-effort confirmation email — never blocks the webhook 200.
     recipient = session.get("customer_details", {}).get("email") or session.get("customer_email")
@@ -243,33 +329,31 @@ def _handle_checkout_completed(session: dict, db: Session) -> None:
         send_email(
             to=recipient,
             subject="Your Marrow subscription is active",
-            html=subscription_confirmation_html(org.name, tier),
+            html=subscription_confirmation_html(org.name, org.tier),
         )
 
 
 def _handle_subscription_updated(subscription: dict, db: Session) -> None:
     customer_id = subscription.get("customer")
-    subscription_id = subscription.get("id")
     org = _org_by_customer(customer_id, db)
     if org is None:
+        logger.warning(
+            "billing: customer.subscription.updated matched no org (customer=%s)",
+            customer_id,
+        )
         return
 
-    result = _tier_from_subscription(subscription)
-    if result is None:
-        return
-    tier, billing_interval = result
-
-    org.stripe_subscription_id = subscription_id
-    org.tier = tier
-    org.billing_interval = billing_interval
-    org.subscription_status = _map_stripe_status(subscription.get("status"))
-    db.commit()
+    _apply_subscription(org, subscription, db)
 
 
 def _handle_subscription_deleted(subscription: dict, db: Session) -> None:
     customer_id = subscription.get("customer")
     org = _org_by_customer(customer_id, db)
     if org is None:
+        logger.warning(
+            "billing: customer.subscription.deleted matched no org (customer=%s)",
+            customer_id,
+        )
         return
 
     org.tier = "starter"
@@ -284,6 +368,10 @@ def _handle_payment_failed(invoice: dict, db: Session) -> None:
     customer_id = invoice.get("customer")
     org = _org_by_customer(customer_id, db)
     if org is None:
+        logger.warning(
+            "billing: invoice.payment_failed matched no org (customer=%s)",
+            customer_id,
+        )
         return
     org.subscription_status = "past_due"
     db.commit()

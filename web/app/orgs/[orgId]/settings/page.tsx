@@ -27,6 +27,8 @@ export default function OrgSettingsPage() {
   const [inviteRole, setInviteRole] = useState<string>("editor");
   const [busy, setBusy] = useState(false);
   const [savingPermission, setSavingPermission] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -45,6 +47,7 @@ export default function OrgSettingsPage() {
         const [o, m] = await Promise.all([getOrg(orgId), listOrgMembers(orgId)]);
         if (cancelled) return;
         setOrg(o);
+        setNameDraft(o.name);
         setMembers(m);
       } catch (err) {
         if (!cancelled) toast.error(String(err));
@@ -117,6 +120,48 @@ export default function OrgSettingsPage() {
           </Link>
         </div>
       </div>
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold">General</h2>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const name = nameDraft.trim();
+            if (!name || name === org.name) return;
+            setSavingName(true);
+            try {
+              const updated = await updateOrg(orgId, { name });
+              setOrg(updated);
+              setNameDraft(updated.name);
+              toast.success("Organization renamed");
+            } catch (err) {
+              toast.error(String(err));
+            } finally {
+              setSavingName(false);
+            }
+          }}
+          className="space-y-2"
+        >
+          <label htmlFor="org-name" className="text-sm font-medium">
+            Organization name
+          </label>
+          <div className="flex gap-2">
+            <Input
+              id="org-name"
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              disabled={savingName}
+              className="flex-1"
+            />
+            <Button
+              type="submit"
+              disabled={savingName || !nameDraft.trim() || nameDraft.trim() === org.name}
+            >
+              {savingName ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </form>
+      </section>
 
       <section className="space-y-4">
         <h2 className="text-lg font-semibold">Members</h2>

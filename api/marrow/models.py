@@ -45,6 +45,9 @@ class Organization(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # When the owner completed first-run onboarding (naming the org).
+    # NULL means the /onboarding step should be shown (SaaS only).
+    onboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Billing
     tier: Mapped[str] = mapped_column(Text, nullable=False, server_default="starter")

@@ -24,6 +24,7 @@ import type {
   OrgMembership,
   PropertySchema,
   PropertyValueType,
+  ReconcileResult,
   Revision,
   SearchResponse,
   ShareLink,
@@ -378,6 +379,10 @@ export function createPortalSession(orgId: string): Promise<{ url: string }> {
   return apiFetch(`/api/billing/${orgId}/portal`, { method: "POST" });
 }
 
+export function reconcileSubscription(orgId: string): Promise<ReconcileResult> {
+  return apiFetch(`/api/billing/${orgId}/reconcile`, { method: "POST" });
+}
+
 // ---------------------------------------------------------------------------
 // Organizations
 // ---------------------------------------------------------------------------
@@ -399,11 +404,18 @@ export function getOrg(orgId: string): Promise<Organization> {
 
 export function updateOrg(
   orgId: string,
-  patch: { members_can_create_spaces?: boolean }
+  patch: { name?: string; members_can_create_spaces?: boolean }
 ): Promise<Organization> {
   return apiFetch(`/api/orgs/${orgId}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
+  });
+}
+
+export function completeOnboarding(orgId: string, name: string): Promise<Organization> {
+  return apiFetch(`/api/orgs/${orgId}/onboard`, {
+    method: "POST",
+    body: JSON.stringify({ name }),
   });
 }
 

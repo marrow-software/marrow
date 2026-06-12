@@ -1,5 +1,6 @@
 """Webhook handler tests — subscription_status transitions + confirmation email."""
 
+import logging
 import os
 import uuid
 
@@ -64,6 +65,13 @@ def db(engine):
     session.close()
     tx.rollback()
     conn.close()
+
+
+@pytest.fixture(autouse=True)
+def _enable_billing_logger():
+    # Alembic's fileConfig (run by the db_url fixture) disables pre-existing
+    # loggers, which would silently swallow the records caplog asserts on.
+    logging.getLogger("marrow.routers.billing").disabled = False
 
 
 def _seed_org(db: Session, *, customer="cus_test", **overrides) -> Organization:
@@ -153,3 +161,121 @@ def test_handlers_noop_for_unknown_customer(db):
     # No org with this customer — must not raise.
     billing._handle_payment_failed({"customer": "cus_missing"}, db)
     billing._handle_subscription_deleted({"customer": "cus_missing"}, db)
+
+
+# ---------------------------------------------------------------------------
+# Webhook observability — every early-return must log (#214)
+# ---------------------------------------------------------------------------
+
+
+def test_checkout_completed_missing_fields_logs(db, caplog):
+    with caplog.at_level("WARNING", logger="marrow.routers.billing"):
+        billing._handle_checkout_completed({}, db)
+    assert any("missing fields" in r.message for r in caplog.records)
+
+
+def test_checkout_completed_unknown_org_logs(db, caplog):
+    session = {
+        "customer": "cus_ghost",
+        "subscription": "sub_ghost",
+        "metadata": {"org_id": str(uuid.uuid4())},
+    }
+    with caplog.at_level("WARNING", logger="marrow.routers.billing"):
+        billing._handle_checkout_completed(session, db)
+    assert any("matched no org" in r.message for r in caplog.records)
+
+
+def test_subscription_updated_unknown_customer_logs(db, caplog):
+    with caplog.at_level("WARNING", logger="marrow.routers.billing"):
+        billing._handle_subscription_updated({"id": "sub_x", "customer": "cus_missing"}, db)
+    assert any("matched no org" in r.message for r in caplog.records)
+
+
+def test_unknown_price_logs(db, caplog, monkeypatch):
+    org = _seed_org(db, customer="cus_badprice")
+    monkeypatch.setattr(billing, "_PRICE_TO_TIER", {})
+    with caplog.at_level("WARNING", logger="marrow.routers.billing"):
+        applied = billing._apply_subscription(org, {"id": "sub_bp", **_sub_obj("active")}, db)
+    assert applied is False
+    assert any("unrecognized price" in r.message for r in caplog.records)
+
+
+def test_payment_failed_unknown_customer_logs(db, caplog):
+    with caplog.at_level("WARNING", logger="marrow.routers.billing"):
+        billing._handle_payment_failed({"customer": "cus_missing"}, db)
+    assert any("matched no org" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Reconcile — pull subscription truth from Stripe (#214)
+# ---------------------------------------------------------------------------
+
+
+def _stub_subscription_list(monkeypatch, data):
+    calls = []
+
+    def _fake_list(**kwargs):
+        calls.append(kwargs)
+        return {"data": data}
+
+    monkeypatch.setattr(billing.stripe.Subscription, "list", _fake_list)
+    return calls
+
+
+def test_reconcile_writes_subscription_from_stripe(db, monkeypatch, known_price):
+    monkeypatch.setenv("SAAS_MODE", "true")
+    org = _seed_org(db, customer="cus_rec")
+    calls = _stub_subscription_list(monkeypatch, [{"id": "sub_rec", **_sub_obj("trialing")}])
+
+    result = billing.reconcile_subscription(org.id, db=db, auth=None)
+    db.refresh(org)
+
+    assert calls == [{"customer": "cus_rec", "status": "all", "limit": 1}]
+    assert result["reconciled"] is True
+    assert result["has_active_subscription"] is True
+    assert org.subscription_status == "trialing"
+    assert org.tier == "business"
+    assert org.billing_interval == "monthly"
+    assert org.stripe_subscription_id == "sub_rec"
+
+
+def test_reconcile_without_customer_is_clean_noop(db, monkeypatch, caplog):
+    monkeypatch.setenv("SAAS_MODE", "true")
+    org = _seed_org(db, customer=None)
+
+    with caplog.at_level("WARNING", logger="marrow.routers.billing"):
+        result = billing.reconcile_subscription(org.id, db=db, auth=None)
+    db.refresh(org)
+
+    assert result["reconciled"] is False
+    assert result["reason"] == "no_customer"
+    assert result["has_active_subscription"] is False
+    assert org.subscription_status == "none"
+    assert any("no Stripe customer" in r.message for r in caplog.records)
+
+
+def test_reconcile_with_no_subscriptions(db, monkeypatch, caplog):
+    monkeypatch.setenv("SAAS_MODE", "true")
+    org = _seed_org(db, customer="cus_empty")
+    _stub_subscription_list(monkeypatch, [])
+
+    with caplog.at_level("WARNING", logger="marrow.routers.billing"):
+        result = billing.reconcile_subscription(org.id, db=db, auth=None)
+
+    assert result["reconciled"] is False
+    assert result["reason"] == "no_subscription"
+    assert any("found no subscriptions" in r.message for r in caplog.records)
+
+
+def test_reconcile_with_unknown_price(db, monkeypatch):
+    monkeypatch.setenv("SAAS_MODE", "true")
+    org = _seed_org(db, customer="cus_unk")
+    monkeypatch.setattr(billing, "_PRICE_TO_TIER", {})
+    _stub_subscription_list(monkeypatch, [{"id": "sub_unk", **_sub_obj("active")}])
+
+    result = billing.reconcile_subscription(org.id, db=db, auth=None)
+    db.refresh(org)
+
+    assert result["reconciled"] is False
+    assert result["reason"] == "unknown_price"
+    assert org.subscription_status == "none"
