@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Each release also has fuller narrative notes (highlights, breaking changes, upgrade
 steps) on its [GitHub release](https://github.com/marrow-software/marrow/releases).
 
+## [0.3.1] — 2026-06-11
+
+### Fixed
+- The `/subscribe → /home → /subscribe` redirect loop after a completed Stripe Checkout:
+  `/subscribe/success` now actively **reconciles** the subscription from Stripe
+  (`POST /api/billing/{org}/reconcile`, owner) instead of waiting on the webhook, and renders
+  a terminal Retry/billing-portal/support state on failure — it never forwards to `/home`
+  while the org is unsubscribed.
+- Silent Stripe webhook failures: every early-return in the webhook handlers now logs a
+  warning (missing fields, unknown customer/org, unrecognized price), and the persistence
+  logic is shared between the webhook and reconcile paths (`_apply_subscription`).
+
+### Added
+- First-run **organization onboarding** (`/onboarding`) — new users name their auto-created
+  org before anything else; the post-login gate order is now **onboarding → subscription →
+  home**. Orgs can also be renamed in org settings (`PATCH /api/orgs/{id}` accepts `name`).
+- `organizations.onboarded_at` (backfilled to `created_at` for existing orgs, so nobody is
+  re-onboarded) and `AuthStatus.needs_onboarding`.
+- `marrow reset-org-billing <slug>` CLI — resets billing + onboarding state to fresh-signup
+  values for repeatable auth/payment testing (never touches Stripe).
+
 ## [0.3.0] — 2026-06-09
 
 ### Added

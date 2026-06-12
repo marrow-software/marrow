@@ -12,6 +12,7 @@ from ..models import Organization, OrgMembership, OrgRole, User
 from ..rbac import require_org_role
 from ..schemas import (
     OrganizationCreate,
+    OrganizationOnboard,
     OrganizationRead,
     OrganizationUpdate,
     OrgMembershipCreate,
@@ -50,8 +51,12 @@ def create_org(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(verify_auth),
 ):
-    """Create an org. The creating user becomes the owner."""
-    org = Organization(slug=body.slug, name=body.name)
+    """Create an org. The creating user becomes the owner.
+
+    Explicitly created orgs are named by the user already, so they skip the
+    first-run /onboarding step (unlike the auto-created personal org).
+    """
+    org = Organization(slug=body.slug, name=body.name, onboarded_at=func.now())
     db.add(org)
     try:
         db.flush()
@@ -97,8 +102,35 @@ def update_org(
     org = db.get(Organization, org_id)
     if org is None:
         raise HTTPException(404, "Organization not found")
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(422, "Organization name cannot be empty")
+        org.name = name
     if body.members_can_create_spaces is not None:
         org.members_can_create_spaces = body.members_can_create_spaces
+    db.commit()
+    db.refresh(org)
+    return org
+
+
+@router.post("/{org_id}/onboard", response_model=OrganizationRead)
+def onboard_org(
+    org_id: UUID,
+    body: OrganizationOnboard,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_org_role(OrgRole.OWNER)),
+):
+    """Complete first-run onboarding: name the org and stamp ``onboarded_at``."""
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise HTTPException(404, "Organization not found")
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(422, "Organization name cannot be empty")
+    org.name = name
+    if org.onboarded_at is None:
+        org.onboarded_at = func.now()
     db.commit()
     db.refresh(org)
     return org

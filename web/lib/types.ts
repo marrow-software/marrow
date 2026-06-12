@@ -12,7 +12,18 @@ export interface Organization {
   slug: string;
   name: string;
   created_at: string;
+  onboarded_at: string | null;
   members_can_create_spaces: boolean;
+  tier: string;
+  subscription_status: SubscriptionStatus;
+  has_active_subscription: boolean;
+}
+
+// Result of POST /api/billing/{orgId}/reconcile — pulls subscription truth
+// from Stripe so a completed Checkout lands even without the webhook.
+export interface ReconcileResult {
+  reconciled: boolean;
+  reason: string | null;
   tier: string;
   subscription_status: SubscriptionStatus;
   has_active_subscription: boolean;
@@ -248,6 +259,7 @@ export interface AuthStatus {
   method: string;
   oidc_enabled: boolean;
   has_payable_unsubscribed_org: boolean;
+  needs_onboarding: boolean;
 }
 
 // View-only sharing links (#40)

@@ -9,15 +9,19 @@ import {
 
 /**
  * Global Home shell. Uses its own lightweight chrome (NOT WorkspaceShell, which
- * is workspace-bound). Re-asserts the subscription gate as defense in depth:
- * the post-login callback already routes unsubscribed owners to /subscribe, but
- * a direct hit on /home must enforce the same rule.
+ * is workspace-bound). Re-asserts the post-login gates (onboarding →
+ * subscription) as defense in depth: the callback already routes first-run
+ * owners to /onboarding and unsubscribed owners to /subscribe, but a direct
+ * hit on /home must enforce the same rules.
  */
 export default async function HomeLayout({ children }: { children: React.ReactNode }) {
   const auth = await getAuthStatus().catch(() => null);
 
   if (!auth?.authenticated) {
     redirect("/login");
+  }
+  if (auth.needs_onboarding) {
+    redirect("/onboarding");
   }
   if (auth.has_payable_unsubscribed_org) {
     redirect("/subscribe");

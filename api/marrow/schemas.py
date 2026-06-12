@@ -402,6 +402,7 @@ class OrganizationRead(_ReadBase):
     slug: str
     name: str
     created_at: datetime
+    onboarded_at: datetime | None = None
     members_can_create_spaces: bool = True
     tier: str = "starter"
     subscription_status: str = "none"
@@ -415,7 +416,14 @@ class OrganizationRead(_ReadBase):
 
 
 class OrganizationUpdate(BaseModel):
+    name: str | None = None
     members_can_create_spaces: bool | None = None
+
+
+class OrganizationOnboard(BaseModel):
+    """First-run onboarding: name the org (sets ``onboarded_at``)."""
+
+    name: str
 
 
 # ---------------------------------------------------------------------------
@@ -460,6 +468,9 @@ class AuthStatus(BaseModel):
     # True when the user owns >=1 org with no active subscription (SaaS only).
     # Lets the post-login callback decide the subscription gate in one round trip.
     has_payable_unsubscribed_org: bool = False
+    # True when the user owns >=1 org that hasn't completed first-run
+    # onboarding (onboarded_at IS NULL). SaaS only; gates the /onboarding step.
+    needs_onboarding: bool = False
 
 
 class WatchStatus(BaseModel):

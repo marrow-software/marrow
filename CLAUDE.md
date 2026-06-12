@@ -138,6 +138,7 @@ cd api && alembic downgrade -1
 cd api && marrow export --workspace <slug> --output <path>
 cd api && marrow restore <bundle.zip>
 cd api && marrow purge-trash --older-than-days 30   # hard-delete old trashed nodes (cron'able)
+cd api && marrow reset-org-billing <slug>           # reset billing+onboarding state for repeatable testing (#214)
 
 # Product frontend (web/)
 cd web && npm run dev
@@ -184,7 +185,8 @@ marrow/
 │   │       ├── ac1e5d8ab0f8_add_node_links_backlink_index.py
 │   │       ├── cd990242773c_add_user_stars_table.py
 │   │       ├── 70645242437d_merge_swarm_v0_2_migrations.py
-│   │       └── a1b2c3d4e5f6_add_subscription_status_to_organizations.py  # #208
+│   │       ├── a1b2c3d4e5f6_add_subscription_status_to_organizations.py  # #208
+│   │       └── b8d2e4f6a1c3_add_onboarded_at_to_organizations.py  # #214
 │   ├── marrow/                       # Main package
 │   │   ├── app.py                    # FastAPI app factory, CORS + session middleware
 │   │   ├── auth.py                   # OIDC config, session JWT helpers, cookie params
@@ -200,7 +202,7 @@ marrow/
 │   │   ├── storage.py                # StorageAdapter ABC + LocalFilesystemAdapter
 │   │   ├── export.py                 # Export workspace → zip bundle
 │   │   ├── restore.py                # Restore workspace ← zip bundle
-│   │   ├── cli.py                    # Typer CLI (export, restore commands)
+│   │   ├── cli.py                    # Typer CLI (export, restore, reset-org-billing)
 │   │   └── routers/
 │   │       ├── auth.py               # OIDC login/callback/me/logout + personal org creation
 │   │       ├── organizations.py      # Org CRUD, member management (invite, role, remove)
@@ -328,7 +330,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 
 | Table | Key columns |
 | --- | --- |
-| organizations | id, slug (unique), name, members_can_create_spaces (bool, default true) |
+| organizations | id, slug (unique), name, onboarded_at (nullable — NULL means show first-run /onboarding), members_can_create_spaces (bool, default true) |
 | org_memberships | id, org_id (FK), user_id (FK, nullable for pending), email, role (owner/editor/viewer) |
 | workspaces | id, org_id (FK), slug (unique), name |
 | spaces | id, workspace_id (FK cascade), slug (unique per workspace), name |
@@ -368,7 +370,8 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | POST | /api/auth/logout | Clear session cookie | — |
 | GET/POST | /api/orgs | List user's orgs / create org | session |
 | GET | /api/orgs/{oid} | Get org details | viewer |
-| PATCH | /api/orgs/{oid} | Update org settings (members_can_create_spaces) | owner |
+| PATCH | /api/orgs/{oid} | Update org settings (name, members_can_create_spaces) | owner |
+| POST | /api/orgs/{oid}/onboard | First-run onboarding: set org name + stamp onboarded_at | owner |
 | GET | /api/orgs/{oid}/members | List members (incl. pending) | viewer |
 | POST | /api/orgs/{oid}/members | Invite member by email | owner |
 | PATCH | /api/orgs/{oid}/members/{mid} | Change member role | owner |
@@ -397,6 +400,7 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET | /api/users/me/recent | Recently edited pages across all the caller's workspaces (#208) | session |
 | POST | /api/billing/{oid}/checkout | Create a Stripe Checkout session (JSON body `{tier, interval}`, 14-day trial) | owner |
 | POST | /api/billing/{oid}/portal | Create a Stripe Customer Portal session | owner |
+| POST | /api/billing/{oid}/reconcile | Pull subscription truth from Stripe and persist it (webhook-independent self-heal) | owner |
 | POST | /api/billing/webhook | Stripe webhook — writes `subscription_status`, sends confirmation email | — |
 | POST | /api/nodes/{nid}/star | Star a node (idempotent) | viewer |
 | DELETE | /api/nodes/{nid}/star | Unstar a node | viewer |
@@ -494,15 +498,19 @@ Marrow supports three authentication methods, checked in priority order:
 
 **Key files**: `auth.py` (config, JWT helpers), `dependencies.py` (`verify_auth` + `AuthContext`), `rbac.py` (role enforcement dependencies), `routers/auth.py` (login/callback/me/logout), `routers/organizations.py` (org CRUD + member management).
 
-### Subscriptions & Billing (#208)
+### Subscriptions & Billing (#208, #214)
 
-Post-login flow: **login → subscription gate → global `/home`**.
+Post-login flow: **login → onboarding gate → subscription gate → global `/home`**.
 
 - **Gate model** — "active subscription" is a property of the **org** (`marrow/subscriptions.py`, the single source of truth). `is_org_active(tier, subscription_status)` is True when `SAAS_MODE` is off (self-hosted is never gated), the tier is `enterprise`, or `subscription_status ∈ {trialing, active}`. `is_saas_mode()` reads `SAAS_MODE` dynamically.
-- **`organizations.subscription_status`** (`none | trialing | active | past_due | canceled`, default `none`) is written **only** by the Stripe webhook. `OrganizationRead` exposes `tier`, `subscription_status`, and the computed `has_active_subscription`. `AuthStatus.has_payable_unsubscribed_org` (computed in `/api/auth/me` over the user's *owned* orgs) lets the post-login gate be one round trip. **Billing fields are never exported** (the restore round-trip is unaffected).
+- **`organizations.subscription_status`** (`none | trialing | active | past_due | canceled`, default `none`) is written by the Stripe webhook **and** the reconcile endpoint — both go through the shared `_apply_subscription(org, subscription)` write path in `routers/billing.py`. `OrganizationRead` exposes `tier`, `subscription_status`, and the computed `has_active_subscription`. `AuthStatus.has_payable_unsubscribed_org` and `AuthStatus.needs_onboarding` (computed in `/api/auth/me` over the user's *owned* orgs) let the post-login gates be one round trip. **Billing and onboarding fields are never exported** (the restore round-trip is unaffected).
+- **Reconcile** (#214): `POST /api/billing/{oid}/reconcile` (owner) pulls the org's latest subscription from Stripe (`Subscription.list(customer=…, status="all", limit=1)`) and persists it — the webhook-independent self-heal that `/subscribe/success` relies on. Every webhook early-return logs a `logger.warning` (missing fields, unknown customer/org, unrecognized price); failures are never silent.
+- **Onboarding** (#214): `organizations.onboarded_at` is NULL only for the auto-created personal org (explicitly created and restored orgs are stamped immediately; existing rows were backfilled to `created_at`). `POST /api/orgs/{oid}/onboard {name}` sets name + `onboarded_at` atomically. `marrow reset-org-billing <slug>` resets billing + onboarding state for repeatable testing (never touches Stripe) — see `references/deploy-runbook.md` for the incognito test process.
 - **Webhook** (`routers/billing.py`): `checkout.session.completed` → status from the Stripe subscription (trial → `trialing`) + confirmation email; `customer.subscription.updated` → mapped status; `…deleted` → `canceled`; `invoice.payment_failed` → `past_due`. `/checkout` takes a **JSON body** (`{tier, interval}`), adds a 14-day trial, and redirects to `/subscribe/success?org=` / `/subscribe?org=&canceled=1`.
 - **Email** (`marrow/email.py`): `send_email(to, subject, html)` via the Resend REST API, sender `hello@marrow.so`. Best-effort — never raises, never blocks the webhook 200; skipped when `RESEND_API_KEY` is unset.
-- **Gate enforcement (frontend)**: `app/auth/callback` routes only to `/subscribe` (owner of an unsubscribed org) or `/home`; `app/home/layout.tsx` re-asserts it (defense in depth); `app/w/[workspaceId]/layout.tsx` gates on *that* workspace's org (owner → `/subscribe?org=`, member → notice).
+- **Gate enforcement (frontend)**: `app/auth/callback` routes in order — `/onboarding` (owner of an un-onboarded org) → `/subscribe` (owner of an unsubscribed org) → `/home`; `app/home/layout.tsx` re-asserts the same order (defense in depth); `app/w/[workspaceId]/layout.tsx` gates on *that* workspace's org (owner → `/subscribe?org=`, member → notice).
+- **Success page (#214)**: `app/subscribe/success` calls `reconcileSubscription(orgId)` with bounded retries; active → `/home`, exhausted retries → a terminal "couldn't confirm payment" state with Retry + billing-portal + support links. It **never** auto-forwards to `/home` while the org is inactive (that's what caused the `/subscribe → /home → /subscribe` loop).
+- **Onboarding page (#214)**: `app/onboarding/page.tsx` pre-fills the org name, submits via `completeOnboarding`, then continues to `/subscribe` or `/home` per the subscription gate. Org settings has a Name field (`updateOrg({name})`).
 
 ### Frontend Patterns
 
