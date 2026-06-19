@@ -257,7 +257,7 @@ async def logout(request: Request):
             if end_session_endpoint:
                 params: dict[str, str] = {
                     "client_id": config.client_id,
-                    "post_logout_redirect_uri": config.frontend_url + "/login",
+                    "post_logout_redirect_uri": config.frontend_url + "/login?signedout=1",
                 }
                 if id_token_hint:
                     params["id_token_hint"] = id_token_hint
