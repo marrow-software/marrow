@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Each release also has fuller narrative notes (highlights, breaking changes, upgrade
 steps) on its [GitHub release](https://github.com/marrow-software/marrow/releases).
 
+## [0.3.3] — 2026-06-21
+
+### Fixed
+- Production login 500: the v0.3.2 `/login` page (an async server component reading
+  `searchParams`) was statically prerendered with build-time env and crashed on the Workers
+  runtime at request time, breaking the `/ → /home → /login` sign-in path. `/login` is now
+  `export const dynamic = "force-dynamic"`, so it always renders per request with runtime env.
+  (#216 follow-up)
+
 ## [0.3.2] — 2026-06-21
 
 ### Fixed
@@ -141,6 +150,7 @@ restore guarantee.
 - PostgreSQL full-text search.
 - BlockNote rich-text editor.
 
+[0.3.3]: https://github.com/marrow-software/marrow/releases/tag/v0.3.3
 [0.3.2]: https://github.com/marrow-software/marrow/releases/tag/v0.3.2
 [0.3.1]: https://github.com/marrow-software/marrow/releases/tag/v0.3.1
 [0.3.0]: https://github.com/marrow-software/marrow/releases/tag/v0.3.0
