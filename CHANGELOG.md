@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Each release also has fuller narrative notes (highlights, breaking changes, upgrade
 steps) on its [GitHub release](https://github.com/marrow-software/marrow/releases).
 
+## [0.3.2] — 2026-06-21
+
+### Fixed
+- Stripe webhook/reconcile silently dropping subscription updates: in `stripe>=15`,
+  `StripeObject` no longer subclasses `dict`, so `.get(...)` on a real webhook/reconcile
+  payload raised `AttributeError` — and the webhook swallowed it, so checkout never persisted
+  `subscription_status`/`tier`. All Stripe-object reads in `routers/billing.py` now use typed
+  attribute access; the webhook logs handler exceptions and still returns 200 so reconcile
+  self-heals without Stripe retry storms. Tests use real `StripeObject` fixtures so the bug
+  class fails CI. (#217, #218)
+
+### Changed
+- `/login` now server-redirects straight to the Auth0 login widget instead of rendering an
+  intermediate "Sign in with SSO" page. Signing out lands on a minimal `/login?signedout=1`
+  page with a single Sign-in link (no auto-bounce back into Auth0); the backend
+  `post_logout_redirect_uri` points there. (#216)
+
+### Added
+- Marrowglyph SVG served from `web/public` for Auth0 login-page branding. (#215)
+
 ## [0.3.1] — 2026-06-11
 
 ### Fixed
@@ -121,6 +141,9 @@ restore guarantee.
 - PostgreSQL full-text search.
 - BlockNote rich-text editor.
 
+[0.3.2]: https://github.com/marrow-software/marrow/releases/tag/v0.3.2
+[0.3.1]: https://github.com/marrow-software/marrow/releases/tag/v0.3.1
+[0.3.0]: https://github.com/marrow-software/marrow/releases/tag/v0.3.0
 [0.2.9]: https://github.com/marrow-software/marrow/releases/tag/v0.2.9
 [0.1.1]: https://github.com/marrow-software/marrow/releases/tag/v0.1.1
 [0.1.0]: https://github.com/marrow-software/marrow/releases/tag/v0.1.0
