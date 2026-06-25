@@ -1,5 +1,9 @@
 # Marrow
 
+[![CI](https://github.com/marrow-software/marrow/actions/workflows/ci.yml/badge.svg)](https://github.com/marrow-software/marrow/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/marrow-software/marrow)](https://github.com/marrow-software/marrow/releases)
+[![License](https://img.shields.io/github/license/marrow-software/marrow)](https://github.com/marrow-software/marrow/blob/main/LICENSE)
+
 **Your knowledge, owned outright. No landlords. No lock-in. No surprises.**
 
 Marrow is a self-hosted, open-source knowledge base built on one non-negotiable principle: if you have your data, you can always come back. Export, wipe, restore. Every time. No exceptions.
@@ -23,14 +27,14 @@ These are not aspirations. They are constraints that every architectural and pro
 1. **Restore guarantee** — A Marrow export bundle is restorable to an exact replica of the original workspace. A failing restore test is a critical bug.
 2. **Transparent format** — Markdown, JSON, attachments in a zip. No proprietary blobs.
 3. **Append-only history** — Every save creates a revision. Old revisions are never modified or deleted (enforced by a database trigger).
-4. **Pluggable storage** — Local filesystem or Cloudflare R2. Business logic never bypasses the storage adapter.
+4. **Pluggable storage** — Local filesystem or S3-compatible object storage. Business logic never bypasses the storage adapter.
 5. **Self-hosted by default** — Your data stays on infrastructure you control.
 
 See **[Restore guarantee](./docs/src/content/docs/concepts/restore-guarantee.md)** for the full explanation.
 
 ---
 
-## What Marrow is (v0.2)
+## Features
 
 - Content organized in a tree: Organizations → Workspaces → Spaces → Folders / Pages
 - BlockNote-powered editor with code blocks, tables, page links, and `@` mentions
@@ -40,22 +44,61 @@ See **[Restore guarantee](./docs/src/content/docs/concepts/restore-guarantee.md)
 - Backlinks — every page knows what links to it
 - Stars, watches, and per-user Inbox (notifications for edits and `@` mentions)
 - View-only share links for any page or folder (no account required to view)
+- Global Home dashboard — recently edited pages, starred items, and Inbox across all workspaces
+- Organization onboarding for first-run setup
 - File attachments
 - Full-text search across a workspace
 - Append-only revision history on every save
 - One-command export to a transparent zip bundle (full or slim)
 - One-command restore from any export bundle (forwards-compatible across versions)
 - OIDC authentication with org-level RBAC (owner / editor / viewer)
-- Pluggable storage (local filesystem; Cloudflare R2)
+- Pluggable storage (local filesystem; S3-compatible backends such as Cloudflare R2)
 
 ---
 
-## Quickstart (development)
+## Self-hosting
+
+The recommended production path is Docker Compose. The API image is pulled from GHCR; the web image is built locally from source.
+
+**Prerequisites:** Docker and Docker Compose.
+
+```bash
+git clone https://github.com/marrow-software/marrow.git
+cd marrow
+git checkout v0.3.3          # recommended for production
+
+cp .env.prod.example .env
+# edit .env — SECRET_KEY, POSTGRES_PASSWORD, MARROW_API_URL (your public API URL)
+
+docker compose -f docker-compose.prod.yml up -d --build
+curl http://localhost:8000/health
+# open http://localhost:3000
+```
+
+**Auth is required in production.** Set OIDC (preferred for multi-user) or `API_KEY` / `MARROW_API_KEY` for solo use. Without either, all requests are allowed — fine for local dev, never for production. See **[OIDC](./docs/src/content/docs/configuration/oidc.md)** for setup.
+
+**Reverse proxy:** The Compose file does not include TLS termination. In production, put Caddy, Traefik, or nginx in front of the web container. If the API and web run on different hosts, set `CORS_ORIGINS` to the web origin and `COOKIE_DOMAIN` to the parent domain so the session cookie is shared.
+
+**Updating:**
+
+```bash
+git checkout v0.3.x
+docker compose -f docker-compose.prod.yml pull api
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+The API image is pulled from GHCR; the web image is rebuilt from source.
+
+Full reference: **[Docker Compose](./docs/src/content/docs/deployment/docker-compose.md)** · **[Environment variables](./docs/src/content/docs/configuration/env-vars.md)**
+
+---
+
+## Development
 
 **Prerequisites:** Python 3.11+, Node.js 20+, Docker.
 
 ```bash
-git clone https://github.com/spmcgraw/marrow.git
+git clone https://github.com/marrow-software/marrow.git
 cd marrow
 
 # Database
@@ -83,26 +126,16 @@ For more depth see **[Quickstart](./docs/src/content/docs/getting-started/quicks
 
 ---
 
-## Production deployment
-
-- **[Docker Compose](./docs/src/content/docs/deployment/docker-compose.md)** — recommended. Build images, configure `.env`, `docker compose -f docker-compose.prod.yml up`.
-- **[Cloudflare](./docs/src/content/docs/deployment/cloudflare.md)** — Workers + Containers + Neon + R2. The full Cloudflare stack is supported as of v0.2.
-
-See **[Environment variables](./docs/src/content/docs/configuration/env-vars.md)** for the full config reference and **[OIDC](./docs/src/content/docs/configuration/oidc.md)** for sign-in setup.
-
----
-
 ## Tech stack
 
 | Layer | Choice |
 | --- | --- |
 | Backend | FastAPI, SQLAlchemy, Alembic |
 | Database | PostgreSQL 16 |
-| Product app | Next.js 16, React 19, Tailwind 4, Base UI, BlockNote (`web/`) |
-| Marketing site | Next.js 16, static export to Cloudflare Pages (`web-marketing/`) |
-| Auth | OIDC (any provider, Auth0 recommended for multi-provider) + API key fallback |
+| Frontend | Next.js 16, React 19, Tailwind 4, Base UI, BlockNote (`web/`) |
+| Auth | OIDC (any provider) + API key fallback |
 | Search | PostgreSQL FTS (Meilisearch later) |
-| Storage | Local filesystem; Cloudflare R2 |
+| Storage | Local filesystem; S3-compatible object storage |
 | CLI | Typer (`marrow export`, `marrow restore`) |
 
 ---
