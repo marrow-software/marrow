@@ -69,6 +69,7 @@ git checkout v0.3.3          # recommended for production
 
 cp .env.prod.example .env
 # edit .env — SECRET_KEY, POSTGRES_PASSWORD, MARROW_API_URL (your public API URL)
+# set MARROW_VERSION to the same tag you checked out (e.g. v0.3.3)
 
 docker compose -f docker-compose.prod.yml up -d --build
 curl http://localhost:8000/health
@@ -81,13 +82,17 @@ curl http://localhost:8000/health
 
 **Updating:**
 
+Check out the release tag, set `MARROW_VERSION` in `.env` to the same tag (so the API image and web build stay in sync), then pull and restart:
+
 ```bash
-git checkout v0.3.x
+git fetch --tags
+git checkout v0.3.4          # pick the release you want
+# edit .env — set MARROW_VERSION=v0.3.4 to match
 docker compose -f docker-compose.prod.yml pull api
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-The API image is pulled from GHCR; the web image is rebuilt from source.
+The API image is pulled from GHCR using `MARROW_VERSION`; the web image is rebuilt from the checked-out source. If you skip updating `MARROW_VERSION`, `pull api` keeps resolving the old tag while the web container rebuilds from the new checkout.
 
 Full reference: **[Docker Compose](./docs/src/content/docs/deployment/docker-compose.md)** · **[Environment variables](./docs/src/content/docs/configuration/env-vars.md)**
 
