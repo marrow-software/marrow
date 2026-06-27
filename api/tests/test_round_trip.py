@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 
 from alembic import command
 from marrow.export import export_workspace
-from marrow.models import Attachment, Node, Organization, Revision, Space, Workspace
+from marrow.links import reconcile_node_links
+from marrow.models import Attachment, Node, NodeLink, Organization, Revision, Space, Workspace
 from marrow.restore import restore_workspace
 from marrow.storage import StorageAdapter
 
@@ -210,6 +211,9 @@ def test_export_restore_round_trip(db_url, tmp_path):
         page2.current_revision_id = rev2a.id
         session.flush()
 
+        reconcile_node_links(session, page1.id, rev1c.content, rev1c.content_format)
+        session.flush()
+
         att_data = b"binary attachment content"
         att_hash = hashlib.sha256(att_data).hexdigest()
         att = Attachment(
@@ -280,6 +284,10 @@ def test_export_restore_round_trip(db_url, tmp_path):
             "size_bytes": att.size_bytes,
             "data": att_data,
         }
+        original["node_links"] = [
+            {"source_node_id": str(row.source_node_id), "target_node_id": str(row.target_node_id)}
+            for row in session.query(NodeLink).order_by(NodeLink.source_node_id, NodeLink.target_node_id)
+        ]
 
         session.commit()
 
@@ -403,6 +411,15 @@ def test_export_restore_round_trip(db_url, tmp_path):
             "Attachment hash mismatch after restore"
         )
         assert restored_data == exp_att["data"], "Attachment bytes differ after restore"
+
+        # node_links index — must round-trip via links.json
+        restored_links = [
+            {"source_node_id": str(row.source_node_id), "target_node_id": str(row.target_node_id)}
+            for row in session.query(NodeLink).order_by(NodeLink.source_node_id, NodeLink.target_node_id)
+        ]
+        assert restored_links == original["node_links"], (
+            f"node_links mismatch after restore. Got: {restored_links} Expected: {original['node_links']}"
+        )
 
     engine.dispose()
 

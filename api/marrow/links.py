@@ -3,7 +3,8 @@
 A page links to another node in two ways:
 
 * **Wiki-links** — a Markdown/BlockNote link whose href points at a node, e.g.
-  ``/w/{workspace}/pages/{node-id}`` or the export-relative ``/pages/{node-id}``.
+  ``/w/{workspace}/pages/{node-id}``, ``/nodes/{node-id}``, or the export-relative
+  ``/pages/{node-id}``.
 * **`@` mentions** — a BlockNote ``mention`` inline element. User mentions carry
   a ``userId`` (not a node) and are ignored here; a mention that carries a
   ``nodeId`` prop is treated as a link for forward-compatibility.
@@ -33,12 +34,12 @@ _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 # adversarial input (ReDoS). Requires Python 3.11+.
 _MD_HREF_RE = re.compile(r"\[(?>[^\]]*)\]\(([^)]+)\)")
 
-# Pull the node id out of a /pages/{id} href (with or without a /w/{ws} prefix).
-_PAGE_HREF_RE = re.compile(rf"/pages/({_UUID})(?:[/?#]|$)")
+# Pull the node id out of a /pages/{id} or /nodes/{id} href (with or without a /w/{ws} prefix).
+_NODE_HREF_RE = re.compile(rf"/(?:pages|nodes)/({_UUID})(?:[/?#]|$)")
 
 
 def _href_to_node_id(href: str) -> uuid.UUID | None:
-    match = _PAGE_HREF_RE.search(href)
+    match = _NODE_HREF_RE.search(href)
     if match is None:
         return None
     try:
@@ -155,14 +156,15 @@ def serialize_node_links(db: Session, node_ids: set[uuid.UUID]) -> list[dict]:
     return [{"source_node_id": str(src), "target_node_id": str(tgt)} for src, tgt in rows]
 
 
-def rebuild_node_links(db: Session, links: list[dict]) -> None:
+def rebuild_node_links(db: Session, links: list[dict], *, include_trash: bool = False) -> None:
     """Recreate ``node_links`` rows from an export *links* list, on restore.
 
     Idempotent: deletes any existing links for all source nodes in the list
     before re-inserting, so retried restores don't hit unique-constraint errors.
     Skips entries whose endpoints are missing so a partial bundle still
-    restores cleanly without FK violations. The caller is responsible for
-    committing the session.
+    restores cleanly without FK violations. When *include_trash* is True,
+    links involving soft-deleted nodes are kept (matching ``include_trash``
+    exports). The caller is responsible for committing the session.
     """
     candidates: list[tuple[uuid.UUID, uuid.UUID]] = []
     for link in links:
@@ -178,9 +180,10 @@ def rebuild_node_links(db: Session, links: list[dict]) -> None:
         return
 
     all_ids = {nid for pair in candidates for nid in pair}
-    live_ids: set[uuid.UUID] = set(
-        db.execute(select(Node.id).where(Node.id.in_(all_ids), Node.deleted_at.is_(None))).scalars()
-    )
+    live_query = select(Node.id).where(Node.id.in_(all_ids))
+    if not include_trash:
+        live_query = live_query.where(Node.deleted_at.is_(None))
+    live_ids: set[uuid.UUID] = set(db.execute(live_query).scalars())
 
     valid = [(src, tgt) for src, tgt in candidates if src in live_ids and tgt in live_ids]
     if not valid:
