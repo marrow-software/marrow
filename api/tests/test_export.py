@@ -337,6 +337,7 @@ def test_export_reconciles_stale_links_from_content(session, tmp_path):
         {"source_node_id": str(src.id), "target_node_id": str(tgt.id)}
     ]
 
+
 def test_attachment_hash_mismatch_raises(seeded, session, tmp_path):
     att = seeded["attachment"]
     bad_storage = FakeStorageAdapter({(str(att.id), "photo.png"): b"corrupted bytes"})
