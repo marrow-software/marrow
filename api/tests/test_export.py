@@ -14,6 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from marrow.export import SCHEMA_VERSION, estimate_export_sizes, export_workspace
+from marrow.links import reconcile_node_links
 from marrow.models import Attachment, Node, Organization, Revision, Space, Workspace
 from marrow.storage import StorageAdapter
 
@@ -123,6 +124,9 @@ def seeded(session):
     session.flush()
 
     node1.current_revision_id = rev1c.id
+    session.flush()
+
+    reconcile_node_links(session, node1.id, link_content, "markdown")
     session.flush()
 
     # Attachment on node1.

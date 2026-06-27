@@ -21,7 +21,6 @@ from the manifest in favour of a flat nodes list.
 
 import hashlib
 import json
-import re
 import zipfile
 from datetime import datetime, timezone
 from io import BytesIO
@@ -29,6 +28,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from .links import serialize_node_links
 from .models import Node, NodeProperty, Workspace
 from .storage import StorageAdapter
 
@@ -37,11 +37,6 @@ SCHEMA_VERSION = "4"
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def _extract_hrefs(content: str) -> list[str]:
-    """Return all link targets found in Markdown content."""
-    return re.findall(r"\[(?:[^\]]*)\]\(([^)]+)\)", content)
 
 
 def _collect_nodes(workspace: Workspace, include_trash: bool = False) -> list[Node]:
@@ -199,41 +194,28 @@ def blocks_to_markdown(content_json: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Link analysis (Markdown only — best-effort for JSON revisions)
+# Link index serialization (from node_links table)
 # ---------------------------------------------------------------------------
 
 
-def _build_links(nodes: list[Node], node_id_set: set[str]) -> dict:
-    internal_links: list[dict] = []
-    broken_links: list[dict] = []
+def _build_links(session: Session, nodes: list[Node]) -> dict:
+    """Build links.json payload from the live ``node_links`` index."""
+    page_nodes = [n for n in nodes if n.type == "page"]
+    page_ids = {n.id for n in page_nodes}
+    exported_ids = {str(nid) for nid in page_ids}
 
-    for node in nodes:
-        if node.type != "page" or node.current_revision is None:
-            continue
-        content = node.current_revision.content or ""
-        content_format = node.current_revision.content_format
-
-        if content_format == "json":
-            content = blocks_to_markdown(content)
-
-        for href in _extract_hrefs(content):
-            source = str(node.id)
-            # Strip both /nodes/ (v4) and /pages/ (v3/pre-migration) prefixes.
-            candidate = href.removeprefix("/nodes/").removeprefix("/pages/").rstrip("/")
-            if candidate in node_id_set:
-                internal_links.append(
-                    {"source_node_id": source, "target_node_id": candidate, "href": href}
-                )
-            elif href.startswith("/") or not href.startswith(("http://", "https://")):
-                broken_links.append({"source_node_id": source, "href": href})
+    internal_links = [
+        lnk
+        for lnk in serialize_node_links(session, page_ids)
+        if lnk["target_node_id"] in exported_ids
+    ]
 
     linked_ids = {lnk["target_node_id"] for lnk in internal_links}
-    page_nodes = [n for n in nodes if n.type == "page"]
     orphaned = [str(n.id) for n in page_nodes if str(n.id) not in linked_ids]
 
     return {
         "internal_links": internal_links,
-        "broken_links": broken_links,
+        "broken_links": [],
         "orphaned_nodes": orphaned,
     }
 
@@ -300,7 +282,7 @@ def _build_manifest(
         node_records.append(rec)
 
     org = workspace.organization
-    return {
+    manifest: dict = {
         "schema_version": SCHEMA_VERSION,
         "export_timestamp": export_timestamp,
         "organization": {
@@ -331,6 +313,9 @@ def _build_manifest(
         "attachments": attachment_records,
         "node_properties": node_properties or [],
     }
+    if include_trash:
+        manifest["include_trash"] = True
+    return manifest
 
 
 def estimate_export_sizes(
@@ -392,7 +377,6 @@ def export_workspace(
         raise ValueError(f"Workspace '{slug}' not found")
 
     nodes = _collect_nodes(workspace, include_trash=include_trash)
-    node_id_set = {str(n.id) for n in nodes if n.type == "page"}
 
     # Eagerly touch lazy-loaded relationships while the session is open.
     for node in nodes:
@@ -472,7 +456,7 @@ def export_workspace(
                 }
             )
 
-        zf.writestr("links.json", json.dumps(_build_links(nodes, node_id_set), indent=2))
+        zf.writestr("links.json", json.dumps(_build_links(session, nodes), indent=2))
 
         node_id_list = [n.id for n in nodes]
         prop_rows = (

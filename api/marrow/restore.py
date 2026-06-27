@@ -72,6 +72,7 @@ def restore_workspace(
         )
 
         is_slim = manifest.get("slim", False)
+        include_trash = manifest.get("include_trash", False)
 
         ws_meta = manifest["workspace"]
         ws_id = uuid.UUID(ws_meta["id"])
@@ -166,7 +167,7 @@ def restore_workspace(
                 }
                 for lnk in raw_links
             ]
-            rebuild_node_links(session, normalized)
+            rebuild_node_links(session, normalized, include_trash=include_trash)
 
     return ws_meta["slug"]
 

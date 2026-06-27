@@ -45,6 +45,11 @@ class TestExtractLinkTargets:
         content = f"[link](/pages/{tid})"
         assert extract_link_targets(content, "markdown") == {tid}
 
+    def test_markdown_nodes_href(self):
+        tid = uuid.uuid4()
+        content = f"[link](/nodes/{tid})"
+        assert extract_link_targets(content, "markdown") == {tid}
+
     def test_markdown_external_links_ignored(self):
         content = "[ext](https://example.com) and [anchor](#section)"
         assert extract_link_targets(content, "markdown") == set()
@@ -351,3 +356,142 @@ class TestSerializeRebuild:
         finally:
             db.rollback()
             db.close()
+
+    def test_rebuild_keeps_trashed_endpoints_when_include_trash(self):
+        from datetime import datetime, timezone
+
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            _, _, space = _make_workspace(db)
+            live = _make_page(db, space, "Live")
+            trashed = _make_page(db, space, "Trashed")
+            trashed.deleted_at = datetime.now(timezone.utc)
+            db.flush()
+            link = {"source_node_id": str(live.id), "target_node_id": str(trashed.id)}
+            db.commit()
+
+            rebuild_node_links(db, [link], include_trash=True)
+            db.commit()
+
+            rows = (
+                db.query(NodeLink)
+                .filter_by(source_node_id=live.id, target_node_id=trashed.id)
+                .all()
+            )
+            assert len(rows) == 1
+        finally:
+            db.rollback()
+            db.close()
+
+    def test_rebuild_skips_trashed_endpoints_by_default(self):
+        from datetime import datetime, timezone
+
+        from marrow.dependencies import get_db
+
+        db = next(get_db())
+        try:
+            _, _, space = _make_workspace(db)
+            live = _make_page(db, space, "Live")
+            trashed = _make_page(db, space, "Trashed")
+            trashed.deleted_at = datetime.now(timezone.utc)
+            db.flush()
+            link = {"source_node_id": str(live.id), "target_node_id": str(trashed.id)}
+            db.commit()
+
+            rebuild_node_links(db, [link])
+            db.commit()
+
+            assert (
+                db.query(NodeLink)
+                .filter_by(source_node_id=live.id, target_node_id=trashed.id)
+                .count()
+                == 0
+            )
+        finally:
+            db.rollback()
+            db.close()
+
+
+# ---------------------------------------------------------------------------
+# Export / restore round-trip of links involving trashed nodes
+# ---------------------------------------------------------------------------
+
+
+class TestExportRestoreLinks:
+    def test_include_trash_restores_links_to_trashed_nodes(self, tmp_path):
+        import zipfile
+        from datetime import datetime, timezone
+
+        from sqlalchemy import create_engine, text
+        from sqlalchemy.orm import Session
+
+        from marrow.export import export_workspace
+        from marrow.restore import restore_workspace
+        from marrow.storage import StorageAdapter
+
+        class MemStorage(StorageAdapter):
+            def read(self, attachment_id: str, filename: str) -> bytes:
+                raise FileNotFoundError(attachment_id)
+
+            def write(self, attachment_id: str, filename: str, data: bytes) -> None:
+                pass
+
+        engine = create_engine(DATABASE_URL)
+        org_id = None
+        with Session(engine) as session:
+            org = Organization(slug=f"bl-org-{uuid.uuid4().hex[:6]}", name="BL Org")
+            session.add(org)
+            session.flush()
+            ws = Workspace(org_id=org.id, slug=f"bl-ws-{uuid.uuid4().hex[:6]}", name="BL WS")
+            session.add(ws)
+            session.flush()
+            space = Space(workspace_id=ws.id, slug="main", name="Main")
+            session.add(space)
+            session.flush()
+
+            live = _make_page(session, space, "Live")
+            trashed = _make_page(session, space, "Trashed")
+            session.flush()
+            reconcile_node_links(
+                session, live.id, f"[trashed](/pages/{trashed.id})", "markdown"
+            )
+            trashed.deleted_at = datetime.now(timezone.utc)
+            session.commit()
+            org_id = org.id
+            ws_slug = ws.slug
+            live_id, trashed_id = live.id, trashed.id
+
+            bundle = export_workspace(
+                ws_slug, session, MemStorage(), output_path=tmp_path, include_trash=True
+            )
+
+        with zipfile.ZipFile(bundle) as zf:
+            links = json.loads(zf.read("links.json"))
+            manifest = json.loads(zf.read("manifest.json"))
+        assert manifest.get("include_trash") is True
+        assert links["internal_links"] == [
+            {"source_node_id": str(live_id), "target_node_id": str(trashed_id)}
+        ]
+
+        with Session(engine) as session:
+            session.execute(text("DELETE FROM organizations WHERE id = :id"), {"id": org_id})
+            session.commit()
+
+        with Session(engine) as session:
+            restore_workspace(bundle, session, MemStorage())
+            session.commit()
+
+        with Session(engine) as session:
+            rows = (
+                session.query(NodeLink)
+                .filter_by(source_node_id=live_id, target_node_id=trashed_id)
+                .all()
+            )
+            assert len(rows) == 1
+
+            session.execute(text("DELETE FROM organizations WHERE id = :id"), {"id": org_id})
+            session.commit()
+
+        engine.dispose()
