@@ -211,9 +211,7 @@ def _reconcile_export_links(
         else:
             content = ""
             fmt = "markdown"
-        reconcile_node_links(
-            session, node.id, content, fmt, include_trash=include_trash
-        )
+        reconcile_node_links(session, node.id, content, fmt, include_trash=include_trash)
 
 
 def _build_links(session: Session, nodes: list[Node]) -> dict:
