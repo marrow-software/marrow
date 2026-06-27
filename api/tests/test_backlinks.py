@@ -454,9 +454,7 @@ class TestExportRestoreLinks:
             live = _make_page(session, space, "Live")
             trashed = _make_page(session, space, "Trashed")
             session.flush()
-            reconcile_node_links(
-                session, live.id, f"[trashed](/pages/{trashed.id})", "markdown"
-            )
+            reconcile_node_links(session, live.id, f"[trashed](/pages/{trashed.id})", "markdown")
             trashed.deleted_at = datetime.now(timezone.utc)
             session.commit()
             org_id = org.id

@@ -286,7 +286,9 @@ def test_export_restore_round_trip(db_url, tmp_path):
         }
         original["node_links"] = [
             {"source_node_id": str(row.source_node_id), "target_node_id": str(row.target_node_id)}
-            for row in session.query(NodeLink).order_by(NodeLink.source_node_id, NodeLink.target_node_id)
+            for row in session.query(NodeLink).order_by(
+                NodeLink.source_node_id, NodeLink.target_node_id
+            )
         ]
 
         session.commit()
@@ -415,7 +417,9 @@ def test_export_restore_round_trip(db_url, tmp_path):
         # node_links index — must round-trip via links.json
         restored_links = [
             {"source_node_id": str(row.source_node_id), "target_node_id": str(row.target_node_id)}
-            for row in session.query(NodeLink).order_by(NodeLink.source_node_id, NodeLink.target_node_id)
+            for row in session.query(NodeLink).order_by(
+                NodeLink.source_node_id, NodeLink.target_node_id
+            )
         ]
         assert restored_links == original["node_links"], (
             f"node_links mismatch after restore. Got: {restored_links} Expected: {original['node_links']}"
