@@ -278,6 +278,65 @@ def test_links_json(seeded, session, tmp_path):
     assert node1_id in links["orphaned_nodes"]
 
 
+def test_export_reconciles_stale_links_from_content(session, tmp_path):
+    """Wiki links in page content but missing from node_links are exported."""
+    from marrow.models import NodeLink
+
+    org = Organization(slug="stale-links-org", name="Stale Links Org")
+    session.add(org)
+    session.flush()
+
+    ws = Workspace(org_id=org.id, slug="stale-links-ws", name="Stale Links WS")
+    session.add(ws)
+    session.flush()
+
+    space = Space(workspace_id=ws.id, slug="sp", name="Space")
+    session.add(space)
+    session.flush()
+
+    src = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="page",
+        name="Source",
+        slug="source",
+        position="a0",
+    )
+    tgt = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="page",
+        name="Target",
+        slug="target",
+        position="a1",
+    )
+    session.add_all([src, tgt])
+    session.flush()
+
+    link_content = f"# Source\n[See target](/nodes/{tgt.id})"
+    rev = Revision(node_id=src.id, content=link_content)
+    session.add(rev)
+    session.flush()
+    src.current_revision_id = rev.id
+    session.flush()
+
+    assert session.query(NodeLink).filter_by(source_node_id=src.id).count() == 0
+
+    storage = FakeStorageAdapter()
+    result = export_workspace(
+        slug="stale-links-ws",
+        session=session,
+        storage=storage,
+        output_path=tmp_path,
+    )
+
+    with zipfile.ZipFile(result) as zf:
+        links = json.loads(zf.read("links.json"))
+
+    assert links["internal_links"] == [
+        {"source_node_id": str(src.id), "target_node_id": str(tgt.id)}
+    ]
+
 def test_attachment_hash_mismatch_raises(seeded, session, tmp_path):
     att = seeded["attachment"]
     bad_storage = FakeStorageAdapter({(str(att.id), "photo.png"): b"corrupted bytes"})

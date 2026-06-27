@@ -28,7 +28,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from .links import serialize_node_links
+from .links import reconcile_node_links, serialize_node_links
 from .models import Node, NodeProperty, Workspace
 from .storage import StorageAdapter
 
@@ -196,6 +196,24 @@ def blocks_to_markdown(content_json: str) -> str:
 # ---------------------------------------------------------------------------
 # Link index serialization (from node_links table)
 # ---------------------------------------------------------------------------
+
+
+def _reconcile_export_links(
+    session: Session, nodes: list[Node], *, include_trash: bool = False
+) -> None:
+    """Sync ``node_links`` from each exported page's current revision content."""
+    for node in nodes:
+        if node.type != "page":
+            continue
+        if node.current_revision:
+            content = node.current_revision.content
+            fmt = node.current_revision.content_format
+        else:
+            content = ""
+            fmt = "markdown"
+        reconcile_node_links(
+            session, node.id, content, fmt, include_trash=include_trash
+        )
 
 
 def _build_links(session: Session, nodes: list[Node]) -> dict:
@@ -456,6 +474,7 @@ def export_workspace(
                 }
             )
 
+        _reconcile_export_links(session, nodes, include_trash=include_trash)
         zf.writestr("links.json", json.dumps(_build_links(session, nodes), indent=2))
 
         node_id_list = [n.id for n in nodes]

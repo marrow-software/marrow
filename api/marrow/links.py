@@ -10,8 +10,9 @@ A page links to another node in two ways:
   ``nodeId`` prop is treated as a link for forward-compatibility.
 
 The set of targets parsed from a node's current content is reconciled into the
-``node_links`` table on every save (add new, remove stale). Export serializes
-the index into ``links.json``; restore rebuilds it.
+``node_links`` table on every save (add new, remove stale). Export reconciles
+from current revision content before serializing the index into ``links.json``;
+restore rebuilds it.
 """
 
 import json
@@ -107,22 +108,24 @@ def reconcile_node_links(
     source_node_id: uuid.UUID,
     content: str | None,
     content_format: str,
+    *,
+    include_trash: bool = False,
 ) -> None:
     """Make ``node_links`` for *source_node_id* match the links in *content*.
 
     Adds rows for new targets and deletes rows for targets no longer present.
-    Self-links and links to missing or trashed nodes are dropped. The caller
-    is responsible for committing the session.
+    Self-links and links to missing nodes are dropped; links to soft-deleted
+    nodes are kept only when *include_trash* is True (export with trash).
+    The caller is responsible for committing the session.
     """
     targets = extract_link_targets(content, content_format)
     targets.discard(source_node_id)
 
     if targets:
-        live = set(
-            db.execute(
-                select(Node.id).where(Node.id.in_(targets), Node.deleted_at.is_(None))
-            ).scalars()
-        )
+        live_query = select(Node.id).where(Node.id.in_(targets))
+        if not include_trash:
+            live_query = live_query.where(Node.deleted_at.is_(None))
+        live = set(db.execute(live_query).scalars())
         targets &= live
 
     existing = set(
