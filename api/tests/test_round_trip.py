@@ -324,9 +324,7 @@ def test_export_restore_round_trip(db_url, tmp_path):
                 "value_type": row.value_type,
                 "options": row.options,
             }
-            for row in session.query(NodeProperty).order_by(
-                NodeProperty.node_id, NodeProperty.key
-            )
+            for row in session.query(NodeProperty).order_by(NodeProperty.node_id, NodeProperty.key)
         ]
 
         session.commit()
@@ -473,9 +471,7 @@ def test_export_restore_round_trip(db_url, tmp_path):
                 "value_type": row.value_type,
                 "options": row.options,
             }
-            for row in session.query(NodeProperty).order_by(
-                NodeProperty.node_id, NodeProperty.key
-            )
+            for row in session.query(NodeProperty).order_by(NodeProperty.node_id, NodeProperty.key)
         ]
         assert restored_props == original["node_properties"], (
             f"node_properties mismatch after restore. "
