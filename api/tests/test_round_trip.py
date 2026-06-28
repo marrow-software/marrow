@@ -22,7 +22,16 @@ from sqlalchemy.orm import Session
 from alembic import command
 from marrow.export import export_workspace
 from marrow.links import reconcile_node_links
-from marrow.models import Attachment, Node, NodeLink, Organization, Revision, Space, Workspace
+from marrow.models import (
+    Attachment,
+    Node,
+    NodeLink,
+    NodeProperty,
+    Organization,
+    Revision,
+    Space,
+    Workspace,
+)
 from marrow.restore import restore_workspace
 from marrow.storage import StorageAdapter
 
@@ -227,6 +236,22 @@ def test_export_restore_round_trip(db_url, tmp_path):
 
         export_storage.write(str(att.id), "diagram.png", att_data)
 
+        # Folder schema + page property value
+        schema_prop = NodeProperty(
+            node_id=folder.id,
+            key="status",
+            value_type="select",
+            options='["todo", "done"]',
+        )
+        page_prop = NodeProperty(
+            node_id=page1.id,
+            key="status",
+            value="todo",
+            value_type="select",
+        )
+        session.add_all([schema_prop, page_prop])
+        session.flush()
+
         # Capture ground truth before committing (IDs are assigned).
         original["organization"] = {
             "id": str(org.id),
@@ -288,6 +313,19 @@ def test_export_restore_round_trip(db_url, tmp_path):
             {"source_node_id": str(row.source_node_id), "target_node_id": str(row.target_node_id)}
             for row in session.query(NodeLink).order_by(
                 NodeLink.source_node_id, NodeLink.target_node_id
+            )
+        ]
+        original["node_properties"] = [
+            {
+                "id": str(row.id),
+                "node_id": str(row.node_id),
+                "key": row.key,
+                "value": row.value,
+                "value_type": row.value_type,
+                "options": row.options,
+            }
+            for row in session.query(NodeProperty).order_by(
+                NodeProperty.node_id, NodeProperty.key
             )
         ]
 
@@ -424,6 +462,104 @@ def test_export_restore_round_trip(db_url, tmp_path):
         assert restored_links == original["node_links"], (
             f"node_links mismatch after restore. Got: {restored_links} Expected: {original['node_links']}"
         )
+
+        # node_properties — folder schema + page values must round-trip via manifest
+        restored_props = [
+            {
+                "id": str(row.id),
+                "node_id": str(row.node_id),
+                "key": row.key,
+                "value": row.value,
+                "value_type": row.value_type,
+                "options": row.options,
+            }
+            for row in session.query(NodeProperty).order_by(
+                NodeProperty.node_id, NodeProperty.key
+            )
+        ]
+        assert restored_props == original["node_properties"], (
+            f"node_properties mismatch after restore. "
+            f"Got: {restored_props} Expected: {original['node_properties']}"
+        )
+
+    engine.dispose()
+
+
+def test_export_restore_round_trip_with_trash(db_url, tmp_path):
+    """include_trash export preserves deleted_at through wipe and restore."""
+    import zipfile
+    from datetime import datetime, timezone
+
+    engine = create_engine(db_url)
+    export_storage = FakeStorageAdapter()
+    trashed_at = datetime(2024, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+
+    with Session(engine) as session:
+        org = Organization(slug="trash-roundtrip-org", name="Trash Round-Trip Org")
+        session.add(org)
+        session.flush()
+
+        ws = Workspace(org_id=org.id, slug="trash-roundtrip-ws", name="Trash Round-Trip WS")
+        session.add(ws)
+        session.flush()
+
+        space = Space(workspace_id=ws.id, slug="main", name="Main Space")
+        session.add(space)
+        session.flush()
+
+        trashed_page = Node(
+            space_id=space.id,
+            parent_id=None,
+            type="page",
+            name="Archived Page",
+            slug="archived",
+            position="000000",
+            deleted_at=trashed_at,
+            current_revision_id=None,
+        )
+        session.add(trashed_page)
+        session.flush()
+
+        rev = Revision(
+            node_id=trashed_page.id,
+            content="# Archived\nSoft-deleted content.",
+            content_format="markdown",
+        )
+        session.add(rev)
+        session.flush()
+        trashed_page.current_revision_id = rev.id
+        session.commit()
+
+    with Session(engine) as session:
+        bundle_path = export_workspace(
+            slug="trash-roundtrip-ws",
+            session=session,
+            storage=export_storage,
+            output_path=tmp_path,
+            include_trash=True,
+        )
+
+    with zipfile.ZipFile(bundle_path) as zf:
+        manifest = _json.loads(zf.read("manifest.json"))
+    assert manifest.get("include_trash") is True
+    trashed_rec = next(n for n in manifest["nodes"] if n["slug"] == "archived")
+    assert trashed_rec.get("deleted_at") == trashed_at.isoformat()
+
+    with engine.connect() as conn:
+        conn.execute(text("TRUNCATE organizations, workspaces CASCADE"))
+        conn.commit()
+
+    restore_storage = FakeStorageAdapter()
+    with Session(engine) as session:
+        slug = restore_workspace(bundle_path, session, restore_storage)
+        session.commit()
+
+    assert slug == "trash-roundtrip-ws"
+
+    with Session(engine) as session:
+        restored = session.query(Node).filter_by(slug="archived").one()
+        assert restored.deleted_at is not None
+        assert restored.deleted_at == trashed_at
 
     engine.dispose()
 

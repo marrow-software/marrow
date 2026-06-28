@@ -18,7 +18,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from marrow.export import SCHEMA_VERSION
-from marrow.models import Attachment, Node, Revision, Workspace
+from marrow.models import Attachment, Node, NodeProperty, Revision, Workspace
 from marrow.restore import restore_workspace
 from marrow.storage import StorageAdapter
 
@@ -478,6 +478,212 @@ def test_restore_not_a_zip_raises(session, storage, tmp_path):
 
     with pytest.raises(ValueError, match="Not a valid zip"):
         restore_workspace(path, session, storage)
+
+
+def test_restore_replays_deleted_at_with_include_trash(session, storage, tmp_path):
+    """include_trash bundles restore soft-deleted nodes with deleted_at intact."""
+    now = datetime.now(timezone.utc)
+    deleted_at = datetime(2024, 3, 1, 8, 30, 0, tzinfo=timezone.utc)
+    ws_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+    space_id = uuid.uuid4()
+    page_id = uuid.uuid4()
+    rev_id = uuid.uuid4()
+
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "include_trash": True,
+        "export_timestamp": now.isoformat(),
+        "organization": {
+            "id": str(org_id),
+            "slug": "trash-restore-org",
+            "name": "Trash Restore Org",
+            "created_at": now.isoformat(),
+        },
+        "workspace": {
+            "id": str(ws_id),
+            "org_id": str(org_id),
+            "slug": "trash-restore-ws",
+            "name": "Trash Restore WS",
+            "created_at": now.isoformat(),
+        },
+        "spaces": [
+            {
+                "id": str(space_id),
+                "workspace_id": str(ws_id),
+                "slug": "sp",
+                "name": "Space",
+                "created_at": now.isoformat(),
+            }
+        ],
+        "nodes": [
+            {
+                "id": str(page_id),
+                "space_id": str(space_id),
+                "parent_id": None,
+                "type": "page",
+                "name": "Archived",
+                "slug": "archived",
+                "position": "000000",
+                "current_revision_id": str(rev_id),
+                "deleted_at": deleted_at.isoformat(),
+                "created_at": now.isoformat(),
+            }
+        ],
+        "revisions": [
+            {
+                "id": str(rev_id),
+                "node_id": str(page_id),
+                "content_format": "markdown",
+                "created_at": now.isoformat(),
+            }
+        ],
+        "attachments": [],
+        "node_properties": [],
+    }
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("manifest.json", json.dumps(manifest))
+        zf.writestr(f"revisions/{page_id}/{rev_id}.md", "# Archived\nGone.")
+        zf.writestr(f"nodes/{page_id}.md", "# Archived\nGone.")
+        zf.writestr(
+            "links.json",
+            json.dumps(
+                {"internal_links": [], "broken_links": [], "orphaned_nodes": [str(page_id)]}
+            ),
+        )
+
+    path = _write_bundle(tmp_path, buf.getvalue(), name="trash-restore.zip")
+    restore_workspace(path, session, storage)
+    session.flush()
+
+    restored = session.get(Node, page_id)
+    assert restored is not None
+    assert restored.deleted_at is not None
+    assert restored.deleted_at == deleted_at
+
+
+def test_restore_node_properties(session, storage, tmp_path):
+    """v4 bundles restore folder schema and page property values."""
+    now = datetime.now(timezone.utc)
+    ws_id = uuid.uuid4()
+    org_id = uuid.uuid4()
+    space_id = uuid.uuid4()
+    folder_id = uuid.uuid4()
+    page_id = uuid.uuid4()
+    rev_id = uuid.uuid4()
+    schema_prop_id = uuid.uuid4()
+    page_prop_id = uuid.uuid4()
+
+    manifest = {
+        "schema_version": SCHEMA_VERSION,
+        "export_timestamp": now.isoformat(),
+        "organization": {
+            "id": str(org_id),
+            "slug": "props-restore-org",
+            "name": "Props Restore Org",
+            "created_at": now.isoformat(),
+        },
+        "workspace": {
+            "id": str(ws_id),
+            "org_id": str(org_id),
+            "slug": "props-restore-ws",
+            "name": "Props Restore WS",
+            "created_at": now.isoformat(),
+        },
+        "spaces": [
+            {
+                "id": str(space_id),
+                "workspace_id": str(ws_id),
+                "slug": "sp",
+                "name": "Space",
+                "created_at": now.isoformat(),
+            }
+        ],
+        "nodes": [
+            {
+                "id": str(folder_id),
+                "space_id": str(space_id),
+                "parent_id": None,
+                "type": "folder",
+                "name": "Folder",
+                "slug": "folder",
+                "position": "000000",
+                "current_revision_id": None,
+                "created_at": now.isoformat(),
+            },
+            {
+                "id": str(page_id),
+                "space_id": str(space_id),
+                "parent_id": str(folder_id),
+                "type": "page",
+                "name": "Page",
+                "slug": "pg",
+                "position": "000000",
+                "current_revision_id": str(rev_id),
+                "created_at": now.isoformat(),
+            },
+        ],
+        "revisions": [
+            {
+                "id": str(rev_id),
+                "node_id": str(page_id),
+                "content_format": "markdown",
+                "created_at": now.isoformat(),
+            }
+        ],
+        "attachments": [],
+        "node_properties": [
+            {
+                "id": str(schema_prop_id),
+                "node_id": str(folder_id),
+                "key": "priority",
+                "value": None,
+                "value_type": "select",
+                "options": '["low", "high"]',
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            },
+            {
+                "id": str(page_prop_id),
+                "node_id": str(page_id),
+                "key": "priority",
+                "value": "high",
+                "value_type": "select",
+                "options": None,
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            },
+        ],
+    }
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("manifest.json", json.dumps(manifest))
+        zf.writestr(f"revisions/{page_id}/{rev_id}.md", "# Page\nBody.")
+        zf.writestr(f"nodes/{page_id}.md", "# Page\nBody.")
+        zf.writestr(
+            "links.json",
+            json.dumps(
+                {"internal_links": [], "broken_links": [], "orphaned_nodes": [str(page_id)]}
+            ),
+        )
+
+    path = _write_bundle(tmp_path, buf.getvalue(), name="props-restore.zip")
+    restore_workspace(path, session, storage)
+    session.flush()
+
+    schema = session.get(NodeProperty, schema_prop_id)
+    value = session.get(NodeProperty, page_prop_id)
+    assert schema is not None
+    assert schema.key == "priority"
+    assert schema.value_type == "select"
+    assert schema.options == '["low", "high"]'
+    assert value is not None
+    assert value.key == "priority"
+    assert value.value == "high"
+    assert value.value_type == "select"
 
 
 # ---------------------------------------------------------------------------

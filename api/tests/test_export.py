@@ -493,6 +493,79 @@ def test_include_trash_includes_deleted_nodes(session, tmp_path):
     assert str(trashed_node.id) in node_ids2
 
 
+def test_export_excludes_descendants_of_trashed_folder(session, tmp_path):
+    """Children of a trashed folder are excluded from default export."""
+    from datetime import datetime, timezone
+
+    org = Organization(slug="trash-desc-org", name="Trash Desc Org")
+    session.add(org)
+    session.flush()
+
+    ws = Workspace(org_id=org.id, slug="trash-desc-ws", name="Trash Desc WS")
+    session.add(ws)
+    session.flush()
+
+    space = Space(workspace_id=ws.id, slug="sp", name="Space")
+    session.add(space)
+    session.flush()
+
+    trashed_folder = Node(
+        space_id=space.id,
+        parent_id=None,
+        type="folder",
+        name="Archived Folder",
+        slug="archived-folder",
+        position="a0",
+        deleted_at=datetime.now(timezone.utc),
+    )
+    session.add(trashed_folder)
+    session.flush()
+
+    child_page = Node(
+        space_id=space.id,
+        parent_id=trashed_folder.id,
+        type="page",
+        name="Child Page",
+        slug="child-page",
+        position="a0",
+        current_revision_id=None,
+    )
+    session.add(child_page)
+    session.flush()
+
+    rev = Revision(node_id=child_page.id, content="Child content.")
+    session.add(rev)
+    session.flush()
+    child_page.current_revision_id = rev.id
+    session.flush()
+
+    storage = FakeStorageAdapter()
+    result = export_workspace(
+        slug="trash-desc-ws",
+        session=session,
+        storage=storage,
+        output_path=tmp_path,
+    )
+    with zipfile.ZipFile(result) as zf:
+        manifest = json.loads(zf.read("manifest.json"))
+    node_ids = {n["id"] for n in manifest["nodes"]}
+    assert str(trashed_folder.id) not in node_ids
+    assert str(child_page.id) not in node_ids
+
+    result2 = export_workspace(
+        slug="trash-desc-ws",
+        session=session,
+        storage=storage,
+        output_path=tmp_path,
+        include_trash=True,
+    )
+    with zipfile.ZipFile(result2) as zf:
+        manifest2 = json.loads(zf.read("manifest.json"))
+    node_ids2 = {n["id"] for n in manifest2["nodes"]}
+    assert str(trashed_folder.id) in node_ids2
+    assert str(child_page.id) in node_ids2
+
+
 # ---------------------------------------------------------------------------
 # Slim export tests
 # ---------------------------------------------------------------------------
