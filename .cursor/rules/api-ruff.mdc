@@ -1,0 +1,23 @@
+---
+description: Run ruff check and format on API Python changes before finishing (matches CI)
+globs: api/**/*.py
+alwaysApply: false
+---
+
+# API Python — ruff before done
+
+CI runs **both** `ruff check` and `ruff format --check` in `api/` (see `.github/workflows/ci.yml`). Lint-only is not enough — formatting failures fail CI.
+
+Before marking API Python work complete (including tests), run on every changed file under `api/`:
+
+```bash
+cd api && ruff check <paths> && ruff format <paths>
+```
+
+To verify without writing (optional):
+
+```bash
+cd api && ruff format --check <paths>
+```
+
+Use `api/.venv/bin/ruff` when the venv exists. Fix any issues and re-run until both pass.
