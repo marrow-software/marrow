@@ -14,7 +14,7 @@ This walks you through running Marrow on your machine for development. For produ
 ## 1. Clone the repo
 
 ```bash
-git clone https://github.com/spmcgraw/marrow.git
+git clone https://github.com/marrow-software/marrow.git
 cd marrow
 ```
 
@@ -54,9 +54,9 @@ The frontend runs at `http://localhost:3000`.
 
 ## 5. Try it
 
-- Open `http://localhost:3000`.
+- Open `http://localhost:3000`. The app root (`/`) redirects to `/home`; in anonymous dev mode (no OIDC), unauthenticated users are sent to `/login` and then `/workspaces`.
 - Create a workspace, then a space, then add folders and pages inside that space.
-- Type into the editor — it auto-saves after 2 seconds and creates a revision on every save.
+- Type into the BlockNote editor — it auto-saves after 2 seconds and creates a revision on every save.
 - Hover over a folder in the sidebar to create child folders and pages via the `+` buttons.
 - Try `cd api && marrow export --workspace <slug> --output ./out.zip` and inspect the bundle. Then `marrow restore ./out.zip` into a fresh database to confirm the round-trip.
 

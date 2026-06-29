@@ -86,8 +86,8 @@ Check out the release tag, set `MARROW_VERSION` in `.env` to the same tag (so th
 
 ```bash
 git fetch --tags
-git checkout v0.3.4          # pick the release you want
-# edit .env — set MARROW_VERSION=v0.3.4 to match
+git checkout v0.3.3          # pick the release you want
+# edit .env — set MARROW_VERSION=v0.3.3 to match
 docker compose -f docker-compose.prod.yml pull api
 docker compose -f docker-compose.prod.yml up -d --build
 ```

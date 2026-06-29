@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Marrow is a self-hosted, open-source knowledge base (wiki) built around a non-negotiable **restore guarantee**: a Marrow export bundle must always be restorable to an exact replica of the original workspace. This guarantee is the architectural foundation — every decision flows from it.
 
-Current status: **v0.1 MVP** — core hierarchy, append-only revisions, export/restore, file attachments, and a working Next.js frontend are all implemented and tested.
+Current status: **v0.3.x** — node tree (folders + pages), v4 export/restore, OIDC + org RBAC, BlockNote editor, comments, properties, backlinks, SaaS billing gates, and global `/home` landing are implemented and tested. Comments, share links, and folder view definitions are not yet in export bundles (planned bundle v5 — see `references/To-do.md` item 8).
 
 ---
 
@@ -144,7 +144,7 @@ cd api && marrow reset-org-billing <slug>           # reset billing+onboarding s
 cd web && npm run dev
 cd web && npm run build
 cd web && npm run lint
-cd web && npm test
+# web/ has no test script yet — see What's Not Built Yet
 
 # Marketing site (web-marketing/) — runs on port 3001 in dev
 cd web-marketing && npm run dev
@@ -355,7 +355,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 
 **Deferred FK**: `nodes.current_revision_id → revisions.id` is a deferred constraint, allowing a node and its first revision to be created in a single transaction.
 
-**Comments**: Page-level only for v1; `node_id` must reference a `type='page'` node, enforced in `routers/comments.py` (the issue explicitly allowed check-or-app-level). One level of replies via `parent_comment_id` (nested replies are rejected with 400). Resolve = setting `resolved_at`. A future `block_id` column can be added additively for block-level comments without a breaking migration. RLS `tenant_isolation` is enabled on `comments` via the node-indirect tenant expression, identical to `revisions`/`attachments`. Comments are **not yet in the export bundle** — they ride along with the node-aware export/restore rewrite (bundle v4, #132/#133); until then `export.py`/`restore.py` remain pre-existing broken stubs for the v0.2 transition.
+**Comments**: Page-level only for v1; `node_id` must reference a `type='page'` node, enforced in `routers/comments.py` (the issue explicitly allowed check-or-app-level). One level of replies via `parent_comment_id` (nested replies are rejected with 400). Resolve = setting `resolved_at`. A future `block_id` column can be added additively for block-level comments without a breaking migration. RLS `tenant_isolation` is enabled on `comments` via the node-indirect tenant expression, identical to `revisions`/`attachments`. Comments are **not yet in the export bundle** (planned bundle v5 — `references/To-do.md` item 8).
 
 ### API Routes Summary
 
@@ -425,27 +425,24 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 > properties (#42). Views are presentation-only — CRUD never touches nodes.
 > `rbac.require_view_role` resolves view → folder node → org for role checks.
 > Frontend: `lib/api.ts` `*NodeView` helpers + `components/folder-views.tsx`
-> (presentational switcher; wiring into the node-aware sidebar lands with the
-> frontend node rewrite). Export of view definitions lands with bundle v4 (#132).
+> (presentational switcher; wiring into folder pages is tracked in
+> `references/To-do.md` item 5). Export of view definitions is planned for
+> bundle v5 (`references/To-do.md` item 8).
 
 > **Share links (#40):** `share_links` grant view-only public access to a node.
 > `GET /shared/{token}` requires no account: a page returns its current
 > revision content; a folder returns its visible (non-trashed) subtree
 > recursively. Expired links return 410, unknown/revoked return 404. The
 > public endpoint relies on RLS treating an unset `app.current_org` as
-> unrestricted (same pattern as the API-key/dev path). Export/restore
-> integration ("bundle v4") is **deferred**: `export.py`/`restore.py` still
-> reference removed Page/Collection classes and NameError at runtime until the
-> #132/#133 rewrites land — share links should be added to the bundle there.
->
-> **Note (#123 → #125):** v0.1's collection-scoped and global page routes were removed by the schema migration. Node CRUD/tree/attachment/revision routes land in #124 (2.0b) under `/api/nodes/...` and `/api/spaces/{sid}/nodes`. The workspace `/search` endpoint is node-aware as of #125 (2.0c). The `/tree`, `/export`, and `/restore` endpoints are still wired but their handlers will NameError at runtime until the node-aware rewrites land in #124, #132, and #133.
+> unrestricted (same pattern as the API-key/dev path). Share links are **not
+> yet in the export bundle** (planned bundle v5 — `references/To-do.md` item 8).
 >
 > **Watches & notifications (#103/#104):** `notifications` is a user-scoped Inbox feed; `create_notification()` in `marrow/notifications.py` is the single insertion point. `marrow/watches.py` fans out `watch_event` notifications: on a page save (`update_node` revision create), every watcher of the page **or any ancestor folder** is notified, excluding the acting user. Both tables are deliberately excluded from export/restore (user-scoped, workspace-independent) — the round-trip guarantee is unaffected.
 >
 > **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
 >
 > **Backlinks (#100, 2.6):** `GET /api/nodes/{nid}/backlinks` returns the nodes that link to `{nid}` (min role `viewer`, trashed sources excluded). `marrow/links.py` parses wiki-links (`/pages/{id}` and `/nodes/{id}` hrefs) and reconciles the `node_links` table on every page create/update via `reconcile_node_links()`. Export serializes the live DB index via `serialize_node_links()` into `links.json`; restore rebuilds it with `rebuild_node_links()`, honouring `manifest.include_trash` so links involving trashed nodes round-trip when the bundle was exported with `include_trash=True`.
-> **Node properties (#42, 2.4):** Folder nodes declare a property schema (key + `value_type` + `options`); every descendant page inherits it (nearest-ancestor wins) and may set its own value. Effective properties resolve at read time via the ancestor folder chain. Property keys+values fold into the page `search_vector` at weight C — a single `marrow_node_search_vector(uuid)` SQL helper computes the full vector and all node search triggers (revision-insert, name-change, and the new `node_properties` change trigger) keep it consistent. Frontend: `web/components/property-editor.tsx` renders chips/date pickers/dropdowns/checkboxes below the page title. Export/restore bundle bumped to **v4** (`node_properties` array in `manifest.json`); the v4 export/restore *handlers* still depend on the #132/#133 node-aware rewrite to run end-to-end, but the property serialization (`export.serialize_node_properties`) and restore loop are in place and symmetric.
+> **Node properties (#42, 2.4):** Folder nodes declare a property schema (key + `value_type` + `options`); every descendant page inherits it (nearest-ancestor wins) and may set its own value. Effective properties resolve at read time via the ancestor folder chain. Property keys+values fold into the page `search_vector` at weight C — a single `marrow_node_search_vector(uuid)` SQL helper computes the full vector and all node search triggers (revision-insert, name-change, and the new `node_properties` change trigger) keep it consistent. Frontend: `web/components/property-editor.tsx` renders chips/date pickers/dropdowns/checkboxes below the page title. Export/restore bundle **v4** carries a `node_properties` array in `manifest.json`; `export.serialize_node_properties` and the restore loop round-trip folder schemas and page values.
 
 ### Storage Adapter Interface
 
@@ -463,8 +460,8 @@ class StorageAdapter(ABC):
 marrow-export-{workspace-slug}-{timestamp}.zip          # full
 marrow-export-{workspace-slug}-slim-{timestamp}.zip     # slim
 ├── manifest.json        # workspace + org metadata, full node tree, schema version (v4)
-├── pages/
-│   ├── {node-id}.md     # human-readable Markdown (page-typed nodes)
+├── nodes/
+│   ├── {node-id}.md     # human-readable Markdown (page-typed nodes only)
 │   └── {node-id}.json   # canonical BlockNote JSON (JSON-format pages only)
 ├── revisions/
 │   └── {node-id}/
@@ -475,12 +472,12 @@ marrow-export-{workspace-slug}-slim-{timestamp}.zip     # slim
 └── links.json           # node_links index (internal_links + orphaned_nodes; broken_links always [])
 ```
 
-**Schema versions**: v1/v2 were Markdown-only. v3 added `.json` as canonical. v4 (Marrow 0.2) carries the `nodes` tree (folders + pages, with `parent_id`, `position`, `deleted_at`) instead of the old `collections`+`pages` shape. Restore supports v1–v4 — older bundles are auto-upgraded onto the node tree on read.
-v1/v2 bundles had only `.md` files. v3 adds `.json` as canonical for JSON-format revisions.
-v4 adds a `node_properties` array to `manifest.json` (folder schemas + page values).
-Restore supports v1, v2, v3, and v4 bundles.
+Folder nodes appear in `manifest.json` only — no files under `nodes/`. v3 bundles used a `pages/` directory; v4 renamed it to `nodes/`.
 
-**Slim bundles** omit the `revisions/` directory entirely and set `"slim": true` + `"revisions": []` in `manifest.json`. Restore recreates one revision per page from `pages/` content. CLI: `marrow export --slim`; API: `?slim=true`.
+**Schema versions**: v1/v2 were Markdown-only. v3 added `.json` as canonical under `pages/`. v4 (Marrow 0.2) carries the `nodes` tree (folders + pages, with `parent_id`, `position`, `deleted_at`, `include_trash`) instead of the old `collections`+`pages` manifest shape; content files live under `nodes/`. Restore supports v1–v4 — older bundles are auto-upgraded onto the node tree on read.
+v4 adds a `node_properties` array to `manifest.json` (folder schemas + page values).
+
+**Slim bundles** omit the `revisions/` directory entirely and set `"slim": true` + `"revisions": []` in `manifest.json`. Restore recreates one revision per page from `nodes/` content. CLI: `marrow export --slim`; API: `?slim=true`.
 
 **Trash**: soft-deleted nodes are excluded from exports by default. Pass `marrow export --include-trash` (or `?include_trash=true`) to include them; the manifest records `"include_trash": bool` so restore replays each node's `deleted_at`.
 

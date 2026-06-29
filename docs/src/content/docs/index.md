@@ -19,4 +19,4 @@ Marrow is a self-hosted, open-source knowledge base. Every workspace can be expo
 3. **Transparent format.** Bundles are plain Markdown + JSON in a zip.
 4. **Self-hosted.** Your data never leaves the infrastructure you control.
 
-[GitHub →](https://github.com/spmcgraw/marrow)
+[GitHub →](https://github.com/marrow-software/marrow)
