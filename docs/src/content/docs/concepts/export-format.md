@@ -19,7 +19,7 @@ The `marrow restore` CLI also accepts the legacy `freehold-export-*` prefix from
 ```
 bundle.zip
 ├── manifest.json
-├── pages/
+├── nodes/
 │   ├── {node-id}.md
 │   └── {node-id}.json
 ├── revisions/
@@ -31,24 +31,34 @@ bundle.zip
 └── links.json
 ```
 
+**Folder nodes** appear only in `manifest.json` — they have no files under `nodes/`. Only page-typed nodes get content files.
+
 ### `manifest.json`
 
-Contains workspace and org metadata, all entity IDs, and the bundle schema version. Schema is currently **v4** (Marrow 0.2+). Restore supports v1, v2, v3, and v4: older bundles are auto-upgraded — their legacy collection/page structure is mapped onto the new `nodes` tree on read. v4 manifests carry the full node tree (folders + pages), each node's `parent_id`, `position` (fractional index), and `deleted_at`.
+Contains workspace and org metadata, all entity IDs, and the bundle schema version. Schema is currently **v4** (Marrow 0.2+). Restore supports v1, v2, v3, and v4: older bundles are auto-upgraded — their legacy collection/page structure is mapped onto the new `nodes` tree on read.
 
-### `pages/`
+v4 manifests carry:
 
-Current state of every page-typed node.
+- The full **node tree** (folders + pages), each node's `parent_id`, `position` (fractional index), and `deleted_at`
+- **`node_properties`** — folder property schemas and page values
+- **`include_trash`** — whether soft-deleted nodes were included in the export
+
+### `nodes/`
+
+Current state of every **page-typed** node.
 
 - `{node-id}.md` — Markdown render of the current revision (always present).
 - `{node-id}.json` — canonical BlockNote JSON (present when the current revision is JSON-format).
 
 The Markdown is for humans. The JSON is what gets restored byte-for-byte.
 
+v3 bundles used a `pages/` directory with the same file naming; v4 renamed it to `nodes/` to match the unified node tree.
+
 ### `revisions/`
 
-The full append-only history. Each page-typed node has a subfolder containing every revision. Same `.md` + `.json` convention as `pages/`.
+The full append-only history. Each page-typed node has a subfolder containing every revision. Same `.md` + `.json` convention as `nodes/`.
 
-**Slim bundles** omit this directory entirely. The manifest sets `"slim": true` and `"revisions": []`. Restore recreates a single revision per page from the `pages/` content.
+**Slim bundles** omit this directory entirely. The manifest sets `"slim": true` and `"revisions": []`. Restore recreates a single revision per page from the `nodes/` content.
 
 CLI: `marrow export --slim`. API: `?slim=true`.
 
@@ -67,7 +77,7 @@ Every attachment, named by attachment ID with the original extension.
 
 ### `links.json`
 
-Internal node-to-node links, broken links, and orphaned pages. Used to reconstruct cross-references on restore.
+Internal node-to-node links, broken links, and orphaned nodes. Used to reconstruct cross-references on restore. The `orphaned_nodes` array lists nodes with no inbound links from other exported nodes.
 
 ## Bundle schema versions
 
@@ -75,8 +85,8 @@ Internal node-to-node links, broken links, and orphaned pages. Used to reconstru
 | --- | --- | --- |
 | v1 | Initial | Markdown-only revisions. |
 | v2 | — | Added `links.json`. |
-| v3 | 0.1 | Added `.json` files alongside `.md` for canonical BlockNote content. |
-| v4 | 0.2 (current) | Collapsed `collections` + `pages` into a single `nodes` tree (folders + pages); added `parent_id`, `position`, `deleted_at`, and `include_trash`. |
+| v3 | 0.1 | Added `.json` files alongside `.md` for canonical BlockNote content; content under `pages/`. |
+| v4 | 0.2 (current) | Collapsed `collections` + `pages` into a single `nodes` tree (folders + pages); content under `nodes/`; added `parent_id`, `position`, `deleted_at`, `include_trash`, and `node_properties`. |
 
 Restore is backward-compatible: any older bundle restores cleanly into a current Marrow workspace. v1/v2/v3 bundles are auto-upgraded — their legacy collection/page layout is mapped onto the v4 node tree on read.
 

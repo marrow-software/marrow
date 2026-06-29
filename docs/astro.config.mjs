@@ -31,7 +31,7 @@ export default defineConfig({
         },
       ],
       editLink: {
-        baseUrl: "https://github.com/spmcgraw/marrow/edit/main/docs/",
+        baseUrl: "https://github.com/marrow-software/marrow/edit/main/docs/",
       },
       sidebar: [
         {
