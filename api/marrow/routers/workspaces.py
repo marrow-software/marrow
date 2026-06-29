@@ -330,6 +330,7 @@ def estimate_workspace_export(
 def export_workspace_endpoint(
     workspace_id: UUID,
     slim: bool = False,
+    include_trash: bool = False,
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_workspace_role(OrgRole.VIEWER)),
 ):
@@ -354,6 +355,7 @@ def export_workspace_endpoint(
             storage=storage,
             output_path=Path(tmp),
             slim=slim,
+            include_trash=include_trash,
         )
         data = bundle_path.read_bytes()
 

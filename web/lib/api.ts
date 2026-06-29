@@ -125,9 +125,15 @@ export function getExportSizeEstimate(
   return apiFetch(`/api/workspaces/${workspaceId}/export/estimate`);
 }
 
-export function exportWorkspaceUrl(workspaceId: string, slim: boolean): string {
-  const params = slim ? "?slim=true" : "";
-  return `${getApiUrl()}/api/workspaces/${workspaceId}/export${params}`;
+export function exportWorkspaceUrl(
+  workspaceId: string,
+  options: { slim?: boolean; includeTrash?: boolean } = {}
+): string {
+  const params = new URLSearchParams();
+  if (options.slim) params.set("slim", "true");
+  if (options.includeTrash) params.set("include_trash", "true");
+  const query = params.toString();
+  return `${getApiUrl()}/api/workspaces/${workspaceId}/export${query ? `?${query}` : ""}`;
 }
 
 export async function restoreWorkspace(file: File): Promise<Workspace> {

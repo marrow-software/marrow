@@ -382,7 +382,7 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | GET/DELETE | /api/workspaces/{id} | Get / delete workspace | viewer/owner |
 | GET | /api/workspaces/{id}/tree | Full hierarchy (sidebar) | viewer |
 | GET | /api/workspaces/{id}/search?q= | Full-text search across workspace pages | viewer |
-| GET | /api/workspaces/{id}/export?slim=false | Download workspace as zip bundle | viewer |
+| GET | /api/workspaces/{id}/export?slim=false&include_trash=false | Download workspace as zip bundle | viewer |
 | GET | /api/workspaces/{id}/export/estimate | Pre-compression byte estimates for full & slim exports | viewer |
 | POST | /api/workspaces/restore | Restore a workspace from an uploaded export bundle zip | — |
 | GET/POST | /api/workspaces/{id}/spaces/ | List / create spaces | viewer/editor |

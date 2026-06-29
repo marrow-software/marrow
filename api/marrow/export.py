@@ -328,9 +328,8 @@ def _build_manifest(
         "revisions": revision_records,
         "attachments": attachment_records,
         "node_properties": node_properties or [],
+        "include_trash": include_trash,
     }
-    if include_trash:
-        manifest["include_trash"] = True
     return manifest
 
 
