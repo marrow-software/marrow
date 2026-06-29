@@ -27,6 +27,7 @@ function formatBytes(bytes: number): string {
 export function ExportDialog({ workspaceId, workspaceName }: Props) {
   const [open, setOpen] = useState(false);
   const [slim, setSlim] = useState(false);
+  const [includeTrash, setIncludeTrash] = useState(false);
   const [estimate, setEstimate] = useState<{ full_bytes: number; slim_bytes: number } | null>(null);
   const [loadingEstimate, setLoadingEstimate] = useState(false);
 
@@ -46,7 +47,7 @@ export function ExportDialog({ workspaceId, workspaceName }: Props) {
   }
 
   function handleDownload() {
-    const url = exportWorkspaceUrl(workspaceId, slim);
+    const url = exportWorkspaceUrl(workspaceId, { slim, includeTrash });
     window.location.href = url;
     setOpen(false);
   }
@@ -117,6 +118,22 @@ export function ExportDialog({ workspaceId, workspaceName }: Props) {
               </div>
             </label>
           </div>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={includeTrash}
+              onChange={(e) => setIncludeTrash(e.target.checked)}
+              className="mt-0.5"
+            />
+            <div>
+              <p className="text-sm font-medium">Include trash</p>
+              <p className="text-xs text-muted-foreground">
+                Export soft-deleted nodes with their <code className="text-xs">deleted_at</code>{" "}
+                timestamps so trash is preserved on restore.
+              </p>
+            </div>
+          </label>
 
           {slim && (
             <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5">

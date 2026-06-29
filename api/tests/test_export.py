@@ -5,6 +5,7 @@ Each test rolls back its transaction so the DB stays clean between runs.
 """
 
 import hashlib
+import io
 import json
 import os
 import zipfile
@@ -475,6 +476,7 @@ def test_include_trash_includes_deleted_nodes(session, tmp_path):
     with zipfile.ZipFile(result) as zf:
         manifest = json.loads(zf.read("manifest.json"))
     node_ids = {n["id"] for n in manifest["nodes"]}
+    assert manifest["include_trash"] is False
     assert str(live_node.id) in node_ids
     assert str(trashed_node.id) not in node_ids
 
@@ -489,8 +491,11 @@ def test_include_trash_includes_deleted_nodes(session, tmp_path):
     with zipfile.ZipFile(result2) as zf:
         manifest2 = json.loads(zf.read("manifest.json"))
     node_ids2 = {n["id"] for n in manifest2["nodes"]}
+    assert manifest2["include_trash"] is True
     assert str(live_node.id) in node_ids2
     assert str(trashed_node.id) in node_ids2
+    trashed_record = next(n for n in manifest2["nodes"] if n["id"] == str(trashed_node.id))
+    assert trashed_record["deleted_at"] is not None
 
 
 def test_export_excludes_descendants_of_trashed_folder(session, tmp_path):
@@ -708,3 +713,96 @@ def test_estimate_export_sizes(seeded, session):
     assert "slim_bytes" in sizes
     assert sizes["full_bytes"] >= sizes["slim_bytes"]
     assert sizes["slim_bytes"] >= 0
+
+
+# ---------------------------------------------------------------------------
+# API export endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def export_api_client(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from marrow.app import app
+    from marrow.auth import reset_oidc_config
+
+    monkeypatch.delenv("OIDC_ISSUER", raising=False)
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.setenv("SECRET_KEY", "test-secret")
+    reset_oidc_config()
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def test_api_export_include_trash_param(export_api_client, tmp_path, monkeypatch):
+    """GET /export?include_trash=true includes trashed nodes and sets manifest flag."""
+    import uuid
+    from datetime import datetime, timezone
+
+    from marrow.dependencies import get_db
+
+    monkeypatch.setenv("STORAGE_PATH", str(tmp_path))
+
+    suffix = uuid.uuid4().hex[:8]
+    db = next(get_db())
+    try:
+        org = Organization(slug=f"api-trash-export-org-{suffix}", name="API Trash Export Org")
+        db.add(org)
+        db.flush()
+
+        ws = Workspace(
+            org_id=org.id, slug=f"api-trash-export-ws-{suffix}", name="API Trash Export WS"
+        )
+        db.add(ws)
+        db.flush()
+
+        space = Space(workspace_id=ws.id, slug="sp", name="Space")
+        db.add(space)
+        db.flush()
+
+        live_node = Node(
+            space_id=space.id, parent_id=None, type="page", name="Live", slug="live", position="a0"
+        )
+        db.add(live_node)
+        db.flush()
+
+        rev = Revision(node_id=live_node.id, content="Live content.")
+        db.add(rev)
+        db.flush()
+        live_node.current_revision_id = rev.id
+        db.flush()
+
+        trashed_node = Node(
+            space_id=space.id,
+            parent_id=None,
+            type="page",
+            name="Trashed",
+            slug="trashed",
+            position="a1",
+            deleted_at=datetime.now(timezone.utc),
+        )
+        db.add(trashed_node)
+        db.flush()
+        db.commit()
+
+        default_res = export_api_client.get(f"/api/workspaces/{ws.id}/export")
+        assert default_res.status_code == 200
+        with zipfile.ZipFile(io.BytesIO(default_res.content)) as zf:
+            default_manifest = json.loads(zf.read("manifest.json"))
+        default_ids = {n["id"] for n in default_manifest["nodes"]}
+        assert default_manifest["include_trash"] is False
+        assert str(live_node.id) in default_ids
+        assert str(trashed_node.id) not in default_ids
+
+        trash_res = export_api_client.get(f"/api/workspaces/{ws.id}/export?include_trash=true")
+        assert trash_res.status_code == 200
+        with zipfile.ZipFile(io.BytesIO(trash_res.content)) as zf:
+            trash_manifest = json.loads(zf.read("manifest.json"))
+        trash_ids = {n["id"] for n in trash_manifest["nodes"]}
+        assert trash_manifest["include_trash"] is True
+        assert str(live_node.id) in trash_ids
+        assert str(trashed_node.id) in trash_ids
+        trashed_record = next(n for n in trash_manifest["nodes"] if n["id"] == str(trashed_node.id))
+        assert trashed_record["deleted_at"] is not None
+    finally:
+        db.rollback()
