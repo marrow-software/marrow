@@ -256,7 +256,8 @@ export function PageMenu({
           <DialogHeader>
             <DialogTitle>Archive this page?</DialogTitle>
             <DialogDescription>
-              &ldquo;{pageName}&rdquo; will be moved to trash.
+              Archiving moves &ldquo;{pageName}&rdquo; and everything nested under it to
+              trash.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
