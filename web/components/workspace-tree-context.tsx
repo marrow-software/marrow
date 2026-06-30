@@ -51,6 +51,28 @@ export function findNodeById(
   return null;
 }
 
+/** Post-archive navigation target: parent node, or workspace home when unknown. */
+export function archiveDestinationPath(
+  workspaceId: string,
+  page: { parent_id: string | null },
+  tree: WorkspaceTree | null,
+): string {
+  if (page.parent_id && tree) {
+    const parent = findNodeById(tree, page.parent_id);
+    if (parent) {
+      return `/w/${workspaceId}/n/${parent.id}/${parent.slug}`;
+    }
+  }
+  return `/w/${workspaceId}`;
+}
+
+export function countDescendants(node: NodeTreeItem): number {
+  return node.children.reduce(
+    (sum, child) => sum + 1 + countDescendants(child),
+    0,
+  );
+}
+
 /**
  * @deprecated v0.1 collection-based breadcrumb. Always returns null in v0.2 —
  * callers should migrate to findNodeBreadcrumb. Kept as a no-op for incremental

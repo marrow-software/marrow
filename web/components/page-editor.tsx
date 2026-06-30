@@ -19,7 +19,7 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   BlockNoteSchema,
@@ -39,7 +39,12 @@ import { calloutBlockSpec, calloutSlashMenuItem } from "@/components/editor/call
 import { mentionInlineContentSpec } from "@/components/editor/mention-inline-content";
 import { pageLinkSlashMenuItem } from "@/components/editor/page-link-slash-item";
 import { PropertyEditor } from "@/components/property-editor";
-import { useWorkspaceTree, findNodeById } from "@/components/workspace-tree-context";
+import {
+  useWorkspaceTree,
+  archiveDestinationPath,
+  countDescendants,
+  findNodeById,
+} from "@/components/workspace-tree-context";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +73,7 @@ import { CommentBubbleFab } from "@/components/comment-bubble-fab";
 import { useComments } from "@/hooks/use-comments";
 import {
   attachmentFileUrl,
+  deleteNode,
   listAttachments,
   listOrgMembers,
   searchWorkspace,
@@ -129,7 +135,6 @@ export function PageEditor({ initialPage }: Props) {
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [starred, setStarred] = useState(false);
   const { resolvedTheme } = useTheme();
-  const router = useRouter();
   const tree = useWorkspaceTree();
 
   // Extract workspaceId from the URL for page mention search
@@ -160,6 +165,8 @@ export function PageEditor({ initialPage }: Props) {
   const pendingContentRef = useRef(initialPage.content ?? "");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitializingRef = useRef(false);
+  const archivedRef = useRef(false);
+  const saveInFlightRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     titleRef.current = title;
@@ -201,6 +208,8 @@ export function PageEditor({ initialPage }: Props) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveNow = useCallback(async () => {
+    if (archivedRef.current) return;
+
     const currentTitle = titleRef.current;
     const currentContent = pendingContentRef.current;
 
@@ -209,21 +218,35 @@ export function PageEditor({ initialPage }: Props) {
       currentContent !== savedContentRef.current ? currentContent : undefined;
 
     if (!newTitle && newContent === undefined) return;
+    if (archivedRef.current) return;
 
     setStatus("saving");
+    const savePromise = (async () => {
+      try {
+        await updateNode(initialPage.id, {
+          name: newTitle,
+          content: newContent,
+          content_format: "json",
+        });
+        if (archivedRef.current) return;
+        savedTitleRef.current = currentTitle;
+        savedContentRef.current = currentContent;
+        setStatus("saved");
+        setTimeout(() => setStatus("idle"), 2000);
+      } catch (err) {
+        if (archivedRef.current) return;
+        toast.error(`Save failed: ${String(err)}`);
+        setStatus("error");
+      }
+    })();
+
+    saveInFlightRef.current = savePromise;
     try {
-      await updateNode(initialPage.id, {
-        name: newTitle,
-        content: newContent,
-        content_format: "json",
-      });
-      savedTitleRef.current = currentTitle;
-      savedContentRef.current = currentContent;
-      setStatus("saved");
-      setTimeout(() => setStatus("idle"), 2000);
-    } catch (err) {
-      toast.error(`Save failed: ${String(err)}`);
-      setStatus("error");
+      await savePromise;
+    } finally {
+      if (saveInFlightRef.current === savePromise) {
+        saveInFlightRef.current = null;
+      }
     }
   }, [initialPage.id]);
 
@@ -412,19 +435,39 @@ export function PageEditor({ initialPage }: Props) {
     }
   }
 
-  function handleArchived() {
-    if (!workspaceId) return;
-    const parentId = initialPage.parent_id;
-    if (parentId && tree) {
-      const parent = findNodeById(tree, parentId);
-      if (parent) {
-        router.push(`/w/${workspaceId}/n/${parent.id}/${parent.slug}`);
-        router.refresh();
-        return;
-      }
+  function cancelPendingSave() {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
-    router.push(`/w/${workspaceId}`);
-    router.refresh();
+  }
+
+  const nodeInTree = tree ? findNodeById(tree, initialPage.id) : null;
+  const archiveNestedCount =
+    nodeInTree != null ? countDescendants(nodeInTree) : undefined;
+
+  async function handleArchive() {
+    if (!workspaceId || archivedRef.current) return;
+
+    cancelPendingSave();
+    archivedRef.current = true;
+
+    if (saveInFlightRef.current) {
+      await saveInFlightRef.current.catch(() => {});
+    }
+
+    try {
+      await deleteNode(initialPage.id);
+      toast.success("Page archived");
+      const dest = archiveDestinationPath(workspaceId, initialPage, tree);
+      // Hard navigation: router.refresh() on the deleted URL re-fetches this page
+      // and 404s; a full load of the destination also refreshes the sidebar tree.
+      window.location.replace(dest);
+    } catch (err) {
+      archivedRef.current = false;
+      toast.error(`Couldn't archive page: ${String(err)}`);
+      throw err;
+    }
   }
 
   return (
@@ -437,7 +480,8 @@ export function PageEditor({ initialPage }: Props) {
         onShare={() => setShareOpen(true)}
         starred={starred}
         onToggleStar={handleToggleStar}
-        onArchived={handleArchived}
+        onArchive={handleArchive}
+        archiveNestedCount={archiveNestedCount}
       />
 
       <ShareDialog
