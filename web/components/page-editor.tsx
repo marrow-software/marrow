@@ -19,7 +19,7 @@ import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import {
   BlockNoteSchema,
@@ -39,7 +39,7 @@ import { calloutBlockSpec, calloutSlashMenuItem } from "@/components/editor/call
 import { mentionInlineContentSpec } from "@/components/editor/mention-inline-content";
 import { pageLinkSlashMenuItem } from "@/components/editor/page-link-slash-item";
 import { PropertyEditor } from "@/components/property-editor";
-import { useWorkspaceTree } from "@/components/workspace-tree-context";
+import { useWorkspaceTree, findNodeById } from "@/components/workspace-tree-context";
 import {
   Dialog,
   DialogContent,
@@ -129,6 +129,8 @@ export function PageEditor({ initialPage }: Props) {
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [starred, setStarred] = useState(false);
   const { resolvedTheme } = useTheme();
+  const router = useRouter();
+  const tree = useWorkspaceTree();
 
   // Extract workspaceId from the URL for page mention search
   const params = useParams<{ workspaceId?: string }>();
@@ -274,7 +276,6 @@ export function PageEditor({ initialPage }: Props) {
   // @-mention suggestion menu — queries workspace members
   // ---------------------------------------------------------------------------
 
-  const tree = useWorkspaceTree();
   const orgId = tree?.org_id ?? null;
   const membersCacheRef = useRef<{ orgId: string; members: OrgMembership[] } | null>(null);
 
@@ -411,6 +412,21 @@ export function PageEditor({ initialPage }: Props) {
     }
   }
 
+  function handleArchived() {
+    if (!workspaceId) return;
+    const parentId = initialPage.parent_id;
+    if (parentId && tree) {
+      const parent = findNodeById(tree, parentId);
+      if (parent) {
+        router.push(`/w/${workspaceId}/n/${parent.id}/${parent.slug}`);
+        router.refresh();
+        return;
+      }
+    }
+    router.push(`/w/${workspaceId}`);
+    router.refresh();
+  }
+
   return (
     <div className="relative flex h-full flex-col">
       <EditorHeader
@@ -421,6 +437,7 @@ export function PageEditor({ initialPage }: Props) {
         onShare={() => setShareOpen(true)}
         starred={starred}
         onToggleStar={handleToggleStar}
+        onArchived={handleArchived}
       />
 
       <ShareDialog
