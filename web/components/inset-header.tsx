@@ -13,7 +13,8 @@ interface Props {
   onShare: () => void;
   starred?: boolean;
   onToggleStar?: () => void;
-  onArchived?: () => void;
+  onArchive?: () => Promise<void>;
+  archiveNestedCount?: number;
 }
 
 const MOCK_AVATARS = [
@@ -76,7 +77,8 @@ export function EditorHeader({
   onShare,
   starred,
   onToggleStar,
-  onArchived,
+  onArchive,
+  archiveNestedCount,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -104,11 +106,12 @@ export function EditorHeader({
       <PageMenu
         nodeId={nodeId}
         pageName={pageTitle}
+        archiveNestedCount={archiveNestedCount}
         open={menuOpen}
         onOpenChange={setMenuOpen}
         starred={starred}
         onToggleStar={onToggleStar}
-        onArchived={onArchived}
+        onArchive={onArchive}
         onOpenDrawer={(which) => {
           setMenuOpen(false);
           onOpenDrawer(which);

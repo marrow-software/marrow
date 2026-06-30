@@ -23,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { deleteNode, getBacklinks, getWatchStatus, unwatchNode, watchNode } from "@/lib/api";
+import { getBacklinks, getWatchStatus, unwatchNode, watchNode } from "@/lib/api";
 
 export type PageMenuDrawer = "backlinks" | "history";
 
@@ -72,8 +72,10 @@ interface Props {
   nodeId?: string;
   /** Display name for archive confirmation. */
   pageName?: string;
-  /** Invoked after a successful archive (e.g. navigate away). */
-  onArchived?: () => void;
+  /** Nested pages/folders archived with this page; omit when unknown. */
+  archiveNestedCount?: number;
+  /** Soft-delete handler — caller owns navigation and save cancellation. */
+  onArchive?: () => Promise<void>;
 }
 
 export function PageMenu({
@@ -85,7 +87,8 @@ export function PageMenu({
   onToggleStar,
   nodeId,
   pageName = "this page",
-  onArchived,
+  archiveNestedCount = 0,
+  onArchive,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [watching, setWatching] = useState<boolean | null>(null);
@@ -139,16 +142,14 @@ export function PageMenu({
   }
 
   async function confirmArchive() {
-    if (!nodeId || archiveBusy) return;
+    if (!nodeId || archiveBusy || !onArchive) return;
     setArchiveBusy(true);
     try {
-      await deleteNode(nodeId);
+      await onArchive();
       setArchiveOpen(false);
       onOpenChange(false);
-      toast.success("Page archived");
-      onArchived?.();
     } catch {
-      toast.error("Couldn't archive page");
+      // onArchive shows the error toast
     } finally {
       setArchiveBusy(false);
     }
@@ -256,8 +257,19 @@ export function PageMenu({
           <DialogHeader>
             <DialogTitle>Archive this page?</DialogTitle>
             <DialogDescription>
-              Archiving moves &ldquo;{pageName}&rdquo; and everything nested under it to
-              trash.
+              {archiveNestedCount != null && archiveNestedCount > 0 ? (
+                <>
+                  Archiving moves &ldquo;{pageName}&rdquo; and {archiveNestedCount} nested{" "}
+                  {archiveNestedCount === 1 ? "item" : "items"} to trash.
+                </>
+              ) : archiveNestedCount === 0 ? (
+                <>Archiving moves &ldquo;{pageName}&rdquo; to trash.</>
+              ) : (
+                <>
+                  Archiving moves &ldquo;{pageName}&rdquo; and everything nested under it to
+                  trash.
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
