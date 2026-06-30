@@ -14,7 +14,16 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { getWatchStatus, unwatchNode, watchNode } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { deleteNode, getBacklinks, getWatchStatus, unwatchNode, watchNode } from "@/lib/api";
 
 export type PageMenuDrawer = "backlinks" | "history";
 
@@ -37,7 +46,7 @@ type Item =
     };
 
 const ITEMS: Item[] = [
-  { kind: "drawer", id: "backlinks", icon: LinkIcon, label: "Backlinks", meta: "0" },
+  { kind: "drawer", id: "backlinks", icon: LinkIcon, label: "Backlinks" },
   { kind: "drawer", id: "history", icon: History, label: "Version history" },
   { kind: "divider" },
   { kind: "action", id: "star", icon: Star, label: "Star", meta: "⌥S" },
@@ -61,6 +70,10 @@ interface Props {
   onToggleStar?: () => void;
   /** Node (page or folder) this menu acts on; enables the Watch toggle. */
   nodeId?: string;
+  /** Display name for archive confirmation. */
+  pageName?: string;
+  /** Invoked after a successful archive (e.g. navigate away). */
+  onArchived?: () => void;
 }
 
 export function PageMenu({
@@ -71,10 +84,15 @@ export function PageMenu({
   starred = false,
   onToggleStar,
   nodeId,
+  pageName = "this page",
+  onArchived,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [watching, setWatching] = useState<boolean | null>(null);
   const [watchBusy, setWatchBusy] = useState(false);
+  const [backlinkCount, setBacklinkCount] = useState<number | null>(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
 
   // Load the current watch state each time the menu opens so the toggle
   // reflects reality (it may have changed in another tab/session).
@@ -84,6 +102,17 @@ export function PageMenu({
     getWatchStatus(nodeId)
       .then((s) => !cancelled && setWatching(s.watching))
       .catch(() => !cancelled && setWatching(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, nodeId]);
+
+  useEffect(() => {
+    if (!open || !nodeId) return;
+    let cancelled = false;
+    getBacklinks(nodeId)
+      .then((links) => !cancelled && setBacklinkCount(links.length))
+      .catch(() => !cancelled && setBacklinkCount(null));
     return () => {
       cancelled = true;
     };
@@ -106,6 +135,22 @@ export function PageMenu({
       toast.error("Couldn't update watch status");
     } finally {
       setWatchBusy(false);
+    }
+  }
+
+  async function confirmArchive() {
+    if (!nodeId || archiveBusy) return;
+    setArchiveBusy(true);
+    try {
+      await deleteNode(nodeId);
+      setArchiveOpen(false);
+      onOpenChange(false);
+      toast.success("Page archived");
+      onArchived?.();
+    } catch {
+      toast.error("Couldn't archive page");
+    } finally {
+      setArchiveBusy(false);
     }
   }
 
@@ -153,9 +198,14 @@ export function PageMenu({
             }
 
             const isStar = item.kind === "action" && item.id === "star";
+            const isArchive = item.kind === "action" && item.id === "archive";
             const Icon = item.icon;
             const destructive = item.kind === "action" && item.destructive;
             const label = isStar ? (starred ? "Unstar" : "Star") : item.label;
+            const meta =
+              item.kind === "drawer" && item.id === "backlinks" && backlinkCount !== null
+                ? String(backlinkCount)
+                : item.meta;
 
             return (
               <button
@@ -168,6 +218,9 @@ export function PageMenu({
                   } else if (isStar && onToggleStar) {
                     onToggleStar();
                     onOpenChange(false);
+                  } else if (isArchive) {
+                    onOpenChange(false);
+                    setArchiveOpen(true);
                   } else {
                     toast.info(`${label} — coming soon`);
                     onOpenChange(false);
@@ -187,9 +240,9 @@ export function PageMenu({
                   }`}
                 />
                 <span className="flex-1">{label}</span>
-                {item.meta && (
+                {meta && (
                   <span className="font-mono text-[10px] text-muted-foreground">
-                    {item.meta}
+                    {meta}
                   </span>
                 )}
               </button>
@@ -197,6 +250,35 @@ export function PageMenu({
           })}
         </div>
       )}
+
+      <Dialog open={archiveOpen} onOpenChange={(next) => !archiveBusy && setArchiveOpen(next)}>
+        <DialogContent showCloseButton={!archiveBusy} className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Archive this page?</DialogTitle>
+            <DialogDescription>
+              &ldquo;{pageName}&rdquo; will be moved to trash.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={archiveBusy}
+              onClick={() => setArchiveOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={archiveBusy}
+              onClick={confirmArchive}
+            >
+              {archiveBusy ? "Archiving…" : "Archive"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
