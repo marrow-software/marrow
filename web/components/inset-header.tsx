@@ -13,6 +13,7 @@ interface Props {
   onShare: () => void;
   starred?: boolean;
   onToggleStar?: () => void;
+  onArchived?: () => void;
 }
 
 const MOCK_AVATARS = [
@@ -75,6 +76,7 @@ export function EditorHeader({
   onShare,
   starred,
   onToggleStar,
+  onArchived,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -101,10 +103,12 @@ export function EditorHeader({
 
       <PageMenu
         nodeId={nodeId}
+        pageName={pageTitle}
         open={menuOpen}
         onOpenChange={setMenuOpen}
         starred={starred}
         onToggleStar={onToggleStar}
+        onArchived={onArchived}
         onOpenDrawer={(which) => {
           setMenuOpen(false);
           onOpenDrawer(which);

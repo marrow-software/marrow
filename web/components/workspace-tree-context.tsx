@@ -40,6 +40,17 @@ export function findNodeBreadcrumb(
   return null;
 }
 
+export function findNodeById(
+  tree: WorkspaceTree,
+  nodeId: string,
+): NodeTreeItem | null {
+  for (const space of tree.spaces) {
+    const path = findPath(space.nodes, nodeId, []);
+    if (path) return path[path.length - 1];
+  }
+  return null;
+}
+
 /**
  * @deprecated v0.1 collection-based breadcrumb. Always returns null in v0.2 —
  * callers should migrate to findNodeBreadcrumb. Kept as a no-op for incremental
