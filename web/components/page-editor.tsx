@@ -167,6 +167,7 @@ export function PageEditor({ initialPage }: Props) {
   const isInitializingRef = useRef(false);
   const archivedRef = useRef(false);
   const saveInFlightRef = useRef<Promise<void> | null>(null);
+  const saveGenerationRef = useRef(0);
 
   useEffect(() => {
     titleRef.current = title;
@@ -221,6 +222,7 @@ export function PageEditor({ initialPage }: Props) {
     if (archivedRef.current) return;
 
     setStatus("saving");
+    const generation = ++saveGenerationRef.current;
     const savePromise = (async () => {
       try {
         await updateNode(initialPage.id, {
@@ -244,7 +246,7 @@ export function PageEditor({ initialPage }: Props) {
     try {
       await savePromise;
     } finally {
-      if (saveInFlightRef.current === savePromise) {
+      if (saveGenerationRef.current === generation) {
         saveInFlightRef.current = null;
       }
     }
@@ -447,7 +449,11 @@ export function PageEditor({ initialPage }: Props) {
     nodeInTree != null ? countDescendants(nodeInTree) : undefined;
 
   async function handleArchive() {
-    if (!workspaceId || archivedRef.current) return;
+    if (archivedRef.current) return;
+    if (!workspaceId) {
+      toast.error("Couldn't archive page: workspace not found");
+      throw new Error("workspaceId missing");
+    }
 
     cancelPendingSave();
     archivedRef.current = true;
