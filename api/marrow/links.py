@@ -3,8 +3,8 @@
 A page links to another node in two ways:
 
 * **Wiki-links** — a Markdown/BlockNote link whose href points at a node, e.g.
-  ``/w/{workspace}/pages/{node-id}``, ``/nodes/{node-id}``, or the export-relative
-  ``/pages/{node-id}``.
+  ``/w/{workspace}/n/{node-id}`` (app route), ``/w/{workspace}/pages/{node-id}``,
+  ``/nodes/{node-id}``, or the export-relative ``/pages/{node-id}``.
 * **`@` mentions** — a BlockNote ``mention`` inline element. User mentions carry
   a ``userId`` (not a node) and are ignored here; a mention that carries a
   ``nodeId`` prop is treated as a link for forward-compatibility.
@@ -35,8 +35,9 @@ _UUID = r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 # adversarial input (ReDoS). Requires Python 3.11+.
 _MD_HREF_RE = re.compile(r"\[(?>[^\]]*)\]\(([^)]+)\)")
 
-# Pull the node id out of a /pages/{id} or /nodes/{id} href (with or without a /w/{ws} prefix).
-_NODE_HREF_RE = re.compile(rf"/(?:pages|nodes)/({_UUID})(?:[/?#]|$)")
+# Pull the node id out of a /pages/{id}, /nodes/{id}, or /n/{id} href (with or
+# without a /w/{ws} prefix and optional slug suffix).
+_NODE_HREF_RE = re.compile(rf"/(?:pages|nodes|n)/({_UUID})(?:[/?#]|$)")
 
 
 def _href_to_node_id(href: str) -> uuid.UUID | None:

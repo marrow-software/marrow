@@ -50,6 +50,17 @@ class TestExtractLinkTargets:
         content = f"[link](/nodes/{tid})"
         assert extract_link_targets(content, "markdown") == {tid}
 
+    def test_markdown_app_n_route_href(self):
+        tid = uuid.uuid4()
+        ws = uuid.uuid4()
+        content = f"[link](/w/{ws}/n/{tid}/my-slug)"
+        assert extract_link_targets(content, "markdown") == {tid}
+
+    def test_markdown_n_route_without_workspace(self):
+        tid = uuid.uuid4()
+        content = f"[link](/n/{tid})"
+        assert extract_link_targets(content, "markdown") == {tid}
+
     def test_markdown_external_links_ignored(self):
         content = "[ext](https://example.com) and [anchor](#section)"
         assert extract_link_targets(content, "markdown") == set()
@@ -70,6 +81,23 @@ class TestExtractLinkTargets:
                         "type": "link",
                         "href": f"/w/ws/pages/{tid}",
                         "content": [{"type": "text", "text": "here"}],
+                    },
+                ],
+            }
+        ]
+        assert extract_link_targets(json.dumps(blocks), "json") == {tid}
+
+    def test_json_app_n_route_href(self):
+        tid = uuid.uuid4()
+        ws = uuid.uuid4()
+        blocks = [
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "link",
+                        "href": f"/w/{ws}/n/{tid}",
+                        "content": [{"type": "text", "text": "Dev Test"}],
                     },
                 ],
             }
