@@ -208,8 +208,22 @@ export function PageEditor({ initialPage }: Props) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveNow = useCallback(async () => {
+  const syncEditorToPending = useCallback(() => {
+    if (isInitializingRef.current) return;
+    pendingContentRef.current = JSON.stringify(editor.document);
+  }, [editor]);
+
+  const isPageDirty = useCallback(() => {
+    return (
+      titleRef.current !== savedTitleRef.current ||
+      pendingContentRef.current !== savedContentRef.current
+    );
+  }, []);
+
+  const persistPageChanges = useCallback(async (): Promise<void> => {
     if (archivedRef.current) return;
+
+    syncEditorToPending();
 
     const currentTitle = titleRef.current;
     const currentContent = pendingContentRef.current;
@@ -224,33 +238,41 @@ export function PageEditor({ initialPage }: Props) {
     setStatus("saving");
     const generation = ++saveGenerationRef.current;
     const savePromise = (async () => {
-      try {
-        await updateNode(initialPage.id, {
-          name: newTitle,
-          content: newContent,
-          content_format: "json",
-        });
-        if (archivedRef.current) return;
-        savedTitleRef.current = currentTitle;
-        savedContentRef.current = currentContent;
-        setStatus("saved");
-        setTimeout(() => setStatus("idle"), 2000);
-      } catch (err) {
-        if (archivedRef.current) return;
-        toast.error(`Save failed: ${String(err)}`);
-        setStatus("error");
-      }
+      await updateNode(initialPage.id, {
+        name: newTitle,
+        content: newContent,
+        content_format: "json",
+      });
+      if (archivedRef.current) return;
+      savedTitleRef.current = currentTitle;
+      savedContentRef.current = currentContent;
+      setStatus("saved");
+      setTimeout(() => setStatus("idle"), 2000);
     })();
 
     saveInFlightRef.current = savePromise;
     try {
       await savePromise;
+    } catch (err) {
+      if (!archivedRef.current) {
+        toast.error(`Save failed: ${String(err)}`);
+        setStatus("error");
+      }
+      throw err;
     } finally {
       if (saveGenerationRef.current === generation) {
         saveInFlightRef.current = null;
       }
     }
-  }, [initialPage.id]);
+  }, [initialPage.id, syncEditorToPending]);
+
+  const saveNow = useCallback(async () => {
+    try {
+      await persistPageChanges();
+    } catch {
+      // persistPageChanges already surfaced the error toast
+    }
+  }, [persistPageChanges]);
 
   const scheduleSave = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -444,27 +466,35 @@ export function PageEditor({ initialPage }: Props) {
     }
   }
 
+  /** Flush debounced edits and in-flight saves before destructive actions. */
+  const flushBeforeArchive = useCallback(async (): Promise<void> => {
+    syncEditorToPending();
+    cancelPendingSave();
+
+    if (saveInFlightRef.current) {
+      await saveInFlightRef.current;
+    }
+
+    syncEditorToPending();
+    if (isPageDirty()) {
+      await persistPageChanges();
+    }
+  }, [isPageDirty, persistPageChanges, syncEditorToPending]);
+
   const nodeInTree = tree ? findNodeById(tree, initialPage.id) : null;
   const archiveNestedCount =
     nodeInTree != null ? countDescendants(nodeInTree) : undefined;
 
   async function handleArchive() {
-    if (archivedRef.current) return;
+    if (archivedRef.current) {
+      throw new Error("Archive already in progress");
+    }
     if (!workspaceId) {
       toast.error("Couldn't archive page: workspace not found");
       throw new Error("workspaceId missing");
     }
 
-    cancelPendingSave();
-
-    if (saveInFlightRef.current) {
-      try {
-        await saveInFlightRef.current;
-      } catch {
-        // saveNow already surfaced the error — don't archive over a failed save.
-        throw new Error("Pending save failed");
-      }
-    }
+    await flushBeforeArchive();
 
     archivedRef.current = true;
 
