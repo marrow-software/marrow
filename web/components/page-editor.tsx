@@ -166,8 +166,7 @@ export function PageEditor({ initialPage }: Props) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInitializingRef = useRef(false);
   const archivedRef = useRef(false);
-  const saveInFlightRef = useRef<Promise<void> | null>(null);
-  const saveGenerationRef = useRef(0);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     titleRef.current = title;
@@ -223,47 +222,46 @@ export function PageEditor({ initialPage }: Props) {
   const persistPageChanges = useCallback(async (): Promise<void> => {
     if (archivedRef.current) return;
 
-    syncEditorToPending();
-
-    const currentTitle = titleRef.current;
-    const currentContent = pendingContentRef.current;
-
-    const newTitle = currentTitle !== savedTitleRef.current ? currentTitle : undefined;
-    const newContent =
-      currentContent !== savedContentRef.current ? currentContent : undefined;
-
-    if (!newTitle && newContent === undefined) return;
-    if (archivedRef.current) return;
-
-    setStatus("saving");
-    const generation = ++saveGenerationRef.current;
-    const savePromise = (async () => {
-      await updateNode(initialPage.id, {
-        name: newTitle,
-        content: newContent,
-        content_format: "json",
-      });
+    const doSave = async () => {
       if (archivedRef.current) return;
-      savedTitleRef.current = currentTitle;
-      savedContentRef.current = currentContent;
-      setStatus("saved");
-      setTimeout(() => setStatus("idle"), 2000);
-    })();
 
-    saveInFlightRef.current = savePromise;
-    try {
-      await savePromise;
-    } catch (err) {
-      if (!archivedRef.current) {
-        toast.error(`Save failed: ${String(err)}`);
-        setStatus("error");
+      syncEditorToPending();
+
+      const currentTitle = titleRef.current;
+      const currentContent = pendingContentRef.current;
+
+      const newTitle = currentTitle !== savedTitleRef.current ? currentTitle : undefined;
+      const newContent =
+        currentContent !== savedContentRef.current ? currentContent : undefined;
+
+      if (!newTitle && newContent === undefined) return;
+      if (archivedRef.current) return;
+
+      setStatus("saving");
+      try {
+        await updateNode(initialPage.id, {
+          name: newTitle,
+          content: newContent,
+          content_format: "json",
+        });
+        if (archivedRef.current) return;
+        savedTitleRef.current = currentTitle;
+        savedContentRef.current = currentContent;
+        setStatus("saved");
+        setTimeout(() => setStatus("idle"), 2000);
+      } catch (err) {
+        if (!archivedRef.current) {
+          toast.error(`Save failed: ${String(err)}`);
+          setStatus("error");
+        }
+        throw err;
       }
-      throw err;
-    } finally {
-      if (saveGenerationRef.current === generation) {
-        saveInFlightRef.current = null;
-      }
-    }
+    };
+
+    const chained = saveChainRef.current.then(doSave, doSave);
+    // Keep the chain alive after a failure so later saves can run.
+    saveChainRef.current = chained.catch(() => {});
+    await chained;
   }, [initialPage.id, syncEditorToPending]);
 
   const saveNow = useCallback(async () => {
@@ -466,19 +464,16 @@ export function PageEditor({ initialPage }: Props) {
     }
   }
 
-  /** Flush debounced edits and in-flight saves before destructive actions. */
+  /** Flush debounced edits and all queued saves before destructive actions. */
   const flushBeforeArchive = useCallback(async (): Promise<void> => {
     syncEditorToPending();
     cancelPendingSave();
 
-    if (saveInFlightRef.current) {
-      await saveInFlightRef.current;
-    }
-
-    syncEditorToPending();
     if (isPageDirty()) {
       await persistPageChanges();
     }
+
+    await saveChainRef.current;
   }, [isPageDirty, persistPageChanges, syncEditorToPending]);
 
   const nodeInTree = tree ? findNodeById(tree, initialPage.id) : null;
