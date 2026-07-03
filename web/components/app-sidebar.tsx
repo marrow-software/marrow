@@ -710,6 +710,7 @@ function PagesPanel({
         />
       )}
       <DndContext
+        id={`marrow-sidebar-${tree.id}`}
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={onDragStart}
