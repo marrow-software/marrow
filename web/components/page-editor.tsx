@@ -456,11 +456,17 @@ export function PageEditor({ initialPage }: Props) {
     }
 
     cancelPendingSave();
-    archivedRef.current = true;
 
     if (saveInFlightRef.current) {
-      await saveInFlightRef.current.catch(() => {});
+      try {
+        await saveInFlightRef.current;
+      } catch {
+        // saveNow already surfaced the error — don't archive over a failed save.
+        throw new Error("Pending save failed");
+      }
     }
+
+    archivedRef.current = true;
 
     try {
       await deleteNode(initialPage.id);
