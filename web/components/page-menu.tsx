@@ -87,7 +87,7 @@ export function PageMenu({
   onToggleStar,
   nodeId,
   pageName = "this page",
-  archiveNestedCount = 0,
+  archiveNestedCount,
   onArchive,
 }: Props) {
   const wrapperRef = useRef<HTMLDivElement>(null);
