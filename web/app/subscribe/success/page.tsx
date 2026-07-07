@@ -47,12 +47,11 @@ function SuccessInner() {
         try {
           const result = await reconcileSubscription(orgId);
           if (result.has_active_subscription) {
-            const path = await postGateRedirectPath();
-            router.replace(path);
+            router.replace(await postGateRedirectPath());
             return;
           }
         } catch {
-          // transient API error — retry
+          // transient reconcile API error — retry
         }
         await new Promise((r) => setTimeout(r, RETRY_MS));
       }
