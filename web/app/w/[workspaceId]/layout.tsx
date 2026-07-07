@@ -31,6 +31,11 @@ export default async function WorkspaceLayout({ children, params }: Props) {
   const userMembership = members?.find((m) => m.user_id === auth?.user?.id) ?? null;
   const userRole = userMembership?.role ?? null;
 
+  // Gate order: onboarding → subscription (same as /home and /auth/callback).
+  if (auth?.needs_onboarding) {
+    redirect("/onboarding");
+  }
+
   // Workspace-entry subscription gate: gate on *this* workspace's org. An owner
   // of an unsubscribed org is sent to checkout; a non-owner sees a notice.
   // has_active_subscription already accounts for SAAS_MODE off + enterprise.

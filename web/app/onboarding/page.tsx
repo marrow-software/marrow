@@ -64,15 +64,16 @@ export default function OnboardingPage() {
     setError(null);
     try {
       await completeOnboarding(org.id, name.trim());
-      const status = await getAuthStatus();
-      const path = status.has_payable_unsubscribed_org
-        ? "/subscribe"
-        : await postGateRedirectPath();
-      router.replace(path);
     } catch (err) {
       setBusy(false);
       setError(err instanceof Error ? err.message : "Failed to save organization name");
+      return;
     }
+    const status = await getAuthStatus();
+    const path = status.has_payable_unsubscribed_org
+      ? "/subscribe"
+      : await postGateRedirectPath();
+    router.replace(path);
   }
 
   if (loading) {
