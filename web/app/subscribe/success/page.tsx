@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createPortalSession, listOrgs, reconcileSubscription } from "@/lib/api";
+import { postGateRedirectPath } from "@/lib/post-gate-redirect";
 import { Button } from "@/components/ui/button";
 
 // Stripe redirects back here before the webhook is guaranteed to have landed.
@@ -46,7 +47,8 @@ function SuccessInner() {
         try {
           const result = await reconcileSubscription(orgId);
           if (result.has_active_subscription) {
-            router.replace("/home");
+            const path = await postGateRedirectPath();
+            router.replace(path);
             return;
           }
         } catch {

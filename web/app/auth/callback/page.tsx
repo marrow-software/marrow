@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getAuthStatus } from "@/lib/api";
+import { postGateRedirectPath } from "@/lib/post-gate-redirect";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function AuthCallbackPage() {
         } else if (status.has_payable_unsubscribed_org) {
           router.replace("/subscribe");
         } else {
-          router.replace("/home");
+          postGateRedirectPath().then((path) => router.replace(path));
         }
       })
       .catch(() => {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { completeOnboarding, getAuthStatus, listOrgs } from "@/lib/api";
+import { postGateRedirectPath } from "@/lib/post-gate-redirect";
 import type { Organization } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,10 @@ export default function OnboardingPage() {
           return;
         }
         if (!status.needs_onboarding) {
-          router.replace(status.has_payable_unsubscribed_org ? "/subscribe" : "/home");
+          const path = status.has_payable_unsubscribed_org
+            ? "/subscribe"
+            : await postGateRedirectPath();
+          router.replace(path);
           return;
         }
         const orgs = await listOrgs();
@@ -61,7 +65,10 @@ export default function OnboardingPage() {
     try {
       await completeOnboarding(org.id, name.trim());
       const status = await getAuthStatus();
-      router.replace(status.has_payable_unsubscribed_org ? "/subscribe" : "/home");
+      const path = status.has_payable_unsubscribed_org
+        ? "/subscribe"
+        : await postGateRedirectPath();
+      router.replace(path);
     } catch (err) {
       setBusy(false);
       setError(err instanceof Error ? err.message : "Failed to save organization name");
