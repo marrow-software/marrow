@@ -202,6 +202,7 @@ marrow/
 │   │   ├── storage.py                # StorageAdapter ABC + LocalFilesystemAdapter
 │   │   ├── export.py                 # Export workspace → zip bundle
 │   │   ├── restore.py                # Restore workspace ← zip bundle
+│   │   ├── provisioning.py           # Default workspace + space for personal org (#241)
 │   │   ├── cli.py                    # Typer CLI (export, restore, reset-org-billing)
 │   │   └── routers/
 │   │       ├── auth.py               # OIDC login/callback/me/logout + personal org creation
@@ -489,7 +490,7 @@ Marrow supports three authentication methods, checked in priority order:
 2. **API key** (`X-API-Key` header): Static key matching `API_KEY` env var. Used by CLI and scripts. **Bypasses all RBAC checks** (superuser equivalent).
 3. **Anonymous**: When neither OIDC nor API key is configured, all requests are allowed (dev mode). **Bypasses all RBAC checks**.
 
-**OIDC flow**: The backend is the OIDC Relying Party. `GET /api/auth/login` redirects to the IdP. `GET /api/auth/callback` exchanges the code, upserts the user in the `users` table, claims any pending org memberships matching the user's email, auto-creates a personal org if the user has no memberships, and sets an httpOnly session cookie. The `COOKIE_DOMAIN` env var controls the cookie domain (set to `localhost` for dev so the cookie is shared between `:3000` and `:8000`).
+**OIDC flow**: The backend is the OIDC Relying Party. `GET /api/auth/login` redirects to the IdP. `GET /api/auth/callback` exchanges the code, upserts the user in the `users` table, claims any pending org memberships matching the user's email, auto-creates a personal org if the user has no memberships (also provisioning one default workspace + space via `provisioning.py` — explicit org-create and restore paths do not), and sets an httpOnly session cookie. The `COOKIE_DOMAIN` env var controls the cookie domain (set to `localhost` for dev so the cookie is shared between `:3000` and `:8000`).
 
 **RBAC**: Org membership with roles (owner/editor/viewer) enforced on all data routes. Role is resolved by following the resource chain (node → space → workspace → org → membership). Dependency factories in `rbac.py` handle resolution for each resource level.
 
@@ -497,17 +498,18 @@ Marrow supports three authentication methods, checked in priority order:
 
 ### Subscriptions & Billing (#208, #214)
 
-Post-login flow: **login → onboarding gate → subscription gate → global `/home`**.
+Post-login flow: **login → onboarding gate → subscription gate → `/home` or sole workspace (`/w/{id}`)**.
 
+- **First-run provisioning** (#241): When the OIDC callback auto-creates a personal org, `provision_default_workspace_and_space()` also creates one workspace (`Main` / `main`) and one default space. Explicit `POST /api/orgs` and `marrow restore` do not auto-provision. Re-login is safe — provisioning runs only inside the `not has_memberships` block.
 - **Gate model** — "active subscription" is a property of the **org** (`marrow/subscriptions.py`, the single source of truth). `is_org_active(tier, subscription_status)` is True when `SAAS_MODE` is off (self-hosted is never gated), the tier is `enterprise`, or `subscription_status ∈ {trialing, active}`. `is_saas_mode()` reads `SAAS_MODE` dynamically.
 - **`organizations.subscription_status`** (`none | trialing | active | past_due | canceled`, default `none`) is written by the Stripe webhook **and** the reconcile endpoint — both go through the shared `_apply_subscription(org, subscription)` write path in `routers/billing.py`. `OrganizationRead` exposes `tier`, `subscription_status`, and the computed `has_active_subscription`. `AuthStatus.has_payable_unsubscribed_org` and `AuthStatus.needs_onboarding` (computed in `/api/auth/me` over the user's *owned* orgs) let the post-login gates be one round trip. **Billing and onboarding fields are never exported** (the restore round-trip is unaffected).
 - **Reconcile** (#214): `POST /api/billing/{oid}/reconcile` (owner) pulls the org's latest subscription from Stripe (`Subscription.list(customer=…, status="all", limit=1)`) and persists it — the webhook-independent self-heal that `/subscribe/success` relies on. Every webhook early-return logs a `logger.warning` (missing fields, unknown customer/org, unrecognized price); failures are never silent.
 - **Onboarding** (#214): `organizations.onboarded_at` is NULL only for the auto-created personal org (explicitly created and restored orgs are stamped immediately; existing rows were backfilled to `created_at`). `POST /api/orgs/{oid}/onboard {name}` sets name + `onboarded_at` atomically. `marrow reset-org-billing <slug>` resets billing + onboarding state for repeatable testing (never touches Stripe) — see `references/deploy-runbook.md` for the incognito test process.
 - **Webhook** (`routers/billing.py`): `checkout.session.completed` → status from the Stripe subscription (trial → `trialing`) + confirmation email; `customer.subscription.updated` → mapped status; `…deleted` → `canceled`; `invoice.payment_failed` → `past_due`. `/checkout` takes a **JSON body** (`{tier, interval}`), adds a 14-day trial, and redirects to `/subscribe/success?org=` / `/subscribe?org=&canceled=1`.
 - **Email** (`marrow/email.py`): `send_email(to, subject, html)` via the Resend REST API, sender `hello@marrow.so`. Best-effort — never raises, never blocks the webhook 200; skipped when `RESEND_API_KEY` is unset.
-- **Gate enforcement (frontend)**: `app/auth/callback` routes in order — `/onboarding` (owner of an un-onboarded org) → `/subscribe` (owner of an unsubscribed org) → `/home`; `app/home/layout.tsx` re-asserts the same order (defense in depth); `app/w/[workspaceId]/layout.tsx` gates on *that* workspace's org (owner → `/subscribe?org=`, member → notice).
-- **Success page (#214)**: `app/subscribe/success` calls `reconcileSubscription(orgId)` with bounded retries; active → `/home`, exhausted retries → a terminal "couldn't confirm payment" state with Retry + billing-portal + support links. It **never** auto-forwards to `/home` while the org is inactive (that's what caused the `/subscribe → /home → /subscribe` loop).
-- **Onboarding page (#214)**: `app/onboarding/page.tsx` pre-fills the org name, submits via `completeOnboarding`, then continues to `/subscribe` or `/home` per the subscription gate. Org settings has a Name field (`updateOrg({name})`).
+- **Gate enforcement (frontend)**: `app/auth/callback` routes in order — `/onboarding` (owner of an un-onboarded org) → `/subscribe` (owner of an unsubscribed org) → `postGateRedirectPath()` (`/w/{id}` when the user has exactly one workspace, else `/home`); `app/home/layout.tsx` re-asserts the same order (defense in depth); `app/w/[workspaceId]/layout.tsx` gates on *that* workspace's org (owner → `/subscribe?org=`, member → notice).
+- **Success page (#214)**: `app/subscribe/success` calls `reconcileSubscription(orgId)` with bounded retries; active → `postGateRedirectPath()`, exhausted retries → a terminal "couldn't confirm payment" state with Retry + billing-portal + support links. It **never** auto-forwards to `/home` while the org is inactive (that's what caused the `/subscribe → /home → /subscribe` loop).
+- **Onboarding page (#214)**: `app/onboarding/page.tsx` pre-fills the org name, submits via `completeOnboarding`, then continues to `/subscribe` or `postGateRedirectPath()` per the subscription gate. Org settings has a Name field (`updateOrg({name})`).
 
 ### Frontend Patterns
 
