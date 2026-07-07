@@ -143,7 +143,9 @@ async def callback(request: Request):
     session_jwt = create_session_jwt(user_id, user_email, user_name, oidc_id_token=oidc_id_token)
     cookie_params = make_session_cookie_params()
 
-    response = RedirectResponse(url=config.frontend_url, status_code=302)
+    # Frontend gate routing (onboarding → subscribe → workspace) lives at /auth/callback.
+    post_login_url = f"{config.frontend_url.rstrip('/')}/auth/callback"
+    response = RedirectResponse(url=post_login_url, status_code=302)
     response.set_cookie(value=session_jwt, **cookie_params)
     return response
 
@@ -190,11 +192,10 @@ def _owner_gate_flags(user_id: uuid.UUID) -> tuple[bool, bool]:
     """Post-login gate flags over the orgs the user owns.
 
     Returns ``(has_payable_unsubscribed_org, needs_onboarding)``. Both drive
-    the post-login flow (onboarding → subscription → home) and are always
-    False in self-hosted mode (``SAAS_MODE`` off skips both gates).
+    the post-login flow (onboarding → subscription → home). The subscription
+    gate is SaaS-only; onboarding runs whenever the user owns an org with
+    ``onboarded_at`` unset (typically the auto-created personal org).
     """
-    if not is_saas_mode():
-        return False, False
     db = next(get_db())
     try:
         owned_orgs = (
@@ -206,9 +207,11 @@ def _owner_gate_flags(user_id: uuid.UUID) -> tuple[bool, bool]:
             )
             .all()
         )
-        has_payable = any(
-            not is_org_active(org.tier, org.subscription_status) for org in owned_orgs
-        )
+        has_payable = False
+        if is_saas_mode():
+            has_payable = any(
+                not is_org_active(org.tier, org.subscription_status) for org in owned_orgs
+            )
         needs_onboarding = any(org.onboarded_at is None for org in owned_orgs)
         return has_payable, needs_onboarding
     finally:

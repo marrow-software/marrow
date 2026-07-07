@@ -57,7 +57,7 @@ export function GlobalChrome({ user, workspaces, orgs, unreadCount }: Props) {
 
       <div className="flex items-center gap-2">
         {/* Workspace switcher */}
-        <details className="group relative">
+        <details name="global-chrome-menu" className="group relative">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
             <LayoutGrid className="h-4 w-4" />
             Switch workspace
@@ -95,7 +95,7 @@ export function GlobalChrome({ user, workspaces, orgs, unreadCount }: Props) {
         </details>
 
         {/* User menu */}
-        <details className="group relative">
+        <details name="global-chrome-menu" className="group relative">
           <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md px-2 py-1.5 hover:bg-muted">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
               {(user?.name || user?.email || "?").charAt(0).toUpperCase()}

@@ -177,4 +177,11 @@ def test_gate_flags_off_in_self_hosted_mode(db, monkeypatch):
     org = _seed_org(db)
     user = _seed_owner(db, org)
 
-    assert auth_router._owner_gate_flags(user.id) == (False, False)
+    has_payable, needs_onboarding = auth_router._owner_gate_flags(user.id)
+    assert has_payable is False
+    assert needs_onboarding is True
+
+    orgs_router.onboard_org(org.id, OrganizationOnboard(name="Acme"), db=db, auth=None)
+    has_payable, needs_onboarding = auth_router._owner_gate_flags(user.id)
+    assert has_payable is False
+    assert needs_onboarding is False
