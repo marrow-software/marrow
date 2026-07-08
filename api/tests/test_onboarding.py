@@ -9,11 +9,11 @@ import pytest
 from alembic.config import Config
 from fastapi import HTTPException
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from alembic import command
-from marrow.models import Organization, OrgMembership, OrgRole, User
+from marrow.models import Organization, OrgMembership, OrgRole, User, Workspace
 from marrow.routers import auth as auth_router
 from marrow.routers import organizations as orgs_router
 from marrow.schemas import OrganizationCreate, OrganizationOnboard, OrganizationUpdate
@@ -103,6 +103,8 @@ def test_onboard_sets_name_and_onboarded_at(db):
 
     assert result.name == "Real Name"
     assert result.onboarded_at is not None
+    workspaces = db.scalars(select(Workspace).where(Workspace.org_id == org.id)).all()
+    assert len(workspaces) == 1
 
 
 def test_onboard_rejects_empty_name(db):

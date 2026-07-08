@@ -22,7 +22,6 @@ from ..auth import (
 )
 from ..dependencies import get_db
 from ..models import Organization, OrgMembership, OrgRole, User
-from ..provisioning import provision_default_workspace_and_space
 from ..schemas import AuthStatus, UserRead
 from ..subscriptions import is_org_active, is_saas_mode
 
@@ -128,7 +127,6 @@ async def callback(request: Request):
                     role=OrgRole.OWNER.value,
                 )
             )
-            provision_default_workspace_and_space(db, personal_org.id)
 
         db.commit()
         db.refresh(user)

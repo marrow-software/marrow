@@ -21,8 +21,12 @@ def _unique_workspace_slug(db: Session, base: str) -> str:
 def provision_default_workspace_and_space(
     db: Session, org_id: uuid.UUID
 ) -> tuple[Workspace, Space]:
-    """Create one default workspace and space for a newly auto-created personal org."""
-    ws_slug = _unique_workspace_slug(db, "main")
+    """Create one default workspace and space for a newly onboarded personal org.
+
+    Slug is derived from ``org_id`` so concurrent first-time signups cannot race
+    on a shared ``main`` slug at commit time.
+    """
+    ws_slug = _unique_workspace_slug(db, f"main-{org_id.hex}")
     ws = Workspace(org_id=org_id, slug=ws_slug, name="Main")
     db.add(ws)
     db.flush()
