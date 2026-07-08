@@ -8,7 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, verify_auth
-from ..models import Organization, OrgMembership, OrgRole, User
+from ..models import Organization, OrgMembership, OrgRole, User, Workspace
+from ..provisioning import provision_default_workspace_and_space
 from ..rbac import require_org_role
 from ..schemas import (
     OrganizationCreate,
@@ -128,9 +129,19 @@ def onboard_org(
     name = body.name.strip()
     if not name:
         raise HTTPException(422, "Organization name cannot be empty")
+    first_onboard = org.onboarded_at is None
     org.name = name
-    if org.onboarded_at is None:
+    if first_onboard:
         org.onboarded_at = func.now()
+        db.flush()
+        has_workspace = (
+            db.execute(
+                select(Workspace).where(Workspace.org_id == org_id).limit(1)
+            ).scalar_one_or_none()
+            is not None
+        )
+        if not has_workspace:
+            provision_default_workspace_and_space(db, org.id)
     db.commit()
     db.refresh(org)
     return org

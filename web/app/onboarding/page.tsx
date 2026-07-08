@@ -69,11 +69,16 @@ export default function OnboardingPage() {
       setError(err instanceof Error ? err.message : "Failed to save organization name");
       return;
     }
-    const status = await getAuthStatus();
-    const path = status.has_payable_unsubscribed_org
-      ? "/subscribe"
-      : await postGateRedirectPath();
-    router.replace(path);
+    try {
+      const status = await getAuthStatus();
+      const path = status.has_payable_unsubscribed_org
+        ? "/subscribe"
+        : await postGateRedirectPath();
+      router.replace(path);
+    } catch {
+      setBusy(false);
+      setError("Organization saved, but we couldn't continue. Try refreshing the page.");
+    }
   }
 
   if (loading) {

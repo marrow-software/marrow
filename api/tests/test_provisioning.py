@@ -83,7 +83,7 @@ def test_provision_creates_workspace_and_space(db):
 
     assert ws.org_id == org.id
     assert ws.name == "Main"
-    assert ws.slug == "main"
+    assert ws.slug == f"main-{org.id.hex}"
     assert space.workspace_id == ws.id
     assert space.slug == "main"
     assert space.name == "Main"
@@ -91,17 +91,18 @@ def test_provision_creates_workspace_and_space(db):
 
 def test_provision_workspace_slug_collision(db):
     org = _seed_org(db)
-    db.add(Workspace(org_id=org.id, slug="main", name="Existing"))
+    colliding = f"main-{org.id.hex}"
+    db.add(Workspace(org_id=org.id, slug=colliding, name="Existing"))
     db.flush()
 
     ws, _space = provision_default_workspace_and_space(db, org.id)
 
-    assert ws.slug != "main"
-    assert ws.slug.startswith("main-")
+    assert ws.slug != colliding
+    assert ws.slug.startswith(f"main-{org.id.hex}")
 
 
 def test_provision_is_idempotent_per_call_but_not_guarded(db):
-    """Each call creates new rows — auth callback must only call once."""
+    """Each call creates new rows — onboard must only provision when none exist."""
     org = _seed_org(db)
     provision_default_workspace_and_space(db, org.id)
     provision_default_workspace_and_space(db, org.id)
@@ -122,8 +123,10 @@ def test_create_org_does_not_provision(db):
     assert workspaces == []
 
 
-def test_personal_org_simulation_provisions_once(db):
-    """Mirror auth callback: new user with no memberships gets org + ws + space."""
+def test_personal_org_signup_does_not_provision_until_onboard(db):
+    """Auth callback creates org only; workspace is provisioned on first /onboard."""
+    from marrow.schemas import OrganizationOnboard
+
     user = User(
         oidc_issuer="https://test.example.com",
         oidc_subject=uuid.uuid4().hex,
@@ -132,11 +135,6 @@ def test_personal_org_simulation_provisions_once(db):
     )
     db.add(user)
     db.flush()
-
-    has_memberships = (
-        db.query(OrgMembership).filter(OrgMembership.user_id == user.id).first()
-    ) is not None
-    assert has_memberships is False
 
     org = Organization(name="New User's Space", slug=f"user-{uuid.uuid4().hex[:6]}")
     db.add(org)
@@ -149,7 +147,12 @@ def test_personal_org_simulation_provisions_once(db):
             role=OrgRole.OWNER.value,
         )
     )
-    provision_default_workspace_and_space(db, org.id)
+    db.flush()
+
+    workspaces = db.scalars(select(Workspace).where(Workspace.org_id == org.id)).all()
+    assert workspaces == []
+
+    orgs_router.onboard_org(org.id, OrganizationOnboard(name="Acme"), db=db, auth=None)
 
     workspaces = db.scalars(select(Workspace).where(Workspace.org_id == org.id)).all()
     assert len(workspaces) == 1
