@@ -9,14 +9,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 /**
- * First-run onboarding: name the auto-created organization. Shown when
- * AuthStatus.needs_onboarding is true (the user owns an org with
+ * First-run onboarding: name the auto-created org (solo-first copy in the UI).
+ * Shown when AuthStatus.needs_onboarding is true (the user owns an org with
  * onboarded_at unset). Gate order is onboarding → subscription → home.
  */
+function namePlaceholder(userName: string | undefined): string {
+  const first = userName?.trim().split(/\s+/)[0];
+  return first || "My knowledge";
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [org, setOrg] = useState<Organization | null>(null);
   const [name, setName] = useState("");
+  const [placeholder, setPlaceholder] = useState("My knowledge");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +33,7 @@ export default function OnboardingPage() {
       try {
         const status = await getAuthStatus();
         if (cancelled) return;
+        setPlaceholder(namePlaceholder(status.user?.name));
         if (!status.authenticated) {
           router.replace("/login");
           return;
@@ -66,7 +73,7 @@ export default function OnboardingPage() {
       await completeOnboarding(org.id, name.trim());
     } catch (err) {
       setBusy(false);
-      setError(err instanceof Error ? err.message : "Failed to save organization name");
+      setError(err instanceof Error ? err.message : "Couldn't save your name. Try again.");
       return;
     }
     try {
@@ -77,7 +84,7 @@ export default function OnboardingPage() {
       router.replace(path);
     } catch {
       setBusy(false);
-      setError("Organization saved, but we couldn't continue. Try refreshing the page.");
+      setError("Saved, but we couldn't continue. Try refreshing the page.");
     }
   }
 
@@ -93,10 +100,9 @@ export default function OnboardingPage() {
     <div className="flex min-h-screen items-center justify-center px-6">
       <form onSubmit={handleSubmit} className="w-full max-w-md space-y-6">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight">Name your organization</h1>
+          <h1 className="text-2xl font-bold tracking-tight">What should we call your Marrow?</h1>
           <p className="text-muted-foreground text-sm">
-            This is how your team&apos;s workspace will appear in Marrow. You can change it
-            anytime in organization settings.
+            This is your private home for notes and docs. You can invite others later.
           </p>
         </div>
         <div className="space-y-2">
@@ -104,9 +110,9 @@ export default function OnboardingPage() {
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Acme Inc."
+            placeholder={placeholder}
             disabled={busy}
-            aria-label="Organization name"
+            aria-label="Knowledge base name"
           />
           {error && <p className="text-destructive text-sm">{error}</p>}
         </div>

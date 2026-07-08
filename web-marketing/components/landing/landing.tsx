@@ -4,7 +4,7 @@
 // APP_URL, pricing at /pricing, docs at docs.marrow.so.
 
 import type { ComponentType, CSSProperties } from "react";
-import { APP_URL, Button, Eyebrow } from "@/components/chrome";
+import { APP_URL, Button, Eyebrow, SELF_HOST_DOCS_URL } from "@/components/chrome";
 import {
   CheckIcon,
   IconArrow,
@@ -18,8 +18,6 @@ import {
   IconFeather,
   IconX,
 } from "@/components/icons";
-
-const DOCS_URL = "https://docs.marrow.so";
 
 export function Landing() {
   return (
@@ -79,15 +77,15 @@ export function Landing() {
                   color: "var(--color-text-secondary)",
                 }}
               >
-                Marrow is a quiet, self-hosted home for your team&apos;s notes, docs, and decisions — built in
-                plain Markdown, yours forever, editable anywhere.
+                Marrow is a quiet, self-hosted knowledge base — plain Markdown on your disk, a
+                restore guarantee you can audit, and no vendor lock-in.
               </p>
               <div style={{ display: "flex", gap: 12, marginTop: 36 }}>
-                <Button variant="primary" size="lg" href={APP_URL}>
-                  Try the editor <IconArrow size={15} />
+                <Button variant="primary" size="lg" href={SELF_HOST_DOCS_URL}>
+                  <IconServer size={15} /> Self-host with Docker
                 </Button>
-                <Button variant="secondary" size="lg" href="/pricing">
-                  Self-host for free
+                <Button variant="secondary" size="lg" href={APP_URL}>
+                  Try Marrow Cloud <IconArrow size={15} />
                 </Button>
               </div>
               <div
@@ -102,7 +100,7 @@ export function Landing() {
                 }}
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <IconGit size={14} /> MIT licensed
+                  <IconGit size={14} /> Apache 2.0
                 </span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <IconServer size={14} /> Postgres + Markdown
@@ -138,8 +136,10 @@ export function Landing() {
               fontVariationSettings: '"SOFT" 100',
             }}
           >
-            Your team&apos;s knowledge shouldn&apos;t depend on whether a&nbsp;vendor stays in&nbsp;business.{" "}
-            <span style={{ color: "var(--color-accent)" }}>Marrow is the part that&nbsp;stays.</span>
+            Your notes shouldn&apos;t vanish when a vendor changes the rules.{" "}
+            <span style={{ color: "var(--color-accent)" }}>
+              Marrow exports to files you own — the part that&nbsp;stays.
+            </span>
           </p>
         </div>
       </section>
@@ -224,8 +224,8 @@ export function Landing() {
                 up by copying a folder.
               </p>
               <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
-                <Button variant="primary" href={DOCS_URL}>
-                  <IconServer size={14} /> Deploy On-prem
+                <Button variant="primary" href={SELF_HOST_DOCS_URL}>
+                  <IconServer size={14} /> Deploy on-prem
                 </Button>
               </div>
             </div>
@@ -316,11 +316,11 @@ export function Landing() {
             No lock-in, no migration rituals, no someday-when-we-have-time. Start writing today.
           </p>
           <div style={{ marginTop: 40, display: "flex", gap: 12, justifyContent: "center" }}>
-            <Button variant="primary" size="lg" href={APP_URL}>
-              Open Marrow <IconArrow size={15} />
+            <Button variant="primary" size="lg" href={SELF_HOST_DOCS_URL}>
+              <IconServer size={15} /> Self-host with Docker
             </Button>
-            <Button variant="secondary" size="lg" href="/pricing">
-              See pricing
+            <Button variant="secondary" size="lg" href={APP_URL}>
+              Try Marrow Cloud <IconArrow size={15} />
             </Button>
           </div>
         </div>
@@ -754,9 +754,8 @@ Related:: [[RFC-0142]] [[Runbook / Ingest]]
 function Comparison() {
   const rows = [
     { feat: "Your data is in", marrow: "Plain Markdown on your disk", others: "A proprietary DB you lease" },
-    { feat: "Works offline", marrow: "Yes — local-first sync", others: "Degraded or not at all" },
     { feat: "Hosting", marrow: "Self-host, or Cloud", others: "Cloud only" },
-    { feat: 'AI "features"', marrow: "Off by default. BYO key.", others: "Mandatory. Upsold." },
+    { feat: "Built-in AI", marrow: "None — just your words", others: "Mandatory. Upsold." },
     { feat: "Pricing model", marrow: "Per workspace, not per seat", others: "Per seat, escalating" },
     { feat: "When the vendor folds", marrow: "You keep the files", others: "You keep the zip, good luck" },
   ];

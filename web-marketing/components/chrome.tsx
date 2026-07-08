@@ -6,6 +6,7 @@ import { MarrowWordmark, SunIcon, MoonIcon } from "./icons";
 import { useTheme } from "./theme-provider";
 
 export const APP_URL = "https://app.marrow.so";
+export const SELF_HOST_DOCS_URL = "https://docs.marrow.so/deployment/docker-compose/";
 
 const navLinks = [
   { href: "/", label: "Product" },
@@ -101,12 +102,26 @@ export function SiteNav() {
             fontWeight: 500,
             padding: "0.5rem 1rem",
             borderRadius: "0.5rem",
+            border: "1px solid var(--color-border)",
+            color: "var(--color-text-primary)",
+            textDecoration: "none",
+          }}
+        >
+          Open Marrow
+        </a>
+        <a
+          href={SELF_HOST_DOCS_URL}
+          style={{
+            fontSize: "0.875rem",
+            fontWeight: 500,
+            padding: "0.5rem 1rem",
+            borderRadius: "0.5rem",
             background: "var(--color-accent)",
             color: "var(--color-accent-ink)",
             textDecoration: "none",
           }}
         >
-          Open Marrow
+          Self-host
         </a>
       </div>
     </header>
