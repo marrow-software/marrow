@@ -7,6 +7,8 @@ description: The architectural foundation of Marrow.
 
 This is the single non-negotiable promise Marrow makes. Every other architectural decision flows from it.
 
+"Exact replica" means **workspace content parity** — what is in the export bundle restores identically. It does not mean every database row or per-user overlay. See [Export bundle format](/concepts/export-format/) for the on-disk layout and [What round-trips today](#what-round-trips-today) below for the full scope table.
+
 ## Why this matters
 
 Most knowledge bases give you an "export" feature that's really a one-way escape hatch — half-broken Markdown, no metadata, no fidelity. The implicit message is: *this data lives here; if you ever leave, you'll lose something.*
@@ -30,7 +32,9 @@ Bundles are zip files containing Markdown, JSON, and a `manifest.json`. No propr
 
 ### 3. The round-trip test
 
-`api/tests/test_round_trip.py` is a regression anchor: it creates a workspace with multiple spaces, a folder/page node tree, revisions, and attachments, exports it, wipes the database, restores from the bundle, and verifies the result is byte-equivalent to the original. This test must pass at all times. It runs in CI on every change.
+`api/tests/test_round_trip.py` is a regression anchor: it creates a workspace with multiple spaces, a folder/page node tree, revisions, attachments, properties, and links, exports it, wipes the database, restores from the bundle, and verifies the result is byte-equivalent to the original. This test must pass at all times. It runs in CI on every change.
+
+**You are not required to run export→restore yourself.** The guarantee is enforced by automated tests on every commit, not by customer onboarding. If you want to verify a backup by hand, see [Inspecting a bundle](/concepts/export-format/#inspecting-a-bundle) and the [export/restore walkthrough](/getting-started/export-restore-demo/).
 
 ### 4. Legacy bundle compatibility
 
@@ -41,6 +45,20 @@ Marrow 0.2 introduces bundle schema **v4**, which carries the new `nodes` tree s
 ### 5. Soft-deleted nodes
 
 Deleting a node sets `deleted_at` instead of removing rows — the data goes to trash. By default, exports skip soft-deleted nodes so a "live" backup matches what users see in the UI. Pass `--include-trash` to `marrow export` (or `?include_trash=true` on the API) to include them; the manifest records the choice so restore knows whether to recreate trash entries.
+
+## What round-trips today
+
+Bundle schema **v4** (Marrow 0.2+) is the current export format. The table below is the authoritative scope for what the restore guarantee covers today.
+
+| Category | Included in guarantee | Notes |
+| --- | --- | --- |
+| **Exported today (v4)** | Node tree (folders + pages), revisions, attachments, `node_properties`, `node_links` (`links.json`), trash state (with `include_trash`) | Verified by `test_round_trip.py` in CI on every commit |
+| **Never exported** | Stars (`user_stars`), Inbox notifications (`notifications`), node watches (`node_watches`) | User-scoped; workspace-independent by design |
+| **Planned v5** | Comments (`comments`), share links (`share_links`), folder view definitions (`node_views`) | Collaboration metadata — requires bundle v5 before marketing these as fully portable |
+
+**Derived state** — full-text search indices and other computed indexes — is rebuilt on restore, not exported. The bundle carries source content only.
+
+For file layout and manifest fields, see [Export bundle format](/concepts/export-format/#export-scope-v4).
 
 ## What this rules out
 
