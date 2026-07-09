@@ -53,7 +53,7 @@ export default function OnboardingPage() {
           return;
         }
         setOrg(pending);
-        setName(pending.name);
+        // Leave name empty so the personalized placeholder is visible; submit falls back to it.
         setLoading(false);
       } catch {
         if (!cancelled) router.replace("/login");
@@ -66,11 +66,12 @@ export default function OnboardingPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!org || !name.trim()) return;
+    const finalName = name.trim() || placeholder;
+    if (!org || !finalName) return;
     setBusy(true);
     setError(null);
     try {
-      await completeOnboarding(org.id, name.trim());
+      await completeOnboarding(org.id, finalName);
     } catch (err) {
       setBusy(false);
       setError(err instanceof Error ? err.message : "Couldn't save your name. Try again.");
@@ -116,7 +117,7 @@ export default function OnboardingPage() {
           />
           {error && <p className="text-destructive text-sm">{error}</p>}
         </div>
-        <Button type="submit" size="lg" className="w-full" disabled={busy || !name.trim()}>
+        <Button type="submit" size="lg" className="w-full" disabled={busy}>
           {busy ? "Saving…" : "Continue"}
         </Button>
       </form>
