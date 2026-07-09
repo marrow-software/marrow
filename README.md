@@ -30,7 +30,7 @@ These are not aspirations. They are constraints that every architectural and pro
 4. **Pluggable storage** — Local filesystem or S3-compatible object storage. Business logic never bypasses the storage adapter.
 5. **Self-hosted by default** — Your data stays on infrastructure you control.
 
-See **[Restore guarantee](./docs/src/content/docs/concepts/restore-guarantee.md)** for the full explanation.
+See **[Restore guarantee](./docs/src/content/docs/concepts/restore-guarantee.md)** for the full explanation. For a hands-on audit walkthrough, see **[Export & restore demo](./docs/src/content/docs/getting-started/export-restore-demo.md)**.
 
 ---
 

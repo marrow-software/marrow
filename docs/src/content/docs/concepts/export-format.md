@@ -5,6 +5,24 @@ description: The on-disk layout of a Marrow export bundle.
 
 A Marrow export bundle is a zip file with a transparent, human-readable structure. You can unzip it and read it without any Marrow tooling.
 
+For why this format exists and how the guarantee is enforced, see [Restore guarantee](/concepts/restore-guarantee/).
+
+## Export scope (v4)
+
+Bundle schema **v4** is the current format. This table matches the [restore guarantee scope](/concepts/restore-guarantee/#what-round-trips-today):
+
+| Category | Included in bundle | Notes |
+| --- | --- | --- |
+| **Exported today (v4)** | Node tree, revisions, attachments, `node_properties`, `node_links` (`links.json`), trash (`include_trash`) | Round-trips via `marrow restore`; CI verifies with `test_round_trip.py` |
+| **Never exported** | Stars, Inbox notifications, node watches | User-scoped tables — not workspace content |
+| **Planned v5** | Comments, share links, folder view definitions | Not in v4 bundles yet; restore guarantee will extend when bundle v5 ships |
+
+Search indices and other derived state are **not** in the bundle — they are rebuilt on restore.
+
+:::note[You do not need to round-trip yourself]
+The restore guarantee is enforced by automated tests on every commit, not by customer onboarding. To audit a bundle by hand, see [Inspecting a bundle](#inspecting-a-bundle) or the [export/restore walkthrough](/getting-started/export-restore-demo/).
+:::
+
 ## File naming
 
 ```
