@@ -7,7 +7,7 @@ Marrow is a self-hosted, open-source knowledge base. Every workspace can be expo
 
 ## Where to start
 
-- **[Quickstart](/getting-started/quickstart/)** — get a local instance running.
+- **[Quickstart](/getting-started/quickstart/)** — get a local instance running (includes a [solo API-key path](/getting-started/quickstart/#solo-self-host-without-oidc) with no IdP).
 - **[Docker Compose](/deployment/docker-compose/)** — production-style self-host.
 - **[OIDC](/configuration/oidc/)** — wire Marrow up to Google, Keycloak, or any OIDC provider.
 - **[Restore guarantee](/concepts/restore-guarantee/)** — the architectural foundation.
