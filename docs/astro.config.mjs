@@ -39,6 +39,7 @@ export default defineConfig({
           items: [
             { label: "Overview", link: "/" },
             { label: "Quickstart", link: "/getting-started/quickstart/" },
+            { label: "Export & restore demo", link: "/getting-started/export-restore-demo/" },
           ],
         },
         {
