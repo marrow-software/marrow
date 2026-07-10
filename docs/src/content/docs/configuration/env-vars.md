@@ -61,7 +61,7 @@ When using `docker-compose.prod.yml`, both files are replaced by a single root `
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `MARROW_VERSION` | `v0.3.3` (compose default) | GHCR API image tag. Set to the same git release tag you checked out; update in `.env` whenever you upgrade. Also labels the locally built web image. |
+| `MARROW_VERSION` | `v0.4.0` (compose default) | GHCR API image tag. Set to the same git release tag you checked out; update in `.env` whenever you upgrade. Also labels the locally built web image. |
 | `POSTGRES_USER` | `marrow` | Postgres username. |
 | `POSTGRES_DB` | `marrow` | Postgres database name. |
 | `POSTGRES_PASSWORD` | — | **Required.** Postgres password. |

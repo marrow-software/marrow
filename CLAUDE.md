@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Marrow is a self-hosted, open-source knowledge base (wiki) built around a non-negotiable **restore guarantee**: a Marrow export bundle must always be restorable to an exact replica of the original workspace. This guarantee is the architectural foundation — every decision flows from it.
 
-Current status: **v0.3.x** — node tree (folders + pages), v4 export/restore, OIDC + org RBAC, BlockNote editor, comments, properties, backlinks, SaaS billing gates, and global `/home` landing are implemented and tested. Comments, share links, and folder view definitions are not yet in export bundles (planned bundle v5 — see `references/To-do.md` item 8).
+Current status: **v0.4.x** — beachhead activation shipped (solo-first onboarding, workspace provisioning on onboard, self-host-first marketing, export/restore docs). Node tree (folders + pages), v4 export/restore, OIDC + org RBAC, BlockNote editor, comments, properties, backlinks, page archiving, SaaS billing gates, and global `/home` landing are implemented and tested. Comments, share links, and folder view definitions are not yet in export bundles (planned bundle v5 — see `references/To-do.md` item 8).
 
 ---
 

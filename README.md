@@ -65,11 +65,11 @@ The recommended production path is Docker Compose. The API image is pulled from 
 ```bash
 git clone https://github.com/marrow-software/marrow.git
 cd marrow
-git checkout v0.3.3          # recommended for production
+git checkout v0.4.0          # recommended for production
 
 cp .env.prod.example .env
 # edit .env — SECRET_KEY, POSTGRES_PASSWORD, MARROW_API_URL (your public API URL)
-# set MARROW_VERSION to the same tag you checked out (e.g. v0.3.3)
+# set MARROW_VERSION to the same tag you checked out (e.g. v0.4.0)
 
 docker compose -f docker-compose.prod.yml up -d --build
 curl http://localhost:8000/health
@@ -86,8 +86,8 @@ Check out the release tag, set `MARROW_VERSION` in `.env` to the same tag (so th
 
 ```bash
 git fetch --tags
-git checkout v0.3.3          # pick the release you want
-# edit .env — set MARROW_VERSION=v0.3.3 to match
+git checkout v0.4.0          # pick the release you want
+# edit .env — set MARROW_VERSION=v0.4.0 to match
 docker compose -f docker-compose.prod.yml pull api
 docker compose -f docker-compose.prod.yml up -d --build
 ```
