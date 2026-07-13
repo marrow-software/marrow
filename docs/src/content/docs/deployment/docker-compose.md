@@ -43,10 +43,10 @@ Pin a release tag so the API image and web source match:
 
 ```bash
 git fetch --tags
-git checkout v0.3.3          # recommended for production
+git checkout v0.4.0          # recommended for production
 ```
 
-Set `MARROW_VERSION` in `.env` to the same tag (e.g. `v0.3.3`), then:
+Set `MARROW_VERSION` in `.env` to the same tag (e.g. `v0.4.0`), then:
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
@@ -89,8 +89,8 @@ Check out the new release, update `MARROW_VERSION` in `.env` to the same tag, th
 
 ```bash
 git fetch --tags
-git checkout v0.3.3          # pick the release you want
-# edit .env — set MARROW_VERSION=v0.3.3 to match
+git checkout v0.4.0          # pick the release you want
+# edit .env — set MARROW_VERSION=v0.4.0 to match
 docker compose -f docker-compose.prod.yml pull api
 docker compose -f docker-compose.prod.yml up -d --build
 ```

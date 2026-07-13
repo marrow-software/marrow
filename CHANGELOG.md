@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Each release also has fuller narrative notes (highlights, breaking changes, upgrade
 steps) on its [GitHub release](https://github.com/marrow-software/marrow/releases).
 
+## [0.4.0] — 2026-07-10
+
+### Added
+- Page archiving from the page menu — soft-deletes the page (and warns when nested
+  content is trashed); flushes unsaved edits before archiving. (#229)
+- `include_trash` option on workspace export (API + export dialog) so soft-deleted
+  nodes round-trip when explicitly requested.
+- First-run workspace provisioning on onboarding completion — completing `/onboarding`
+  creates a default workspace + space so new users land in a writable tree, not an
+  empty `/home` picker. (#241)
+- Docs: v4 export/restore scope table and planned v5 gaps (comments, share links,
+  node views). (#244)
+- Docs: prominent API-key solo self-host quickstart (no IdP). (#245)
+- Docs: export/restore walkthrough linked from README. (#246)
+
+### Changed
+- Solo-first onboarding copy — ownership language instead of team/org vocabulary. (#242)
+- Marketing landing — self-host-first CTAs, Apache 2.0 badge, removed false claims
+  (offline sync, MIT license). (#243)
+- Backlink index export/restore hardened; wiki-links using `/n/{id}` app routes are
+  now indexed.
+
+### Fixed
+- Archive flow races (unsaved edits, in-flight saves, 404 edge cases).
+- Node route links in rail panels (starred, inbox, side drawer).
+- Post-gate redirect and onboarding enforcement on workspace routes.
+- Docs site TypeScript config resolution after `npm ci`.
+
 ## [0.3.3] — 2026-06-21
 
 ### Fixed
@@ -150,6 +178,7 @@ restore guarantee.
 - PostgreSQL full-text search.
 - BlockNote rich-text editor.
 
+[0.4.0]: https://github.com/marrow-software/marrow/releases/tag/v0.4.0
 [0.3.3]: https://github.com/marrow-software/marrow/releases/tag/v0.3.3
 [0.3.2]: https://github.com/marrow-software/marrow/releases/tag/v0.3.2
 [0.3.1]: https://github.com/marrow-software/marrow/releases/tag/v0.3.1

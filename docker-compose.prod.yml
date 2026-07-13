@@ -24,7 +24,7 @@ services:
       retries: 5
 
   api:
-    image: ghcr.io/marrow-software/marrow-api:${MARROW_VERSION:-v0.3.3}
+    image: ghcr.io/marrow-software/marrow-api:${MARROW_VERSION:-v0.4.0}
     restart: unless-stopped
     depends_on:
       db:
