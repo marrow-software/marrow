@@ -73,6 +73,37 @@ export function countDescendants(node: NodeTreeItem): number {
   );
 }
 
+/** All descendant page nodes under a folder at any depth (non-trashed tree only). */
+export function collectDescendantPages(
+  tree: WorkspaceTree,
+  folderId: string,
+): NodeTreeItem[] {
+  const folder = findNodeById(tree, folderId);
+  if (!folder) return [];
+  const pages: NodeTreeItem[] = [];
+  walkPages(folder.children, pages);
+  return pages;
+}
+
+function walkPages(nodes: NodeTreeItem[], out: NodeTreeItem[]): void {
+  for (const n of nodes) {
+    if (n.type === "page") {
+      out.push(n);
+    } else {
+      walkPages(n.children, out);
+    }
+  }
+}
+
+/** Direct child folders and pages of a folder node. */
+export function collectDirectChildren(
+  tree: WorkspaceTree,
+  folderId: string,
+): NodeTreeItem[] {
+  const folder = findNodeById(tree, folderId);
+  return folder?.children ?? [];
+}
+
 /**
  * @deprecated v0.1 collection-based breadcrumb. Always returns null in v0.2 —
  * callers should migrate to findNodeBreadcrumb. Kept as a no-op for incremental

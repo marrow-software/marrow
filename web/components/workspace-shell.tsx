@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppRail, type RailPanel } from "@/components/app-rail";
 import { AppSidebar } from "@/components/app-sidebar";
+import { WorkspaceRoleProvider } from "@/components/workspace-role-context";
 import { WorkspaceTreeProvider } from "@/components/workspace-tree-context";
 import { listNotifications } from "@/lib/api";
 import type { User, Workspace, WorkspaceTree } from "@/lib/types";
@@ -82,7 +83,9 @@ export function WorkspaceShell({ tree, user, memberCount, showOrgSettings, works
           />
         )}
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <WorkspaceTreeProvider tree={tree}>{children}</WorkspaceTreeProvider>
+          <WorkspaceRoleProvider userRole={userRole}>
+            <WorkspaceTreeProvider tree={tree}>{children}</WorkspaceTreeProvider>
+          </WorkspaceRoleProvider>
         </main>
       </div>
     </SidebarProvider>
