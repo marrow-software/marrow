@@ -3,7 +3,7 @@
 import { ChevronDown, ChevronRight, FileText, Folder, SlidersHorizontal } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { FolderPropertySchemaEditor } from "@/components/folder-property-schema-editor";
 import { FolderViewSettingsDialog } from "@/components/folder-view-settings-dialog";
@@ -70,6 +70,12 @@ export function FolderView({ node, workspaceId }: Props) {
   );
   const [editingView, setEditingView] = useState<NodeView | null>(null);
 
+  const folderLoadGenRef = useRef(0);
+
+  useEffect(() => {
+    folderLoadGenRef.current += 1;
+  }, [node.id, tree]);
+
   const crumb = tree ? findNodeBreadcrumb(tree, node.id) : null;
   const breadcrumbParts = crumb
     ? [crumb.spaceName, ...crumb.ancestorNames, node.name]
@@ -87,21 +93,22 @@ export function FolderView({ node, workspaceId }: Props) {
 
   const schemaKeys = useMemo(() => schema.map((s) => s.key), [schema]);
 
-  const loadViews = useCallback(async () => {
+  const loadViews = useCallback(async (isStale: () => boolean = () => false) => {
     let fetched = await listNodeViews(node.id);
+    if (isStale()) return;
 
     if (fetched.length === 0 && canEdit) {
-      const hasAll = fetched.some((v) => v.name === "All");
-      if (!hasAll) {
-        try {
-          await createNodeView(node.id, "All", "list");
-        } catch {
-          /* concurrent create — refetch below */
-        }
+      try {
+        await createNodeView(node.id, "All", "list");
+      } catch {
+        /* concurrent create — refetch below */
       }
+      if (isStale()) return;
       fetched = await listNodeViews(node.id);
+      if (isStale()) return;
     }
 
+    if (isStale()) return;
     setViews(fetched);
     if (fetched.length > 0) {
       setActiveViewId((cur) => {
@@ -111,28 +118,31 @@ export function FolderView({ node, workspaceId }: Props) {
     }
   }, [node.id, canEdit]);
 
-  const loadSchema = useCallback(async () => {
+  const loadSchema = useCallback(async (isStale: () => boolean = () => false) => {
     try {
       const rows = await getPropertySchema(node.id);
+      if (isStale()) return;
       setSchema(rows);
     } catch {
+      if (isStale()) return;
       setSchema([]);
     }
   }, [node.id]);
 
-  const loadRows = useCallback(async () => {
+  const loadRows = useCallback(async (isStale: () => boolean = () => false) => {
     if (!tree) {
-      setRows([]);
+      if (!isStale()) setRows([]);
       return;
     }
 
     const pages = collectDescendantPages(tree, node.id);
     if (pages.length === 0) {
-      setRows([]);
+      if (!isStale()) setRows([]);
       return;
     }
 
     const schemaRows = await getPropertySchema(node.id).catch(() => [] as PropertySchema[]);
+    if (isStale()) return;
     const keys = schemaRows.map((s) => s.key);
     const typeByKey = new Map(schemaRows.map((s) => [s.key, s.value_type]));
 
@@ -153,37 +163,36 @@ export function FolderView({ node, workspaceId }: Props) {
       return { id: page.id, name: page.name, properties };
     });
 
+    if (isStale()) return;
     setRows(built);
   }, [tree, node.id]);
 
   useEffect(() => {
-    let cancelled = false;
+    const gen = folderLoadGenRef.current;
+    const isStale = () => folderLoadGenRef.current !== gen;
+    setViews(null);
+    setActiveViewId(null);
     (async () => {
       try {
-        await loadViews();
+        await loadViews(isStale);
       } catch {
-        if (!cancelled) setViews([]);
+        if (!isStale()) setViews([]);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [loadViews]);
 
   useEffect(() => {
-    void loadSchema();
+    const gen = folderLoadGenRef.current;
+    const isStale = () => folderLoadGenRef.current !== gen;
+    setSchema([]);
+    void loadSchema(isStale);
   }, [loadSchema]);
 
   useEffect(() => {
-    let cancelled = false;
+    const gen = folderLoadGenRef.current;
+    const isStale = () => folderLoadGenRef.current !== gen;
     setRows(null);
-    (async () => {
-      await loadRows();
-      if (cancelled) return;
-    })();
-    return () => {
-      cancelled = true;
-    };
+    void loadRows(isStale);
   }, [loadRows]);
 
   const handleOpenNode = useCallback(
