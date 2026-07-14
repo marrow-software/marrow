@@ -1,10 +1,9 @@
 "use client";
 
-import { ChevronDown, ChevronRight, FileText, Folder, SlidersHorizontal } from "lucide-react";
+import { ChevronRight, FileText, Folder } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 
 import { FolderPropertySchemaEditor } from "@/components/folder-property-schema-editor";
 import { FolderViewSettingsDialog } from "@/components/folder-view-settings-dialog";
@@ -19,15 +18,12 @@ import {
 } from "@/components/workspace-tree-context";
 import { Button } from "@/components/ui/button";
 import {
-  createNodeView,
-  deleteNodeView,
   getNodeProperties,
   getPropertySchema,
   listNodeViews,
 } from "@/lib/api";
 import { formatPropertyValue } from "@/lib/format-property-value";
 import type { Node, NodeView, PropertySchema } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 interface Props {
   node: Node;
@@ -65,7 +61,6 @@ export function FolderView({ node, workspaceId }: Props) {
   const [schema, setSchema] = useState<PropertySchema[]>([]);
   const [rows, setRows] = useState<ViewRow[] | null>(null);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
-  const [contentsOpen, setContentsOpen] = useState(false);
   const [schemaDialogOpen, setSchemaDialogOpen] = useState(false);
   const [viewDialogMode, setViewDialogMode] = useState<"create" | "edit" | null>(
     null,
@@ -96,48 +91,26 @@ export function FolderView({ node, workspaceId }: Props) {
   const schemaKeys = useMemo(() => schema.map((s) => s.key), [schema]);
 
   const loadViews = useCallback(async (isStale: () => boolean = () => false) => {
-    let fetched = await listNodeViews(node.id);
+    const fetched = await listNodeViews(node.id);
     if (isStale()) return;
 
-    if (fetched.length === 0 && canEdit) {
-      try {
-        await createNodeView(node.id, "All", "list");
-      } catch {
-        /* concurrent create — refetch below; toast only if still empty */
-      }
-      if (isStale()) return;
-      fetched = await listNodeViews(node.id);
-      if (isStale()) return;
-      if (fetched.length === 0) {
-        toast.error("Could not create a default view");
-      } else {
-        // Concurrent tabs can each pass the empty check and create a default
-        // "All" view (the API allows duplicate names). Keep the first, delete
-        // the rest best-effort; a concurrent dedupe deleting the same extras
-        // is fine (404s are swallowed).
-        const defaults = fetched.filter(
-          (v) => v.name === "All" && v.view_type === "list",
-        );
-        if (defaults.length > 1) {
-          const extras = defaults.slice(1);
-          await Promise.all(
-            extras.map((v) => deleteNodeView(v.id).catch(() => undefined)),
-          );
-          if (isStale()) return;
-          fetched = fetched.filter((v) => !extras.some((e) => e.id === v.id));
-        }
-      }
-    }
-
-    if (isStale()) return;
     setViews(fetched);
     if (fetched.length > 0) {
       setActiveViewId((cur) => {
         if (cur && fetched.some((v) => v.id === cur)) return cur;
         return fetched.find((v) => v.view_type === "list")?.id ?? fetched[0].id;
       });
+    } else {
+      setActiveViewId(null);
     }
-  }, [node.id, canEdit]);
+  }, [node.id]);
+
+  const loadSchemaOnly = useCallback(async () => {
+    const schemaRows = await getPropertySchema(node.id).catch(
+      () => [] as PropertySchema[],
+    );
+    setSchema(schemaRows);
+  }, [node.id]);
 
   // Schema and rows share a single getPropertySchema fetch so table columns
   // (schema state) and per-row cell values can never disagree.
@@ -191,6 +164,8 @@ export function FolderView({ node, workspaceId }: Props) {
     const isStale = () => folderLoadGenRef.current !== gen;
     setViews(null);
     setActiveViewId(null);
+    setSchema([]);
+    setRows(null);
     (async () => {
       try {
         await loadViews(isStale);
@@ -200,13 +175,20 @@ export function FolderView({ node, workspaceId }: Props) {
     })();
   }, [loadViews]);
 
+  // Only fetch property data when the folder has saved views (opt-in).
   useEffect(() => {
+    if (views === null || views.length === 0) {
+      setSchema([]);
+      setRows(null);
+      return;
+    }
+
     const gen = folderLoadGenRef.current;
     const isStale = () => folderLoadGenRef.current !== gen;
     setSchema([]);
     setRows(null);
     void loadSchemaAndRows(isStale);
-  }, [loadSchemaAndRows]);
+  }, [views, loadSchemaAndRows]);
 
   const handleOpenNode = useCallback(
     (nodeId: string) => {
@@ -218,15 +200,37 @@ export function FolderView({ node, workspaceId }: Props) {
   );
 
   const handleSchemaChange = useCallback(() => {
-    void loadSchemaAndRows();
-  }, [loadSchemaAndRows]);
+    if ((views?.length ?? 0) > 0) {
+      void loadSchemaAndRows();
+    } else {
+      void loadSchemaOnly();
+    }
+  }, [loadSchemaAndRows, loadSchemaOnly, views?.length]);
+
+  const handleViewsChange = useCallback((next: NodeView[]) => {
+    setViews(next);
+    if (next.length === 0) {
+      setActiveViewId(null);
+      setSchema([]);
+      setRows(null);
+    }
+  }, []);
+
+  const openCreateView = useCallback(() => {
+    void loadSchemaOnly();
+    setEditingView(null);
+    setViewDialogMode("create");
+  }, [loadSchemaOnly]);
+
+  const openSchemaEditor = useCallback(() => {
+    void loadSchemaOnly();
+    setSchemaDialogOpen(true);
+  }, [loadSchemaOnly]);
 
   const viewsLoading = views === null;
   const rowsLoading = rows === null;
+  const hasViews = (views?.length ?? 0) > 0;
   const hasPages = descendantPages.length > 0;
-
-  const viewerNoViews =
-    !canEdit && views !== null && views.length === 0;
 
   const emptyPagesMessage =
     "No pages in this folder yet. Create a page from the sidebar.";
@@ -252,8 +256,8 @@ export function FolderView({ node, workspaceId }: Props) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-3xl px-10 py-10">
+      <div className="flex-1 overflow-auto px-10 py-10">
+        <div className="mx-auto max-w-3xl">
           <div className="mb-2 flex items-center gap-3">
             <Folder className="h-7 w-7 text-muted-foreground" />
             <h1
@@ -269,122 +273,19 @@ export function FolderView({ node, workspaceId }: Props) {
             </h1>
           </div>
           {node.description && (
-            <p className="mb-4 text-sm text-muted-foreground">{node.description}</p>
+            <p className="mb-6 text-sm text-muted-foreground">{node.description}</p>
           )}
 
-          {canEdit && (
-            <div className="mb-6 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setSchemaDialogOpen(true)}
-              >
-                <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
-                Properties
-              </Button>
-            </div>
+          {directChildren.length === 0 && (
+            <p className="text-sm text-muted-foreground">This folder is empty.</p>
           )}
-        </div>
-
-        <div className="w-full px-4 pb-6 md:px-6">
-          {viewsLoading && (
-            <p className="px-2 py-4 text-sm text-muted-foreground">Loading views…</p>
-          )}
-
-          {viewerNoViews && (
-            <p className="px-2 py-4 text-sm text-muted-foreground">
-              {hasPages
-                ? "No views configured. Pages exist in this folder but cannot be browsed here."
-                : "No views in this folder yet."}
-            </p>
-          )}
-
-          {!viewsLoading && canEdit && views && views.length === 0 && (
-            <div className="flex flex-col items-start gap-3 px-2 py-4">
-              <p className="text-sm text-muted-foreground">
-                No views in this folder yet.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditingView(null);
-                  setViewDialogMode("create");
-                }}
-              >
-                Create view
-              </Button>
-            </div>
-          )}
-
-          {!viewsLoading && views && views.length > 0 && (
-            <>
-              {rowsLoading ? (
-                <p className="px-2 py-4 text-sm text-muted-foreground">
-                  Loading pages…
-                </p>
-              ) : (
-                <FolderViews
-                  views={views}
-                  rows={rows ?? []}
-                  schemaKeys={schemaKeys}
-                  canEdit={canEdit}
-                  activeViewId={activeViewId}
-                  onActiveViewChange={setActiveViewId}
-                  onCreateView={() => {
-                    setEditingView(null);
-                    setViewDialogMode("create");
-                  }}
-                  onEditView={(view) => {
-                    setEditingView(view);
-                    setViewDialogMode("edit");
-                  }}
-                  onOpenNode={handleOpenNode}
-                  emptyPagesMessage={emptyPagesMessage}
-                />
-              )}
-              {!rowsLoading && schemaKeys.length === 0 && canEdit && hasPages && (
-                <p className="mt-2 px-2 text-xs text-muted-foreground">
-                  Add properties via the Properties menu to show columns in table and
-                  board views.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-
-        {directChildren.length > 0 && (
-          <section className="border-t border-border px-4 py-4 md:px-6">
-            <button
-              type="button"
-              className="mb-3 flex w-full items-center gap-2 text-left md:hidden"
-              onClick={() => setContentsOpen((v) => !v)}
-            >
-              {contentsOpen ? (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              )}
-              <span className="text-sm font-medium">
-                Contents ({directChildren.length})
-              </span>
-            </button>
-            <h2 className="mb-3 hidden text-sm font-medium md:block">
-              Contents ({directChildren.length})
-            </h2>
-            <ul
-              className={cn(
-                "mx-auto flex max-w-3xl flex-col gap-1",
-                contentsOpen ? "block" : "hidden md:flex",
-              )}
-            >
+          {directChildren.length > 0 && (
+            <ul className="flex flex-col gap-1">
               {directChildren.map((child) => (
                 <li key={child.id}>
                   <Link
                     href={`/w/${workspaceId}/n/${child.id}/${child.slug}`}
-                    className="flex min-h-11 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-accent"
+                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-accent"
                   >
                     {child.type === "folder" ? (
                       <Folder className="h-4 w-4 text-muted-foreground" />
@@ -396,6 +297,75 @@ export function FolderView({ node, workspaceId }: Props) {
                 </li>
               ))}
             </ul>
+          )}
+
+          {!viewsLoading && canEdit && !hasViews && (
+            <p className="mt-6 text-sm text-muted-foreground">
+              <button
+                type="button"
+                onClick={openCreateView}
+                className="text-foreground underline-offset-4 hover:underline"
+              >
+                Add table, board, or list view…
+              </button>
+              {" · "}
+              <button
+                type="button"
+                onClick={openSchemaEditor}
+                className="text-foreground underline-offset-4 hover:underline"
+              >
+                Manage properties
+              </button>
+            </p>
+          )}
+        </div>
+
+        {!viewsLoading && hasViews && (
+          <section className="mt-10 border-t border-border pt-6">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-4 md:px-0">
+              <h2 className="text-sm font-medium">Views</h2>
+              {canEdit && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-muted-foreground"
+                  onClick={openSchemaEditor}
+                >
+                  Manage properties
+                </Button>
+              )}
+            </div>
+            <div className="w-full px-4 md:px-0">
+              {rowsLoading ? (
+                <p className="px-2 py-4 text-sm text-muted-foreground">
+                  Loading pages…
+                </p>
+              ) : (
+                <FolderViews
+                  views={views ?? []}
+                  rows={rows ?? []}
+                  schemaKeys={schemaKeys}
+                  canEdit={canEdit}
+                  activeViewId={activeViewId}
+                  onActiveViewChange={setActiveViewId}
+                  onCreateView={openCreateView}
+                  onEditView={(view) => {
+                    void loadSchemaOnly();
+                    setEditingView(view);
+                    setViewDialogMode("edit");
+                  }}
+                  onOpenNode={handleOpenNode}
+                  emptyPagesMessage={emptyPagesMessage}
+                />
+              )}
+              {!rowsLoading && schemaKeys.length === 0 && canEdit && hasPages && (
+                <p className="mt-2 px-2 text-xs text-muted-foreground">
+                  Add properties via Manage properties to show columns in table and
+                  board views.
+                </p>
+              )}
+            </div>
           </section>
         )}
       </div>
@@ -420,7 +390,7 @@ export function FolderView({ node, workspaceId }: Props) {
                 setEditingView(null);
               }
             }}
-            onViewsChange={setViews}
+            onViewsChange={handleViewsChange}
             onActiveViewChange={setActiveViewId}
           />
         </>
