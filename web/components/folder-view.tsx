@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   createNodeView,
+  deleteNodeView,
   getNodeProperties,
   getPropertySchema,
   listNodeViews,
@@ -109,6 +110,22 @@ export function FolderView({ node, workspaceId }: Props) {
       if (isStale()) return;
       if (fetched.length === 0) {
         toast.error("Could not create a default view");
+      } else {
+        // Concurrent tabs can each pass the empty check and create a default
+        // "All" view (the API allows duplicate names). Keep the first, delete
+        // the rest best-effort; a concurrent dedupe deleting the same extras
+        // is fine (404s are swallowed).
+        const defaults = fetched.filter(
+          (v) => v.name === "All" && v.view_type === "list",
+        );
+        if (defaults.length > 1) {
+          const extras = defaults.slice(1);
+          await Promise.all(
+            extras.map((v) => deleteNodeView(v.id).catch(() => undefined)),
+          );
+          if (isStale()) return;
+          fetched = fetched.filter((v) => !extras.some((e) => e.id === v.id));
+        }
       }
     }
 
@@ -122,54 +139,52 @@ export function FolderView({ node, workspaceId }: Props) {
     }
   }, [node.id, canEdit]);
 
-  const loadSchema = useCallback(async (isStale: () => boolean = () => false) => {
-    try {
-      const rows = await getPropertySchema(node.id);
+  // Schema and rows share a single getPropertySchema fetch so table columns
+  // (schema state) and per-row cell values can never disagree.
+  const loadSchemaAndRows = useCallback(
+    async (isStale: () => boolean = () => false) => {
+      const schemaRows = await getPropertySchema(node.id).catch(
+        () => [] as PropertySchema[],
+      );
       if (isStale()) return;
-      setSchema(rows);
-    } catch {
-      if (isStale()) return;
-      setSchema([]);
-    }
-  }, [node.id]);
+      setSchema(schemaRows);
 
-  const loadRows = useCallback(async (isStale: () => boolean = () => false) => {
-    if (!tree) {
-      if (!isStale()) setRows([]);
-      return;
-    }
-
-    const pages = collectDescendantPages(tree, node.id);
-    if (pages.length === 0) {
-      if (!isStale()) setRows([]);
-      return;
-    }
-
-    const schemaRows = await getPropertySchema(node.id).catch(() => [] as PropertySchema[]);
-    if (isStale()) return;
-    const keys = schemaRows.map((s) => s.key);
-    const typeByKey = new Map(schemaRows.map((s) => [s.key, s.value_type]));
-
-    const built = await mapWithConcurrency(pages, async (page) => {
-      const properties: Record<string, string | null> = {};
-      if (keys.length > 0) {
-        try {
-          const res = await getNodeProperties(page.id);
-          for (const key of keys) {
-            const prop = res.properties.find((p) => p.key === key);
-            const valueType = typeByKey.get(key) ?? prop?.value_type ?? "text";
-            properties[key] = formatPropertyValue(prop?.value ?? null, valueType);
-          }
-        } catch {
-          for (const key of keys) properties[key] = null;
-        }
+      if (!tree) {
+        setRows([]);
+        return;
       }
-      return { id: page.id, name: page.name, properties };
-    });
 
-    if (isStale()) return;
-    setRows(built);
-  }, [tree, node.id]);
+      const pages = collectDescendantPages(tree, node.id);
+      if (pages.length === 0) {
+        setRows([]);
+        return;
+      }
+
+      const keys = schemaRows.map((s) => s.key);
+      const typeByKey = new Map(schemaRows.map((s) => [s.key, s.value_type]));
+
+      const built = await mapWithConcurrency(pages, async (page) => {
+        const properties: Record<string, string | null> = {};
+        if (keys.length > 0) {
+          try {
+            const res = await getNodeProperties(page.id);
+            for (const key of keys) {
+              const prop = res.properties.find((p) => p.key === key);
+              const valueType = typeByKey.get(key) ?? prop?.value_type ?? "text";
+              properties[key] = formatPropertyValue(prop?.value ?? null, valueType);
+            }
+          } catch {
+            for (const key of keys) properties[key] = null;
+          }
+        }
+        return { id: page.id, name: page.name, properties };
+      });
+
+      if (isStale()) return;
+      setRows(built);
+    },
+    [tree, node.id],
+  );
 
   useEffect(() => {
     const gen = folderLoadGenRef.current;
@@ -189,15 +204,9 @@ export function FolderView({ node, workspaceId }: Props) {
     const gen = folderLoadGenRef.current;
     const isStale = () => folderLoadGenRef.current !== gen;
     setSchema([]);
-    void loadSchema(isStale);
-  }, [loadSchema]);
-
-  useEffect(() => {
-    const gen = folderLoadGenRef.current;
-    const isStale = () => folderLoadGenRef.current !== gen;
     setRows(null);
-    void loadRows(isStale);
-  }, [loadRows]);
+    void loadSchemaAndRows(isStale);
+  }, [loadSchemaAndRows]);
 
   const handleOpenNode = useCallback(
     (nodeId: string) => {
@@ -209,9 +218,8 @@ export function FolderView({ node, workspaceId }: Props) {
   );
 
   const handleSchemaChange = useCallback(() => {
-    void loadSchema();
-    void loadRows();
-  }, [loadSchema, loadRows]);
+    void loadSchemaAndRows();
+  }, [loadSchemaAndRows]);
 
   const viewsLoading = views === null;
   const rowsLoading = rows === null;

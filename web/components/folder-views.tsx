@@ -186,8 +186,14 @@ export function FolderViews({
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-1">
-        {rows.length === 0 && emptyPagesMessage ? (
-          <p className="px-2 py-4 text-sm text-muted-foreground">{emptyPagesMessage}</p>
+        {rows.length === 0 ? (
+          <p className="px-2 py-4 text-sm text-muted-foreground">
+            {emptyPagesMessage ?? "No pages in this folder yet."}
+          </p>
+        ) : visibleRows.length === 0 ? (
+          <p className="px-2 py-4 text-sm text-muted-foreground">
+            No pages match this view&rsquo;s filters.
+          </p>
         ) : (
           <>
             {active?.view_type === "table" && (

@@ -5,7 +5,6 @@ export function formatPropertyValue(
   valueType: PropertyValueType,
 ): string | null {
   if (value === null || value === "") {
-    if (valueType === "checkbox") return null;
     return null;
   }
 
