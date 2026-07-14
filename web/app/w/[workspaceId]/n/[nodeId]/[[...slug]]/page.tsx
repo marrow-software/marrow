@@ -1,7 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getNode } from "@/lib/api";
 import { PageEditorLoader } from "@/components/page-editor-loader";
-import { FolderView } from "@/components/folder-view";
 
 interface Props {
   params: Promise<{ workspaceId: string; nodeId: string; slug?: string[] }>;
@@ -18,8 +17,9 @@ export default async function NodeRoute({ params }: Props) {
     return; // unreachable at runtime but satisfies TypeScript narrowing
   }
 
+  // Folders are sidebar tree containers only — not navigable pages.
   if (node.type === "folder") {
-    return <FolderView node={node} workspaceId={workspaceId} />;
+    redirect(`/w/${workspaceId}`);
   }
 
   return <PageEditorLoader initialPage={node} />;

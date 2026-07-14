@@ -245,19 +245,15 @@ marrow/
 │   │       ├── layout.tsx            # Workspace shell with sidebar + auth status
 │   │       ├── page.tsx              # Welcome screen / empty state
 │   │       └── n/[nodeId]/[[...slug]]/
-│   │           └── page.tsx          # Node route — renders PageEditor (type='page') or FolderView (type='folder'). Slug suffix is optional and decorative.
+│   │           └── page.tsx          # Node route — PageEditor for pages; folders redirect to workspace home (sidebar-only containers)
 │   ├── components/
 │   │   ├── admin/                    # Admin dashboard section components
 │   │   │   ├── mission-control-section.tsx  # Overview cards + workspace list
 │   │   │   ├── users-section.tsx     # Member management (reused from org settings)
 │   │   │   ├── spaces-section.tsx    # Spaces grouped by workspace
 │   │   │   └── stub-section.tsx      # Placeholder for not-yet-built sections
-│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → recursive nodes (folders/pages), drag-and-drop, inline create
-│   │   ├── folder-view.tsx           # Folder page: Contents-first + opt-in Views section (#238)
-│   │   ├── folder-views.tsx          # Presentational table/board/list switcher over ViewRow[] (#238)
-│   │   ├── folder-property-schema-editor.tsx  # Folder property schema CRUD dialog (#239)
-│   │   ├── folder-view-settings-dialog.tsx    # Folder view create/edit/delete + config (#240)
-│   │   ├── workspace-role-context.tsx  # userRole + canEdit from workspace layout (#238)
+│   │   ├── app-sidebar.tsx           # Tree nav: Spaces → recursive nodes (folders expand/collapse; pages navigate), drag-and-drop, inline create
+│   │   ├── folder-views.tsx          # Presentational table/board/list (unused until database page type)
 │   │   ├── search-dialog.tsx         # Cmd+K search dialog
 │   │   ├── export-dialog.tsx         # Export workspace dialog (full / slim, size estimate)
 │   │   ├── restore-dialog.tsx        # Restore workspace from bundle dialog (drag-and-drop upload)
@@ -268,7 +264,6 @@ marrow/
 │   │   ├── api.ts                    # apiFetch helper + all API client functions
 │   │   ├── types.ts                  # TypeScript interfaces mirroring API schemas
 │   │   ├── fractional-index.ts       # Wrappers around fractional-indexing npm package
-│   │   ├── format-property-value.ts  # Display formatting for folder view property cells (#238)
 │   │   └── utils.ts
 │   └── hooks/
 │
@@ -430,11 +425,11 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 > columns). Views render the folder's descendant *page* nodes using their
 > properties (#42). Views are presentation-only — CRUD never touches nodes.
 > `rbac.require_view_role` resolves view → folder node → org for role checks.
-> Frontend: `folder-view.tsx` orchestrates saved views + descendant page rows;
-> `folder-views.tsx` renders table/board/list; `folder-view-settings-dialog.tsx`
-> manages view CRUD/config; columns use the view folder's schema keys only
-> (`folder-property-schema-editor.tsx`). `collectDescendantPages()` in
-> `workspace-tree-context.tsx` walks the sidebar tree. Export of view definitions
+> Frontend: API client helpers in `lib/api.ts` (`*NodeView`) and presentational
+> `components/folder-views.tsx` exist; **product UI is deferred** until a
+> Confluence-like **database page** type hosts table/board/list views.
+> Folders in the sidebar are tree containers only (expand/collapse); visiting
+> a folder node URL redirects to the workspace home. Export of view definitions
 > is planned for bundle v5 (`references/To-do.md` item 8).
 
 > **Share links (#40):** `share_links` grant view-only public access to a node.
@@ -450,7 +445,8 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 > **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
 >
 > **Backlinks (#100, 2.6):** `GET /api/nodes/{nid}/backlinks` returns the nodes that link to `{nid}` (min role `viewer`, trashed sources excluded). `marrow/links.py` parses wiki-links (`/pages/{id}` and `/nodes/{id}` hrefs) and reconciles the `node_links` table on every page create/update via `reconcile_node_links()`. Export serializes the live DB index via `serialize_node_links()` into `links.json`; restore rebuilds it with `rebuild_node_links()`, honouring `manifest.include_trash` so links involving trashed nodes round-trip when the bundle was exported with `include_trash=True`.
-> **Node properties (#42, 2.4):** Folder nodes declare a property schema (key + `value_type` + `options`); every descendant page inherits it (nearest-ancestor wins) and may set its own value. Effective properties resolve at read time via the ancestor folder chain. Property keys+values fold into the page `search_vector` at weight C — a single `marrow_node_search_vector(uuid)` SQL helper computes the full vector and all node search triggers (revision-insert, name-change, and the new `node_properties` change trigger) keep it consistent. Frontend: `property-editor.tsx` renders page value controls; folder schema is managed via `folder-property-schema-editor.tsx` on folder pages (#239). Export/restore bundle **v4** carries a `node_properties` array in `manifest.json`; `export.serialize_node_properties` and the restore loop round-trip folder schemas and page values.
+> **Node properties (#42, 2.4):** Folder nodes declare a property schema (key + `value_type` + `options`); every descendant page inherits it (nearest-ancestor wins) and may set its own value. Effective properties resolve at read time via the ancestor folder chain. Property keys+values fold into the page `search_vector` at weight C — a single `marrow_node_search_vector(uuid)` SQL helper computes the full vector and all node search triggers (revision-insert, name-change, and the new `node_properties` change trigger) keep it consistent. Frontend: `property-editor.tsx` renders page value controls. Folder schema
+> management UI is deferred until a database page type hosts views (#239). Export/restore bundle **v4** carries a `node_properties` array in `manifest.json`; `export.serialize_node_properties` and the restore loop round-trip folder schemas and page values.
 
 ### Storage Adapter Interface
 
@@ -525,12 +521,12 @@ Post-login flow: **login → onboarding gate → subscription gate → `/home` o
 - **Auto-save**: `PageEditor` debounces saves 2 seconds after last keystroke; shows Saving… / Saved / Error status
 - **Content format**: new saves store BlockNote JSON (`content_format='json'`); legacy Markdown revisions are loaded via `tryParseMarkdownToBlocks` for backward compat
 - **Editor features**: code blocks (Shiki syntax highlighting), tables (`TableHandlesController`), `@` member mentions (custom inline-content spec carrying `userId` + `displayName`, fed by `listOrgMembers`), `/page` slash item that opens a page picker and inserts a WikiLink (`searchWorkspace`)
-- **Sidebar create flows**: hover-to-reveal `+` buttons (FilePlus / FolderPlus) on each folder and space header create new nodes via `createNode()` with `parent_id` set; slug auto-generated via `slugify()`. Tree open/closed state persists in `localStorage` keyed by `marrow.tree.open.<userId>.<workspaceId>`.
+- **Sidebar create flows**: hover-to-reveal `+` buttons (FilePlus / FolderPlus) on each folder and space header create new nodes via `createNode()` with `parent_id` set; slug auto-generated via `slugify()`. Folders expand/collapse only (Confluence-style tree); pages navigate to the editor. Tree open/closed state persists in `localStorage` keyed by `marrow.tree.open.<userId>.<workspaceId>`.
 - **Sidebar drag-and-drop**: `@dnd-kit/core` drives reparenting and reordering of folders/pages. New positions are computed via `fractional-indexing.generateKeyBetween()` and PATCHed to `/api/nodes/{id}` with `parent_id` + `position`. Cross-workspace drops and descendant-cycle drops are rejected with a `sonner` toast. Server is the source of truth — failures rollback via `router.refresh()`.
 - **Comments**: `useComments(nodeId)` hook (`hooks/use-comments.ts`) owns thread state; `CommentsDrawer` renders threads/composer/resolve and `CommentBubbleFab` shows the unread badge. Unread = comments created after the viewer's last drawer visit, tracked client-side in `localStorage` (`marrow:comment-visit:<nodeId>`) — deliberately simple v1 heuristic, no backend visit table
 - **Inbox**: `rail-panels/inbox-panel.tsx` lists notifications with kind-specific icons/copy and an empty state; `WorkspaceShell` fetches the unread count on mount and `AppRail` renders an unread badge on the Inbox tab. Backend delivery lives in `api/marrow/notifications.py` — `@`-mention saves on page nodes notify newly-mentioned users (only mentions new vs. the prior revision; the actor is never self-notified). Notifications are user-scoped and deliberately excluded from export/restore.
 - **Global Home (#208)**: `app/home/` is the post-login default — `layout.tsx` enforces the auth + subscription gate and renders `components/global-chrome.tsx` (a slim top bar with workspace switcher + user menu, **not** `WorkspaceShell`); `page.tsx` composes self-contained widgets in `components/home/widgets.tsx` (Recently edited via `getMyRecent`, Starred, Inbox summary, Workspace switcher) — each kept standalone for the future widgets-dashboard backlog. The `/workspaces` picker is a switcher, not the landing. `/subscribe` + `/subscribe/success` drive checkout (`createCheckoutSession`).
-- **Folder views (#238–#240)**: Confluence-style **Contents-first** folder landing — title, description, and direct child folders/pages in a `max-w-3xl` list (like pre-#238). Table/board/list views are **opt-in**: editors see *"Add table, board, or list view…"* below Contents; once saved views exist, a **Views** section renders below with `FolderViews` (full-width table/board/list). Property schema + per-page fetches run only when views exist (lazy). **Manage properties** lives in the Views section header (or beside the opt-in CTA before any views). Sidebar folder names navigate to the folder page. `canEdit` from `workspace-role-context.tsx`. Schema CRUD: `folder-property-schema-editor.tsx`; view CRUD: `folder-view-settings-dialog.tsx`.
+- **Folder / views UX**: Folders are **sidebar-only** containers (no folder landing page; folder URLs redirect to workspace home). Table/board/list views and folder schema editors are **deferred** to a future Confluence-like **database page** type (`references/To-do.md` Phase B items 5–7 + database page tracking). Backend `node_views` / property schema APIs remain.
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 
@@ -565,3 +561,4 @@ Tests in `api/tests/` are **integration tests** — they hit a real database. A 
 - Task management and integrations
 - K8s and systemd deployment guides (Docker Compose is documented)
 - Page templates
+- Database page type (Confluence-like host for table/board/list views + folder property schema UI — #238–#240 deferred here)

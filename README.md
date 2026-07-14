@@ -38,7 +38,7 @@ See **[Restore guarantee](./docs/src/content/docs/concepts/restore-guarantee.md)
 
 - Content organized in a tree: Organizations → Workspaces → Spaces → Folders / Pages
 - BlockNote-powered editor with code blocks, tables, page links, and `@` mentions
-- Folder views: table, board, and list — rendered from page properties
+- Optional folder views (table, board, list) — backend ready; product UI planned on a database page type
 - Node properties (text, number, date, select, multi-select, checkbox) inherited from parent folders
 - Comments (threads, replies, resolve) on any page
 - Backlinks — every page knows what links to it
