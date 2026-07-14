@@ -129,14 +129,6 @@ export function FolderViews({
     return applySorts(applyFilters(rows, active.config), active.config);
   }, [active, rows]);
 
-  if (!views.length) {
-    return (
-      <p className="px-1 py-4 text-sm text-muted-foreground">
-        No views in this folder yet.
-      </p>
-    );
-  }
-
   return (
     <div className="flex min-h-0 flex-col">
       <div className="flex items-center gap-1 overflow-x-auto border-b px-1 py-2">
