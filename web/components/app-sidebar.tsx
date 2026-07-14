@@ -156,8 +156,9 @@ function NodeRow({
   });
 
   const indentStyle = { paddingLeft: `${depth * 12 + 8}px` };
-  const href = isFolder ? null : `/w/${ctx.workspaceId}/n/${node.id}/${node.slug}`;
-  const isActive = href ? ctx.activePath.startsWith(`/w/${ctx.workspaceId}/n/${node.id}`) : false;
+  // Folders link to their node page too — that's where folder views live (#238).
+  const href = `/w/${ctx.workspaceId}/n/${node.id}/${node.slug}`;
+  const isActive = ctx.activePath.startsWith(`/w/${ctx.workspaceId}/n/${node.id}`);
 
   async function commitCreate(kind: "page" | "folder", name: string) {
     const lastChild = node.children[node.children.length - 1];
@@ -216,20 +217,16 @@ function NodeRow({
           ) : (
             <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
-          {href ? (
-            <a
-              href={href}
-              onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              className={`flex-1 truncate text-sm ${
-                isActive ? "font-medium text-foreground" : "text-foreground/90 hover:text-foreground"
-              }`}
-            >
-              {node.name}
-            </a>
-          ) : (
-            <span className="flex-1 truncate text-sm text-foreground/90">{node.name}</span>
-          )}
+          <a
+            href={href}
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            className={`flex-1 truncate text-sm ${
+              isActive ? "font-medium text-foreground" : "text-foreground/90 hover:text-foreground"
+            }`}
+          >
+            {node.name}
+          </a>
           {inside.isOver && isFolder && (
             <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-primary" />
           )}
