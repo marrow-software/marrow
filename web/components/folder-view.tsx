@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, FileText, Folder, SlidersHorizontal } from "
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { FolderPropertySchemaEditor } from "@/components/folder-property-schema-editor";
 import { FolderViewSettingsDialog } from "@/components/folder-view-settings-dialog";
@@ -101,11 +102,14 @@ export function FolderView({ node, workspaceId }: Props) {
       try {
         await createNodeView(node.id, "All", "list");
       } catch {
-        /* concurrent create — refetch below */
+        /* concurrent create — refetch below; toast only if still empty */
       }
       if (isStale()) return;
       fetched = await listNodeViews(node.id);
       if (isStale()) return;
+      if (fetched.length === 0) {
+        toast.error("Could not create a default view");
+      }
     }
 
     if (isStale()) return;
@@ -286,6 +290,25 @@ export function FolderView({ node, workspaceId }: Props) {
                 ? "No views configured. Pages exist in this folder but cannot be browsed here."
                 : "No views in this folder yet."}
             </p>
+          )}
+
+          {!viewsLoading && canEdit && views && views.length === 0 && (
+            <div className="flex flex-col items-start gap-3 px-2 py-4">
+              <p className="text-sm text-muted-foreground">
+                No views in this folder yet.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditingView(null);
+                  setViewDialogMode("create");
+                }}
+              >
+                Create view
+              </Button>
+            </div>
           )}
 
           {!viewsLoading && views && views.length > 0 && (

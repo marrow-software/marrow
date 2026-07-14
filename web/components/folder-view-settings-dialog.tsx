@@ -219,13 +219,28 @@ export function FolderViewSettingsDialog({
     }));
   }
 
+  function effectiveVisibleKeys(keys: string[]): string[] {
+    // Empty visible_properties means "all schema columns" (matches columnsFor).
+    const schemaKeys = schema.map((s) => s.key);
+    if (keys.length === 0) return schemaKeys;
+    return keys.filter((k) => schemaKeys.includes(k));
+  }
+
   function toggleVisibleProperty(key: string) {
     setConfig((c) => {
-      const set = new Set(c.visible_properties);
+      const schemaKeys = schema.map((s) => s.key);
+      const set = new Set(effectiveVisibleKeys(c.visible_properties));
       if (set.has(key)) set.delete(key);
       else set.add(key);
-      return { ...c, visible_properties: [...set] };
+      const next = schemaKeys.filter((k) => set.has(k));
+      // Persist [] when every schema key is selected (empty = all convention).
+      const isAll = next.length === schemaKeys.length;
+      return { ...c, visible_properties: isAll ? [] : next };
     });
+  }
+
+  function isVisiblePropertyChecked(key: string): boolean {
+    return effectiveVisibleKeys(config.visible_properties).includes(key);
   }
 
   return (
@@ -300,7 +315,7 @@ export function FolderViewSettingsDialog({
                   <label key={s.key} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={config.visible_properties.includes(s.key)}
+                      checked={isVisiblePropertyChecked(s.key)}
                       onChange={() => toggleVisibleProperty(s.key)}
                     />
                     {s.key}
