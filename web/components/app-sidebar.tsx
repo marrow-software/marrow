@@ -156,9 +156,15 @@ function NodeRow({
   });
 
   const indentStyle = { paddingLeft: `${depth * 12 + 8}px` };
-  // Folders link to their node page too — that's where folder views live (#238).
-  const href = `/w/${ctx.workspaceId}/n/${node.id}/${node.slug}`;
-  const isActive = ctx.activePath.startsWith(`/w/${ctx.workspaceId}/n/${node.id}`);
+  // Folders are tree containers only (Confluence-style) — expand/collapse, no landing page.
+  const href = isFolder ? null : `/w/${ctx.workspaceId}/n/${node.id}/${node.slug}`;
+  const isActive = href
+    ? ctx.activePath.startsWith(`/w/${ctx.workspaceId}/n/${node.id}`)
+    : false;
+
+  function toggleFolder() {
+    ctx.setOpen(node.id, !isOpen);
+  }
 
   async function commitCreate(kind: "page" | "folder", name: string) {
     const lastChild = node.children[node.children.length - 1];
@@ -202,7 +208,7 @@ function NodeRow({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                ctx.setOpen(node.id, !isOpen);
+                toggleFolder();
               }}
               className="flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
               aria-label={isOpen ? "Collapse folder" : "Expand folder"}
@@ -217,16 +223,32 @@ function NodeRow({
           ) : (
             <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
-          <a
-            href={href}
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-            className={`flex-1 truncate text-sm ${
-              isActive ? "font-medium text-foreground" : "text-foreground/90 hover:text-foreground"
-            }`}
-          >
-            {node.name}
-          </a>
+          {href ? (
+            <a
+              href={href}
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              className={`flex-1 truncate text-sm ${
+                isActive
+                  ? "font-medium text-foreground"
+                  : "text-foreground/90 hover:text-foreground"
+              }`}
+            >
+              {node.name}
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFolder();
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+              className="flex-1 truncate text-left text-sm text-foreground/90 hover:text-foreground"
+            >
+              {node.name}
+            </button>
+          )}
           {inside.isOver && isFolder && (
             <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-primary" />
           )}

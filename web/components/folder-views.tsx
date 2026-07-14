@@ -9,11 +9,10 @@
  * definitions is done through the `*NodeView` helpers in `lib/api.ts`.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { LayoutGrid, List, Pencil, Plus, Table2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { LayoutGrid, List, Table2 } from "lucide-react";
 
 import type { NodeView, NodeViewConfig, ViewType } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 /** A page node plus its resolved properties (key → display string). */
 export interface ViewRow {
@@ -24,16 +23,11 @@ export interface ViewRow {
 
 const NO_GROUP = "—";
 
-function rowPropertyValue(row: ViewRow, property: string): string | null {
-  if (property === "name") return row.name;
-  return row.properties[property] ?? null;
-}
-
 function applyFilters(rows: ViewRow[], config: NodeViewConfig): ViewRow[] {
   if (!config.filters?.length) return rows;
   return rows.filter((row) =>
     config.filters.every((f) => {
-      const v = rowPropertyValue(row, f.property);
+      const v = row.properties[f.property] ?? null;
       switch (f.operator) {
         case "eq":
           return v === f.value;
@@ -45,10 +39,8 @@ function applyFilters(rows: ViewRow[], config: NodeViewConfig): ViewRow[] {
           return v === null || v === "";
         case "is_not_empty":
           return v !== null && v !== "";
-        default: {
-          const _exhaustive: never = f.operator;
-          return _exhaustive;
-        }
+        default:
+          return true;
       }
     }),
   );
@@ -59,8 +51,8 @@ function applySorts(rows: ViewRow[], config: NodeViewConfig): ViewRow[] {
   const sorted = [...rows];
   sorted.sort((a, b) => {
     for (const s of config.sorts) {
-      const av = rowPropertyValue(a, s.property) ?? "";
-      const bv = rowPropertyValue(b, s.property) ?? "";
+      const av = s.property === "name" ? a.name : (a.properties[s.property] ?? "");
+      const bv = s.property === "name" ? b.name : (b.properties[s.property] ?? "");
       if (av === bv) continue;
       const cmp = av < bv ? -1 : 1;
       return s.direction === "desc" ? -cmp : cmp;
@@ -70,11 +62,11 @@ function applySorts(rows: ViewRow[], config: NodeViewConfig): ViewRow[] {
   return sorted;
 }
 
-function columnsFor(schemaKeys: string[], config: NodeViewConfig): string[] {
-  if (config.visible_properties?.length) {
-    return config.visible_properties.filter((k) => schemaKeys.includes(k));
-  }
-  return schemaKeys;
+function columnsFor(rows: ViewRow[], config: NodeViewConfig): string[] {
+  if (config.visible_properties?.length) return config.visible_properties;
+  const keys = new Set<string>();
+  rows.forEach((r) => Object.keys(r.properties).forEach((k) => keys.add(k)));
+  return [...keys].sort();
 }
 
 const VIEW_META: Record<ViewType, { icon: typeof List; label: string }> = {
@@ -86,41 +78,16 @@ const VIEW_META: Record<ViewType, { icon: typeof List; label: string }> = {
 export function FolderViews({
   views,
   rows,
-  schemaKeys,
-  canEdit = false,
-  activeViewId,
-  onActiveViewChange,
-  onCreateView,
-  onEditView,
   onOpenNode,
-  emptyPagesMessage,
 }: {
   views: NodeView[];
   rows: ViewRow[];
-  schemaKeys: string[];
-  canEdit?: boolean;
-  activeViewId?: string | null;
-  onActiveViewChange?: (viewId: string) => void;
-  onCreateView?: () => void;
-  onEditView?: (view: NodeView) => void;
   onOpenNode?: (nodeId: string) => void;
-  emptyPagesMessage?: string;
 }) {
-  const [internalActiveId, setInternalActiveId] = useState<string | null>(
+  // Default to the list view when present, else the first saved view.
+  const [activeId, setActiveId] = useState<string | null>(
     views.find((v) => v.view_type === "list")?.id ?? views[0]?.id ?? null,
   );
-
-  const activeId = activeViewId ?? internalActiveId;
-  const setActiveId = onActiveViewChange ?? setInternalActiveId;
-
-  useEffect(() => {
-    if (views.length === 0) return;
-    if (!activeId || !views.some((v) => v.id === activeId)) {
-      const fallback =
-        views.find((v) => v.view_type === "list")?.id ?? views[0]?.id ?? null;
-      if (fallback) setActiveId(fallback);
-    }
-  }, [views, activeId, setActiveId]);
 
   const active = views.find((v) => v.id === activeId) ?? null;
 
@@ -129,9 +96,17 @@ export function FolderViews({
     return applySorts(applyFilters(rows, active.config), active.config);
   }, [active, rows]);
 
+  if (!views.length) {
+    return (
+      <p className="px-4 py-6 text-sm text-muted-foreground">
+        No views configured for this folder yet.
+      </p>
+    );
+  }
+
   return (
-    <div className="flex min-h-0 flex-col">
-      <div className="flex items-center gap-1 overflow-x-auto border-b px-1 py-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-1 border-b px-3 py-2">
         {views.map((v) => {
           const Meta = VIEW_META[v.view_type];
           const Icon = Meta.icon;
@@ -141,68 +116,28 @@ export function FolderViews({
               key={v.id}
               type="button"
               onClick={() => setActiveId(v.id)}
-              className={cn(
-                "flex min-h-11 shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-colors",
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 isActive
                   ? "bg-accent text-foreground"
-                  : "text-muted-foreground hover:bg-accent/50",
-              )}
+                  : "text-muted-foreground hover:bg-accent/50"
+              }`}
             >
               <Icon className="h-3.5 w-3.5" />
               {v.name}
             </button>
           );
         })}
-        {canEdit && onCreateView && (
-          <button
-            type="button"
-            title="Add view"
-            aria-label="Add view"
-            onClick={onCreateView}
-            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        )}
-        {canEdit && active && onEditView && (
-          <button
-            type="button"
-            title="Edit view"
-            aria-label="Edit view"
-            onClick={() => onEditView(active)}
-            className="ml-auto flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-        )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto p-1">
-        {rows.length === 0 ? (
-          <p className="px-2 py-4 text-sm text-muted-foreground">
-            {emptyPagesMessage ?? "No pages in this folder yet."}
-          </p>
-        ) : visibleRows.length === 0 ? (
-          <p className="px-2 py-4 text-sm text-muted-foreground">
-            No pages match this view&rsquo;s filters.
-          </p>
-        ) : (
-          <>
-            {active?.view_type === "table" && (
-              <TableView
-                rows={visibleRows}
-                schemaKeys={schemaKeys}
-                config={active.config}
-                onOpenNode={onOpenNode}
-              />
-            )}
-            {active?.view_type === "board" && (
-              <BoardView rows={visibleRows} config={active.config} onOpenNode={onOpenNode} />
-            )}
-            {(!active || active.view_type === "list") && (
-              <ListView rows={visibleRows} onOpenNode={onOpenNode} />
-            )}
-          </>
+      <div className="min-h-0 flex-1 overflow-auto p-3">
+        {active?.view_type === "table" && (
+          <TableView rows={visibleRows} config={active.config} onOpenNode={onOpenNode} />
+        )}
+        {active?.view_type === "board" && (
+          <BoardView rows={visibleRows} config={active.config} onOpenNode={onOpenNode} />
+        )}
+        {(!active || active.view_type === "list") && (
+          <ListView rows={visibleRows} onOpenNode={onOpenNode} />
         )}
       </div>
     </div>
@@ -216,9 +151,6 @@ function ListView({
   rows: ViewRow[];
   onOpenNode?: (nodeId: string) => void;
 }) {
-  if (rows.length === 0) {
-    return null;
-  }
   return (
     <ul className="flex flex-col">
       {rows.map((r) => (
@@ -226,7 +158,7 @@ function ListView({
           <button
             type="button"
             onClick={() => onOpenNode?.(r.id)}
-            className="min-h-11 w-full rounded-md px-2 py-2 text-left text-sm hover:bg-accent/50"
+            className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent/50"
           >
             {r.name}
           </button>
@@ -238,51 +170,47 @@ function ListView({
 
 function TableView({
   rows,
-  schemaKeys,
   config,
   onOpenNode,
 }: {
   rows: ViewRow[];
-  schemaKeys: string[];
   config: NodeViewConfig;
   onOpenNode?: (nodeId: string) => void;
 }) {
-  const cols = columnsFor(schemaKeys, config);
+  const cols = columnsFor(rows, config);
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-max border-collapse text-sm">
-        <thead>
-          <tr className="border-b text-left text-xs uppercase text-muted-foreground">
-            <th className="px-2 py-1.5 font-medium">Name</th>
+    <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr className="border-b text-left text-xs uppercase text-muted-foreground">
+          <th className="px-2 py-1.5 font-medium">Name</th>
+          {cols.map((c) => (
+            <th key={c} className="px-2 py-1.5 font-medium">
+              {c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} className="border-b last:border-0 hover:bg-accent/40">
+            <td className="px-2 py-1.5">
+              <button
+                type="button"
+                onClick={() => onOpenNode?.(r.id)}
+                className="text-left hover:underline"
+              >
+                {r.name}
+              </button>
+            </td>
             {cols.map((c) => (
-              <th key={c} className="px-2 py-1.5 font-medium">
-                {c}
-              </th>
+              <td key={c} className="px-2 py-1.5 text-muted-foreground">
+                {r.properties[c] ?? ""}
+              </td>
             ))}
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-b last:border-0 hover:bg-accent/40">
-              <td className="px-2 py-1.5">
-                <button
-                  type="button"
-                  onClick={() => onOpenNode?.(r.id)}
-                  className="text-left hover:underline"
-                >
-                  {r.name}
-                </button>
-              </td>
-              {cols.map((c) => (
-                <td key={c} className="px-2 py-1.5 text-muted-foreground">
-                  {r.properties[c] ?? "—"}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -315,7 +243,7 @@ function BoardView({
   }
 
   return (
-    <div className="flex gap-3 overflow-x-auto pb-2">
+    <div className="flex gap-3 overflow-x-auto">
       {groups.map(([group, groupRows]) => (
         <div key={group} className="w-60 shrink-0 rounded-lg bg-muted/40 p-2">
           <div className="mb-2 flex items-center justify-between px-1 text-xs font-medium text-muted-foreground">
