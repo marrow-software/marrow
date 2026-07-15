@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db, get_storage, verify_auth
 from ..fractional_index import after as fi_after
-from ..links import reconcile_node_links
 from ..models import (
     Attachment,
     Node,
@@ -24,7 +23,7 @@ from ..models import (
     UserStar,
     Workspace,
 )
-from ..notifications import deliver_mention_notifications
+from ..page_revisions import persist_page_revision
 from ..rbac import _check_membership, require_node_role, require_space_role
 from ..schemas import (
     AttachmentRead,
@@ -35,7 +34,6 @@ from ..schemas import (
     RevisionRead,
     WatchStatus,
 )
-from ..watches import fan_out_watch_event
 
 router = APIRouter(tags=["nodes"])
 
@@ -116,25 +114,11 @@ def create_node(
         raise HTTPException(409, f"Slug '{slug}' already exists in this location")
 
     if body.type == "page":
-        content = body.content or ""
-        rev = Revision(
-            node_id=node.id,
-            content=content,
-            content_format=body.content_format,
-        )
-        db.add(rev)
-        db.flush()
-        node.current_revision_id = rev.id
-        db.flush()
-        reconcile_node_links(db, node.id, content, body.content_format)
-
-        deliver_mention_notifications(
+        persist_page_revision(
             db,
             node=node,
-            new_content=content,
+            content=body.content or "",
             content_format=body.content_format,
-            previous_content=None,
-            previous_format=None,
             actor_user_id=auth.user_id,
         )
 
@@ -210,45 +194,16 @@ def update_node(
     if body.description is not None and node.type == "folder":
         node.description = body.description
 
-    saved_revision = False
     if body.content is not None and node.type == "page":
-        prev_rev = node.current_revision
-        prev_content = prev_rev.content if prev_rev else None
-        prev_format = prev_rev.content_format if prev_rev else None
-
-        rev = Revision(
-            node_id=node.id,
-            content=body.content,
-            content_format=body.content_format or "markdown",
-        )
-        db.add(rev)
-        db.flush()
-        node.current_revision_id = rev.id
-        reconcile_node_links(db, node.id, body.content, body.content_format or "markdown")
-        saved_revision = True
-
-        deliver_mention_notifications(
+        persist_page_revision(
             db,
             node=node,
-            new_content=body.content,
+            content=body.content,
             content_format=body.content_format or "markdown",
-            previous_content=prev_content,
-            previous_format=prev_format,
             actor_user_id=auth.user_id,
         )
-
-    node.updated_at = datetime.now(timezone.utc)
-
-    if saved_revision:
-        # Notify watchers best-effort — must not block or fail the save.
-        # Use a savepoint so any partial notification rows are rolled back on
-        # failure rather than being committed by the db.commit() below.
-        sp = db.begin_nested()
-        try:
-            fan_out_watch_event(db, node=node, actor_user_id=auth.user_id, event="save")
-            sp.commit()
-        except Exception:
-            sp.rollback()
+    else:
+        node.updated_at = datetime.now(timezone.utc)
 
     try:
         db.commit()

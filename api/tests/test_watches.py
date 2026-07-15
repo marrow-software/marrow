@@ -236,3 +236,38 @@ class TestWatchFanOut:
         notes = _watch_events(db, watcher_id)
         assert len(notes) == 1
         assert notes[0].payload["node_id"] == child_id
+
+    def test_create_page_notifies_folder_watcher(self, client, db):
+        """Create-path parity with update: first revision fans out watches (#255)."""
+        watcher = _make_user(db, "create-watcher@test.com")
+        editor = _make_user(db, "create-editor@test.com")
+        org, ws, space = _make_workspace(db)
+        _add_membership(db, org, watcher, OrgRole.VIEWER)
+        _add_membership(db, org, editor, OrgRole.EDITOR)
+        folder = _make_folder(db, space)
+        db.commit()
+        folder_id = str(folder.id)
+        space_id = str(space.id)
+        watcher_id = watcher.id
+
+        _auth_cookie(client, watcher)
+        assert client.post(f"/api/nodes/{folder_id}/watch").status_code == 201
+
+        _auth_cookie(client, editor)
+        res = client.post(
+            f"/api/spaces/{space_id}/nodes",
+            json={
+                "type": "page",
+                "name": "New child",
+                "parent_id": folder_id,
+                "content": "hello from create",
+                "content_format": "markdown",
+            },
+        )
+        assert res.status_code == 201, res.text
+        child_id = res.json()["id"]
+
+        notes = _watch_events(db, watcher_id)
+        assert len(notes) == 1
+        assert notes[0].payload["event"] == "save"
+        assert notes[0].payload["node_id"] == child_id
