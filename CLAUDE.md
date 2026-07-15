@@ -203,6 +203,7 @@ marrow/
 │   │   ├── export.py                 # Export workspace → zip bundle
 │   │   ├── restore.py                # Restore workspace ← zip bundle
 │   │   ├── provisioning.py           # Default workspace + space for personal org (#241)
+│   │   ├── page_revisions.py         # persist_page_revision — save path side effects (#255)
 │   │   ├── cli.py                    # Typer CLI (export, restore, reset-org-billing)
 │   │   └── routers/
 │   │       ├── auth.py               # OIDC login/callback/me/logout + personal org creation
@@ -227,7 +228,8 @@ marrow/
 │   │   ├── test_export.py
 │   │   ├── test_restore.py
 │   │   ├── test_round_trip.py        # Critical regression anchor
-│   │   └── test_search.py            # FTS trigger + search scoping tests
+│   │   ├── test_search.py            # FTS trigger + search scoping tests
+│   │   └── test_page_revisions.py    # persist_page_revision save-path integration (#255)
 │   └── storage/                      # Default local attachment storage (gitignored)
 │
 ├── web/                              # Next.js frontend
@@ -440,11 +442,13 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 > unrestricted (same pattern as the API-key/dev path). Share links are **not
 > yet in the export bundle** (planned bundle v5 — `references/To-do.md` item 8).
 >
-> **Watches & notifications (#103/#104):** `notifications` is a user-scoped Inbox feed; `create_notification()` in `marrow/notifications.py` is the single insertion point. `marrow/watches.py` fans out `watch_event` notifications: on a page save (`update_node` revision create), every watcher of the page **or any ancestor folder** is notified, excluding the acting user. Both tables are deliberately excluded from export/restore (user-scoped, workspace-independent) — the round-trip guarantee is unaffected.
+> **Page revision persistence (#255):** `persist_page_revision()` in `marrow/page_revisions.py` is the single save path for appending a page revision. Both `create_node` and `update_node` call it when writing page content. It owns link reconcile, mention delivery, and watch fan-out (watches are best-effort behind a nested savepoint). The router still owns `db.commit()` / IntegrityError → HTTP. See `CONTEXT.md`.
+>
+> **Watches & notifications (#103/#104):** `notifications` is a user-scoped Inbox feed; `create_notification()` in `marrow/notifications.py` is the single insertion point. `marrow/watches.py` fans out `watch_event` notifications: on a page save (`persist_page_revision`), every watcher of the page **or any ancestor folder** is notified, excluding the acting user. Both tables are deliberately excluded from export/restore (user-scoped, workspace-independent) — the round-trip guarantee is unaffected.
 >
 > **Search response shape (v0.2):** `SearchResultItem` fields are `node_id`, `name`, `snippet`, `space_id`, `space_name`, `node_path` (list of ancestor folder names, root→leaf), `rank`. The old `page_id`, `title`, `collection_id`, `collection_name` fields are gone.
 >
-> **Backlinks (#100, 2.6):** `GET /api/nodes/{nid}/backlinks` returns the nodes that link to `{nid}` (min role `viewer`, trashed sources excluded). `marrow/links.py` parses wiki-links (`/pages/{id}` and `/nodes/{id}` hrefs) and reconciles the `node_links` table on every page create/update via `reconcile_node_links()`. Export serializes the live DB index via `serialize_node_links()` into `links.json`; restore rebuilds it with `rebuild_node_links()`, honouring `manifest.include_trash` so links involving trashed nodes round-trip when the bundle was exported with `include_trash=True`.
+> **Backlinks (#100, 2.6):** `GET /api/nodes/{nid}/backlinks` returns the nodes that link to `{nid}` (min role `viewer`, trashed sources excluded). `marrow/links.py` parses wiki-links (`/pages/{id}` and `/nodes/{id}` hrefs) and reconciles the `node_links` table on every page create/update via `reconcile_node_links()` (invoked from `persist_page_revision`). Export serializes the live DB index via `serialize_node_links()` into `links.json`; restore rebuilds it with `rebuild_node_links()`, honouring `manifest.include_trash` so links involving trashed nodes round-trip when the bundle was exported with `include_trash=True`.
 > **Node properties (#42, 2.4):** Folder nodes declare a property schema (key + `value_type` + `options`); every descendant page inherits it (nearest-ancestor wins) and may set its own value. Effective properties resolve at read time via the ancestor folder chain. Property keys+values fold into the page `search_vector` at weight C — a single `marrow_node_search_vector(uuid)` SQL helper computes the full vector and all node search triggers (revision-insert, name-change, and the new `node_properties` change trigger) keep it consistent. Frontend: `property-editor.tsx` renders page value controls. Folder schema
 > management UI is deferred until a database page type hosts views (#239). Export/restore bundle **v4** carries a `node_properties` array in `manifest.json`; `export.serialize_node_properties` and the restore loop round-trip folder schemas and page values.
 
