@@ -566,3 +566,19 @@ Tests in `api/tests/` are **integration tests** — they hit a real database. A 
 - K8s and systemd deployment guides (Docker Compose is documented)
 - Page templates
 - Database page type (Confluence-like host for table/board/list views + folder property schema UI — #238–#240 deferred here)
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `marrow-software/marrow` (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical roles map 1:1 to tracker labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
