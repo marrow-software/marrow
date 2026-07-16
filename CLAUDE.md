@@ -289,9 +289,11 @@ marrow/
 │       └── landing.spec.ts           # Assertion smoke tests (nav hrefs, glyph, CTA dests, no /signup) — run in marketing.yml
 │
 ├── docs/                             # Astro Starlight docs site (user-facing)
+│   ├── agents/                       # Agent skill config (issue tracker, triage, domain) — NOT published
 │   ├── astro.config.mjs              # Sidebar nav + site metadata
 │   ├── package.json
 │   └── src/content/docs/             # Markdown/MDX content (getting-started, deployment, configuration, concepts)
+│                                     # Only this tree is built/deployed; docs/agents/ is outside the Starlight collection
 │
 ├── references/                       # Internal-only reference docs (PRDs, brand)
 │   └── design-tokens.md              # Marrow's brand reference — NOT published
