@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Marrow is a self-hosted, open-source knowledge base (wiki) built around a non-negotiable **restore guarantee**: a Marrow export bundle must always be restorable to an exact replica of the original workspace. This guarantee is the architectural foundation — every decision flows from it.
 
-Current status: **v0.4.x** — beachhead activation shipped (solo-first onboarding, workspace provisioning on onboard, self-host-first marketing, export/restore docs). Node tree (folders + pages), v4 export/restore, OIDC + org RBAC, BlockNote editor, comments, properties, backlinks, page archiving, SaaS billing gates, and global `/home` landing are implemented and tested. Comments, share links, and folder view definitions are not yet in export bundles (planned bundle v5 — see `references/To-do.md` item 8).
+Current status: **v0.4.x** — beachhead activation shipped (solo-first onboarding, workspace provisioning on onboard, self-host-first marketing, export/restore docs). Node tree (folders + pages), v4 export/restore, OIDC + org RBAC, BlockNote editor, comments, properties, backlinks, page archiving, SaaS billing gates, and global `/home` landing are implemented and tested. Comments, share links, and folder view definitions are not yet in export bundles (planned bundle v5). **Active product track:** wayfinder map [#258](https://github.com/marrow-software/marrow/issues/258) (and its child tickets) — do not open parallel backlog tracks.
 
 ---
 
@@ -360,7 +360,7 @@ organizations → org_memberships (user roles: owner/editor/viewer)
 
 **Deferred FK**: `nodes.current_revision_id → revisions.id` is a deferred constraint, allowing a node and its first revision to be created in a single transaction.
 
-**Comments**: Page-level only for v1; `node_id` must reference a `type='page'` node, enforced in `routers/comments.py` (the issue explicitly allowed check-or-app-level). One level of replies via `parent_comment_id` (nested replies are rejected with 400). Resolve = setting `resolved_at`. A future `block_id` column can be added additively for block-level comments without a breaking migration. RLS `tenant_isolation` is enabled on `comments` via the node-indirect tenant expression, identical to `revisions`/`attachments`. Comments are **not yet in the export bundle** (planned bundle v5 — `references/To-do.md` item 8).
+**Comments**: Page-level only for v1; `node_id` must reference a `type='page'` node, enforced in `routers/comments.py` (the issue explicitly allowed check-or-app-level). One level of replies via `parent_comment_id` (nested replies are rejected with 400). Resolve = setting `resolved_at`. A future `block_id` column can be added additively for block-level comments without a breaking migration. RLS `tenant_isolation` is enabled on `comments` via the node-indirect tenant expression, identical to `revisions`/`attachments`. Comments are **not yet in the export bundle** (planned bundle v5).
 
 ### API Routes Summary
 
@@ -434,7 +434,7 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 > Confluence-like **database page** type hosts table/board/list views.
 > Folders in the sidebar are tree containers only (expand/collapse); visiting
 > a folder node URL redirects to the workspace home. Export of view definitions
-> is planned for bundle v5 (`references/To-do.md` item 8).
+> is planned for bundle v5.
 
 > **Share links (#40):** `share_links` grant view-only public access to a node.
 > `GET /shared/{token}` requires no account: a page returns its current
@@ -442,7 +442,7 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 > recursively. Expired links return 410, unknown/revoked return 404. The
 > public endpoint relies on RLS treating an unset `app.current_org` as
 > unrestricted (same pattern as the API-key/dev path). Share links are **not
-> yet in the export bundle** (planned bundle v5 — `references/To-do.md` item 8).
+> yet in the export bundle** (planned bundle v5).
 >
 > **Page revision persistence (#255):** `persist_page_revision()` in `marrow/page_revisions.py` is the single save path for appending a page revision. Both `create_node` and `update_node` call it when writing page content. It owns link reconcile, mention delivery, and watch fan-out (watches are best-effort behind a nested savepoint). The router still owns `db.commit()` / IntegrityError → HTTP. See `CONTEXT.md`.
 >
@@ -452,7 +452,7 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 >
 > **Backlinks (#100, 2.6):** `GET /api/nodes/{nid}/backlinks` returns the nodes that link to `{nid}` (min role `viewer`, trashed sources excluded). `marrow/links.py` parses wiki-links (`/pages/{id}` and `/nodes/{id}` hrefs) and reconciles the `node_links` table on every page create/update via `reconcile_node_links()` (invoked from `persist_page_revision`). Export serializes the live DB index via `serialize_node_links()` into `links.json`; restore rebuilds it with `rebuild_node_links()`, honouring `manifest.include_trash` so links involving trashed nodes round-trip when the bundle was exported with `include_trash=True`.
 > **Node properties (#42, 2.4):** Folder nodes declare a property schema (key + `value_type` + `options`); every descendant page inherits it (nearest-ancestor wins) and may set its own value. Effective properties resolve at read time via the ancestor folder chain. Property keys+values fold into the page `search_vector` at weight C — a single `marrow_node_search_vector(uuid)` SQL helper computes the full vector and all node search triggers (revision-insert, name-change, and the new `node_properties` change trigger) keep it consistent. Frontend: `property-editor.tsx` renders page value controls. Folder schema
-> management UI is deferred until a database page type hosts views (#239). Export/restore bundle **v4** carries a `node_properties` array in `manifest.json`; `export.serialize_node_properties` and the restore loop round-trip folder schemas and page values.
+> management UI is deferred until a database page type hosts views. Export/restore bundle **v4** carries a `node_properties` array in `manifest.json`; `export.serialize_node_properties` and the restore loop round-trip folder schemas and page values.
 
 ### Storage Adapter Interface
 
@@ -532,7 +532,7 @@ Post-login flow: **login → onboarding gate → subscription gate → `/home` o
 - **Comments**: `useComments(nodeId)` hook (`hooks/use-comments.ts`) owns thread state; `CommentsDrawer` renders threads/composer/resolve and `CommentBubbleFab` shows the unread badge. Unread = comments created after the viewer's last drawer visit, tracked client-side in `localStorage` (`marrow:comment-visit:<nodeId>`) — deliberately simple v1 heuristic, no backend visit table
 - **Inbox**: `rail-panels/inbox-panel.tsx` lists notifications with kind-specific icons/copy and an empty state; `WorkspaceShell` fetches the unread count on mount and `AppRail` renders an unread badge on the Inbox tab. Backend delivery lives in `api/marrow/notifications.py` — `@`-mention saves on page nodes notify newly-mentioned users (only mentions new vs. the prior revision; the actor is never self-notified). Notifications are user-scoped and deliberately excluded from export/restore.
 - **Global Home (#208)**: `app/home/` is the post-login default — `layout.tsx` enforces the auth + subscription gate and renders `components/global-chrome.tsx` (a slim top bar with workspace switcher + user menu, **not** `WorkspaceShell`); `page.tsx` composes self-contained widgets in `components/home/widgets.tsx` (Recently edited via `getMyRecent`, Starred, Inbox summary, Workspace switcher) — each kept standalone for the future widgets-dashboard backlog. The `/workspaces` picker is a switcher, not the landing. `/subscribe` + `/subscribe/success` drive checkout (`createCheckoutSession`).
-- **Folder / views UX**: Folders are **sidebar-only** containers (no folder landing page; folder URLs redirect to workspace home). Table/board/list views and folder schema editors are **deferred** to a future Confluence-like **database page** type (`references/To-do.md` Phase B items 5–7 + database page tracking). Backend `node_views` / property schema APIs remain.
+- **Folder / views UX**: Folders are **sidebar-only** containers (no folder landing page; folder URLs redirect to workspace home). Table/board/list views and folder schema editors are **deferred** to a future Confluence-like **database page** type. Backend `node_views` / property schema APIs remain.
 - **UI library**: Base UI (`@base-ui/react`) with Tailwind CSS 4 — uses `render` prop pattern, not `asChild`
 - **Theme**: `next-themes` wraps the root layout
 
@@ -567,7 +567,7 @@ Tests in `api/tests/` are **integration tests** — they hit a real database. A 
 - Task management and integrations
 - K8s and systemd deployment guides (Docker Compose is documented)
 - Page templates
-- Database page type (Confluence-like host for table/board/list views + folder property schema UI — #238–#240 deferred here)
+- Database page type (Confluence-like host for table/board/list views + folder property schema UI — deferred; not on the current wayfinder launch bar)
 
 ---
 
