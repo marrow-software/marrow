@@ -312,7 +312,8 @@ marrow/
 │   ├── release.yml                   # tags only: build/push API image to GHCR, deploy API → Fly.io + web → Cloudflare Workers
 │   ├── codeql.yml                    # Weekly CodeQL analysis
 │   └── cla.yml                       # Gates external PRs on a signed CLA (see Contributor licensing)
-├── .github/cla/signatures.json       # CLA signature record — in-repo, deliberately not a third-party gist
+│                                     # (CLA signatures live at .github/cla/signatures.json on the
+│                                     #  `cla-signatures` branch, NOT on main — see Contributor licensing)
 ├── CLA.md                            # Marrow Individual CLA (adapted Apache ICLA + §2a relicensing grant)
 ├── CONTRIBUTING.md                   # Contributor guide + the candour framing around the CLA
 ├── CLAUDE.md                         # This file
@@ -558,7 +559,7 @@ These constraints are non-negotiable and must be respected in all contributions:
 External contributions require a signed CLA before merge. Decided in [#270](https://github.com/marrow-software/marrow/issues/270), built in [#275](https://github.com/marrow-software/marrow/issues/275).
 
 - **`CLA.md`** — the Apache ICLA v2.0, adapted. Sections 1 and 3–7 are near-verbatim Apache text. **Section 2a is bespoke**: a perpetual, irrevocable, sublicensable right to relicense contributions under any terms, so relicensing future versions stays possible while the contributor keeps copyright. Section 2a also carves out **non-retroactivity** — already-published releases stay Apache 2.0 permanently, backing the [#260](https://github.com/marrow-software/marrow/issues/260) promise in operative text. Individual-only; no corporate CCLA until a company actually contributes.
-- **`.github/workflows/cla.yml`** — `contributor-assistant/github-action`, SHA-pinned. Runs on `pull_request_target` (fork PRs need a write-capable token) and **never checks out PR code**. Signatures are committed to `.github/cla/signatures.json` **in this repo** — deliberately not a third-party gist, same principle as the export bundle.
+- **`.github/workflows/cla.yml`** — `contributor-assistant/github-action`, SHA-pinned. Runs on `pull_request_target` (fork PRs need a write-capable token) and **never checks out PR code**. Signatures are committed to `.github/cla/signatures.json` **in this repo** — deliberately not a third-party gist, same principle as the export bundle — but on the **`cla-signatures` branch, not `main`**. The `Requirements` ruleset makes `main` PR-only with no bypass actors, so the workflow's `GITHUB_TOKEN` cannot push there; GitHub Actions is not installable as a bypass actor on this org, so the alternative was a PAT or deploy key (a credential to rotate) for no real gain. **Do not repoint `branch:` at `main`** without first solving that write path — every signature will silently fail.
 - **`CONTRIBUTING.md`** — states plainly that Marrow is solo-maintained, that the CLA preserves commercial optionality on *future* versions, and that published releases stay Apache 2.0 irrevocably. Names the rug-pull concern directly rather than letting contributors infer it.
 
 **Constraints when touching any of this:**

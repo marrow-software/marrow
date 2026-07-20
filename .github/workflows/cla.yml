@@ -41,7 +41,15 @@ jobs:
         with:
           path-to-signatures: '.github/cla/signatures.json'
           path-to-document: 'https://github.com/marrow-software/marrow/blob/main/CLA.md'
-          branch: 'main'
+
+          # Signatures are committed to an unprotected side branch, NOT to main.
+          # The `Requirements` ruleset makes main PR-only with no bypass actors,
+          # so GITHUB_TOKEN cannot push there and every signature would fail.
+          # GitHub Actions is not installable as a bypass actor on this org, so
+          # the alternative was a PAT or deploy key — a credential to rotate,
+          # for no gain. The #270 requirement is that the legal record lives in
+          # THIS repo rather than a third party's gist; that holds either way.
+          branch: 'cla-signatures'
 
           # Literal block (|), not folded (>): folded style collapses blank lines
           # to a single newline and the comment renders as one run-on paragraph.

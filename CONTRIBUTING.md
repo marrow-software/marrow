@@ -146,8 +146,9 @@ them off the filesystem.
    ```
 
    Your signature is recorded in
-   [`.github/cla/signatures.json`](./.github/cla/signatures.json) — a plain
-   readable file in this repository, not in a third party's storage.
+   [`.github/cla/signatures.json`](https://github.com/marrow-software/marrow/blob/cla-signatures/.github/cla/signatures.json)
+   on the `cla-signatures` branch — a plain readable file in this repository,
+   not in a third party's storage.
 
 3. Wait for CI. The CLA check and the test suite both have to be green.
 4. Expect review comments. Solo maintenance means reviews can take a few days.

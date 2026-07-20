@@ -186,10 +186,13 @@ I have read the CLA Document and I hereby sign the CLA
 ```
 
 Your signature is recorded in
-[`.github/cla/signatures.json`](./.github/cla/signatures.json) — a plain,
-readable file **in this repository**. Marrow's legal record lives in the same
-place as its source, not in a third party's storage. This is the same
-principle as the export bundle: the record is yours to read, audit, and take
-with you.
+[`.github/cla/signatures.json`](https://github.com/marrow-software/marrow/blob/cla-signatures/.github/cla/signatures.json)
+on the `cla-signatures` branch — a plain, readable file **in this repository**.
+Marrow's legal record lives in the same place as its source, not in a third
+party's storage. This is the same principle as the export bundle: the record is
+yours to read, audit, and take with you.
+
+*(It sits on its own branch rather than `main` for a mechanical reason: `main`
+accepts changes only through pull requests, so the bot cannot commit to it.)*
 
 You sign once. It covers all your future Contributions to Marrow.
