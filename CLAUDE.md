@@ -310,7 +310,11 @@ marrow/
 │   ├── ci.yml                        # PR + push: api lint+test, web build, docs build
 │   ├── marketing.yml                 # web-marketing/ path-filtered CI + Cloudflare Pages deploy
 │   ├── release.yml                   # tags only: build/push API image to GHCR, deploy API → Fly.io + web → Cloudflare Workers
-│   └── codeql.yml                    # Weekly CodeQL analysis
+│   ├── codeql.yml                    # Weekly CodeQL analysis
+│   └── cla.yml                       # Gates external PRs on a signed CLA (see Contributor licensing)
+├── .github/cla/signatures.json       # CLA signature record — in-repo, deliberately not a third-party gist
+├── CLA.md                            # Marrow Individual CLA (adapted Apache ICLA + §2a relicensing grant)
+├── CONTRIBUTING.md                   # Contributor guide + the candour framing around the CLA
 ├── CLAUDE.md                         # This file
 ├── README.md
 └── LICENSE                           # Apache 2.0
@@ -546,6 +550,22 @@ These constraints are non-negotiable and must be respected in all contributions:
 2. **Append-only revisions**: saves always create new revisions; existing revisions are never modified or deleted. The database trigger enforces this — do not remove it.
 3. **Transparent export format**: export bundles must remain human-readable without tooling (Markdown + JSON, no proprietary blobs).
 4. **Pluggable storage**: business logic must not bypass the storage adapter interface. Never call filesystem APIs directly from routers or models.
+
+---
+
+## Contributor licensing (CLA)
+
+External contributions require a signed CLA before merge. Decided in [#270](https://github.com/marrow-software/marrow/issues/270), built in [#275](https://github.com/marrow-software/marrow/issues/275).
+
+- **`CLA.md`** — the Apache ICLA v2.0, adapted. Sections 1 and 3–7 are near-verbatim Apache text. **Section 2a is bespoke**: a perpetual, irrevocable, sublicensable right to relicense contributions under any terms, so relicensing future versions stays possible while the contributor keeps copyright. Section 2a also carves out **non-retroactivity** — already-published releases stay Apache 2.0 permanently, backing the [#260](https://github.com/marrow-software/marrow/issues/260) promise in operative text. Individual-only; no corporate CCLA until a company actually contributes.
+- **`.github/workflows/cla.yml`** — `contributor-assistant/github-action`, SHA-pinned. Runs on `pull_request_target` (fork PRs need a write-capable token) and **never checks out PR code**. Signatures are committed to `.github/cla/signatures.json` **in this repo** — deliberately not a third-party gist, same principle as the export bundle.
+- **`CONTRIBUTING.md`** — states plainly that Marrow is solo-maintained, that the CLA preserves commercial optionality on *future* versions, and that published releases stay Apache 2.0 irrevocably. Names the rug-pull concern directly rather than letting contributors infer it.
+
+**Constraints when touching any of this:**
+
+- The sign-off phrase (`I have read the CLA Document and I hereby sign the CLA`) appears in the workflow `if:` condition, `custom-pr-sign-comment`, `CLA.md`, and `CONTRIBUTING.md`. **All four must match exactly** — a typo in one silently breaks the gate.
+- Use literal block scalars (`|`) for the custom PR comments, never folded (`>`): folded style collapses blank lines and the bot comment renders as one run-on paragraph.
+- **§2a has not been reviewed by a lawyer** ([#281](https://github.com/marrow-software/marrow/issues/281)). Don't promote the CLA as settled, or lean on the relicensing option commercially, until it has been.
 
 ---
 
