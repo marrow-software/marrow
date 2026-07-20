@@ -103,7 +103,7 @@ function BacklinksList({
   return (
     <ul className="flex flex-col gap-1">
       {backlinks.map((node) => {
-        const href = workspaceId ? `/w/${workspaceId}/n/${node.id}/${node.slug}` : null;
+        const href = workspaceId ? `/w/${workspaceId}/pages/${node.id}` : null;
         const inner = (
           <>
             <div className="text-xs font-medium text-foreground">{node.name}</div>
