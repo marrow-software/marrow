@@ -51,7 +51,7 @@ export function StarredPanel({ workspaceId }: { workspaceId: string }) {
         return (
           <Link
             key={node.id}
-            href={`/w/${workspaceId}/pages/${node.id}`}
+            href={`/w/${workspaceId}/n/${node.id}/${node.slug}`}
             className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] text-foreground transition-colors hover:bg-accent"
           >
             <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

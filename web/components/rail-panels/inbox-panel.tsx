@@ -82,7 +82,7 @@ export function InboxPanel({ onUnreadChange }: Props) {
     const nodeId = n.payload.node_id as string | undefined;
     const workspaceId = n.payload.workspace_id as string | undefined;
     if (nodeId && workspaceId) {
-      router.push(`/w/${workspaceId}/pages/${nodeId}`);
+      router.push(`/w/${workspaceId}/n/${nodeId}`);
     }
   }
 

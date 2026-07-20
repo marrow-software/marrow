@@ -200,7 +200,7 @@ def reconcile_subscription(
         return _result(False, "no_customer")
 
     subscriptions = stripe.Subscription.list(customer=org.stripe_customer_id, status="all", limit=1)
-    data = subscriptions.get("data") or []
+    data = getattr(subscriptions, "data", None) or []
     if not data:
         logger.warning(
             "billing: reconcile for org %s found no subscriptions (customer=%s)",
@@ -225,14 +225,19 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     except stripe.error.SignatureVerificationError:
         raise HTTPException(400, "Invalid Stripe signature")
 
-    if event["type"] == "checkout.session.completed":
-        _handle_checkout_completed(event["data"]["object"], db)
-    elif event["type"] == "customer.subscription.updated":
-        _handle_subscription_updated(event["data"]["object"], db)
-    elif event["type"] == "customer.subscription.deleted":
-        _handle_subscription_deleted(event["data"]["object"], db)
-    elif event["type"] == "invoice.payment_failed":
-        _handle_payment_failed(event["data"]["object"], db)
+    # A handler bug must not make Stripe retry: the reconcile endpoint is the
+    # self-heal path, so log and still acknowledge with a 200.
+    try:
+        if event["type"] == "checkout.session.completed":
+            _handle_checkout_completed(event["data"]["object"], db)
+        elif event["type"] == "customer.subscription.updated":
+            _handle_subscription_updated(event["data"]["object"], db)
+        elif event["type"] == "customer.subscription.deleted":
+            _handle_subscription_deleted(event["data"]["object"], db)
+        elif event["type"] == "invoice.payment_failed":
+            _handle_payment_failed(event["data"]["object"], db)
+    except Exception:
+        logger.exception("billing: handler failed for event type %s", event["type"])
 
     return JSONResponse({"received": True})
 
@@ -243,13 +248,14 @@ def _org_by_customer(customer_id: str, db: Session) -> Organization | None:
     ).scalar_one_or_none()
 
 
-def _tier_from_subscription(subscription: dict) -> tuple[str, str] | None:
+def _tier_from_subscription(subscription: "stripe.Subscription") -> tuple[str, str] | None:
     """Return (tier, interval) from the first line item's price ID, or None."""
-    items = subscription.get("items", {}).get("data", [])
+    items = getattr(getattr(subscription, "items", None), "data", None) or []
     if not items:
         return None
-    price_id = items[0]["price"]["id"]
-    interval = items[0]["price"]["recurring"]["interval"]  # 'month' or 'year'
+    price = items[0].price
+    price_id = price.id
+    interval = price.recurring.interval  # 'month' or 'year'
     tier_info = _PRICE_TO_TIER.get(price_id)
     if not tier_info:
         return None
@@ -260,7 +266,7 @@ def _tier_from_subscription(subscription: dict) -> tuple[str, str] | None:
 
 def _apply_subscription(
     org: Organization,
-    subscription: dict,
+    subscription: "stripe.Subscription",
     db: Session,
     *,
     subscription_id: str | None = None,
@@ -277,26 +283,28 @@ def _apply_subscription(
         logger.warning(
             "billing: subscription %s for org %s has an unrecognized price; "
             "check STRIPE_*_PRICE_* configuration",
-            subscription_id or subscription.get("id"),
+            subscription_id or getattr(subscription, "id", None),
             org.id,
         )
         return False
     tier, billing_interval = result
 
-    org.stripe_subscription_id = subscription_id or subscription.get("id")
+    org.stripe_subscription_id = subscription_id or getattr(subscription, "id", None)
     org.tier = tier
     org.billing_interval = billing_interval
-    # StripeObject supports .get(); default_status covers checkout, where the
-    # subscription was just created with a trial period.
-    org.subscription_status = _map_stripe_status(subscription.get("status") or default_status)
+    # default_status covers checkout, where the subscription was just created
+    # with a trial period.
+    org.subscription_status = _map_stripe_status(
+        getattr(subscription, "status", None) or default_status
+    )
     db.commit()
     return True
 
 
-def _handle_checkout_completed(session: dict, db: Session) -> None:
-    customer_id = session.get("customer")
-    subscription_id = session.get("subscription")
-    org_id = session.get("metadata", {}).get("org_id")
+def _handle_checkout_completed(session: "stripe.checkout.Session", db: Session) -> None:
+    customer_id = getattr(session, "customer", None)
+    subscription_id = getattr(session, "subscription", None)
+    org_id = getattr(getattr(session, "metadata", None), "org_id", None)
     if not (customer_id and subscription_id and org_id):
         logger.warning(
             "billing: checkout.session.completed missing fields "
@@ -324,7 +332,9 @@ def _handle_checkout_completed(session: dict, db: Session) -> None:
         return
 
     # Best-effort confirmation email — never blocks the webhook 200.
-    recipient = session.get("customer_details", {}).get("email") or session.get("customer_email")
+    recipient = getattr(getattr(session, "customer_details", None), "email", None) or getattr(
+        session, "customer_email", None
+    )
     if recipient:
         send_email(
             to=recipient,
@@ -333,8 +343,8 @@ def _handle_checkout_completed(session: dict, db: Session) -> None:
         )
 
 
-def _handle_subscription_updated(subscription: dict, db: Session) -> None:
-    customer_id = subscription.get("customer")
+def _handle_subscription_updated(subscription: "stripe.Subscription", db: Session) -> None:
+    customer_id = getattr(subscription, "customer", None)
     org = _org_by_customer(customer_id, db)
     if org is None:
         logger.warning(
@@ -346,8 +356,8 @@ def _handle_subscription_updated(subscription: dict, db: Session) -> None:
     _apply_subscription(org, subscription, db)
 
 
-def _handle_subscription_deleted(subscription: dict, db: Session) -> None:
-    customer_id = subscription.get("customer")
+def _handle_subscription_deleted(subscription: "stripe.Subscription", db: Session) -> None:
+    customer_id = getattr(subscription, "customer", None)
     org = _org_by_customer(customer_id, db)
     if org is None:
         logger.warning(
@@ -363,9 +373,9 @@ def _handle_subscription_deleted(subscription: dict, db: Session) -> None:
     db.commit()
 
 
-def _handle_payment_failed(invoice: dict, db: Session) -> None:
+def _handle_payment_failed(invoice: "stripe.Invoice", db: Session) -> None:
     """Mark the org past_due on a failed invoice payment. Stripe keeps retrying."""
-    customer_id = invoice.get("customer")
+    customer_id = getattr(invoice, "customer", None)
     org = _org_by_customer(customer_id, db)
     if org is None:
         logger.warning(

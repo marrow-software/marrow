@@ -6,7 +6,10 @@ import uuid
 
 import psycopg2
 import pytest
+import stripe
 from alembic.config import Config
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -98,11 +101,40 @@ def stub_email(monkeypatch):
     return sent
 
 
-def _sub_obj(status: str, price_id: str = "price_business_monthly"):
-    return {
-        "status": status,
-        "items": {"data": [{"price": {"id": price_id, "recurring": {"interval": "month"}}}]},
+def _stripe_obj(values: dict):
+    """Build a real StripeObject — in stripe>=15 these are NOT dicts."""
+    return stripe.StripeObject.construct_from(values, None)
+
+
+def _session_obj(**values):
+    return _stripe_obj({"object": "checkout.session", **values})
+
+
+def _invoice_obj(**values):
+    return _stripe_obj({"object": "invoice", **values})
+
+
+def _sub_obj(status: str | None = None, price_id: str = "price_business_monthly", **extra):
+    values: dict = {
+        "object": "subscription",
+        "items": {
+            "object": "list",
+            "data": [
+                {
+                    "object": "subscription_item",
+                    "price": {
+                        "object": "price",
+                        "id": price_id,
+                        "recurring": {"interval": "month"},
+                    },
+                }
+            ],
+        },
+        **extra,
     }
+    if status is not None:
+        values["status"] = status
+    return _stripe_obj(values)
 
 
 @pytest.fixture
@@ -116,12 +148,12 @@ def test_checkout_completed_sets_trialing_and_emails(db, monkeypatch, stub_email
     org = _seed_org(db, customer="cus_co")
     monkeypatch.setattr(billing.stripe.Subscription, "retrieve", lambda sid: _sub_obj("trialing"))
 
-    session = {
-        "customer": "cus_co",
-        "subscription": "sub_co",
-        "metadata": {"org_id": str(org.id)},
-        "customer_details": {"email": "buyer@example.com"},
-    }
+    session = _session_obj(
+        customer="cus_co",
+        subscription="sub_co",
+        metadata={"org_id": str(org.id)},
+        customer_details={"email": "buyer@example.com"},
+    )
     billing._handle_checkout_completed(session, db)
     db.refresh(org)
 
@@ -134,9 +166,7 @@ def test_checkout_completed_sets_trialing_and_emails(db, monkeypatch, stub_email
 
 def test_subscription_updated_maps_status(db, known_price):
     org = _seed_org(db, customer="cus_up", subscription_status="trialing")
-    billing._handle_subscription_updated(
-        {"id": "sub_up", "customer": "cus_up", **_sub_obj("active")}, db
-    )
+    billing._handle_subscription_updated(_sub_obj("active", id="sub_up", customer="cus_up"), db)
     db.refresh(org)
     assert org.subscription_status == "active"
     assert org.tier == "business"
@@ -144,7 +174,9 @@ def test_subscription_updated_maps_status(db, known_price):
 
 def test_subscription_deleted_marks_canceled(db):
     org = _seed_org(db, customer="cus_del", subscription_status="active", tier="business")
-    billing._handle_subscription_deleted({"id": "sub_del", "customer": "cus_del"}, db)
+    billing._handle_subscription_deleted(
+        _stripe_obj({"object": "subscription", "id": "sub_del", "customer": "cus_del"}), db
+    )
     db.refresh(org)
     assert org.subscription_status == "canceled"
     assert org.stripe_subscription_id is None
@@ -152,15 +184,17 @@ def test_subscription_deleted_marks_canceled(db):
 
 def test_payment_failed_marks_past_due(db):
     org = _seed_org(db, customer="cus_pf", subscription_status="active")
-    billing._handle_payment_failed({"customer": "cus_pf"}, db)
+    billing._handle_payment_failed(_invoice_obj(customer="cus_pf"), db)
     db.refresh(org)
     assert org.subscription_status == "past_due"
 
 
 def test_handlers_noop_for_unknown_customer(db):
     # No org with this customer — must not raise.
-    billing._handle_payment_failed({"customer": "cus_missing"}, db)
-    billing._handle_subscription_deleted({"customer": "cus_missing"}, db)
+    billing._handle_payment_failed(_invoice_obj(customer="cus_missing"), db)
+    billing._handle_subscription_deleted(
+        _stripe_obj({"object": "subscription", "customer": "cus_missing"}), db
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -170,16 +204,16 @@ def test_handlers_noop_for_unknown_customer(db):
 
 def test_checkout_completed_missing_fields_logs(db, caplog):
     with caplog.at_level("WARNING", logger="marrow.routers.billing"):
-        billing._handle_checkout_completed({}, db)
+        billing._handle_checkout_completed(_session_obj(), db)
     assert any("missing fields" in r.message for r in caplog.records)
 
 
 def test_checkout_completed_unknown_org_logs(db, caplog):
-    session = {
-        "customer": "cus_ghost",
-        "subscription": "sub_ghost",
-        "metadata": {"org_id": str(uuid.uuid4())},
-    }
+    session = _session_obj(
+        customer="cus_ghost",
+        subscription="sub_ghost",
+        metadata={"org_id": str(uuid.uuid4())},
+    )
     with caplog.at_level("WARNING", logger="marrow.routers.billing"):
         billing._handle_checkout_completed(session, db)
     assert any("matched no org" in r.message for r in caplog.records)
@@ -187,7 +221,9 @@ def test_checkout_completed_unknown_org_logs(db, caplog):
 
 def test_subscription_updated_unknown_customer_logs(db, caplog):
     with caplog.at_level("WARNING", logger="marrow.routers.billing"):
-        billing._handle_subscription_updated({"id": "sub_x", "customer": "cus_missing"}, db)
+        billing._handle_subscription_updated(
+            _stripe_obj({"object": "subscription", "id": "sub_x", "customer": "cus_missing"}), db
+        )
     assert any("matched no org" in r.message for r in caplog.records)
 
 
@@ -195,14 +231,14 @@ def test_unknown_price_logs(db, caplog, monkeypatch):
     org = _seed_org(db, customer="cus_badprice")
     monkeypatch.setattr(billing, "_PRICE_TO_TIER", {})
     with caplog.at_level("WARNING", logger="marrow.routers.billing"):
-        applied = billing._apply_subscription(org, {"id": "sub_bp", **_sub_obj("active")}, db)
+        applied = billing._apply_subscription(org, _sub_obj("active", id="sub_bp"), db)
     assert applied is False
     assert any("unrecognized price" in r.message for r in caplog.records)
 
 
 def test_payment_failed_unknown_customer_logs(db, caplog):
     with caplog.at_level("WARNING", logger="marrow.routers.billing"):
-        billing._handle_payment_failed({"customer": "cus_missing"}, db)
+        billing._handle_payment_failed(_invoice_obj(customer="cus_missing"), db)
     assert any("matched no org" in r.message for r in caplog.records)
 
 
@@ -216,7 +252,9 @@ def _stub_subscription_list(monkeypatch, data):
 
     def _fake_list(**kwargs):
         calls.append(kwargs)
-        return {"data": data}
+        return stripe.ListObject.construct_from(
+            {"object": "list", "data": data, "has_more": False, "url": "/v1/subscriptions"}, None
+        )
 
     monkeypatch.setattr(billing.stripe.Subscription, "list", _fake_list)
     return calls
@@ -225,7 +263,7 @@ def _stub_subscription_list(monkeypatch, data):
 def test_reconcile_writes_subscription_from_stripe(db, monkeypatch, known_price):
     monkeypatch.setenv("SAAS_MODE", "true")
     org = _seed_org(db, customer="cus_rec")
-    calls = _stub_subscription_list(monkeypatch, [{"id": "sub_rec", **_sub_obj("trialing")}])
+    calls = _stub_subscription_list(monkeypatch, [_sub_obj("trialing", id="sub_rec")])
 
     result = billing.reconcile_subscription(org.id, db=db, auth=None)
     db.refresh(org)
@@ -271,7 +309,7 @@ def test_reconcile_with_unknown_price(db, monkeypatch):
     monkeypatch.setenv("SAAS_MODE", "true")
     org = _seed_org(db, customer="cus_unk")
     monkeypatch.setattr(billing, "_PRICE_TO_TIER", {})
-    _stub_subscription_list(monkeypatch, [{"id": "sub_unk", **_sub_obj("active")}])
+    _stub_subscription_list(monkeypatch, [_sub_obj("active", id="sub_unk")])
 
     result = billing.reconcile_subscription(org.id, db=db, auth=None)
     db.refresh(org)
@@ -279,3 +317,51 @@ def test_reconcile_with_unknown_price(db, monkeypatch):
     assert result["reconciled"] is False
     assert result["reason"] == "unknown_price"
     assert org.subscription_status == "none"
+
+
+# ---------------------------------------------------------------------------
+# Webhook endpoint — a handler bug must not trigger a Stripe retry storm
+# ---------------------------------------------------------------------------
+
+
+def _webhook_client(db) -> TestClient:
+    # Imported lazily: marrow.dependencies builds an engine at import time and
+    # needs DATABASE_URL, which the db_url fixture sets.
+    from marrow.dependencies import get_db
+
+    app = FastAPI()
+    app.include_router(billing.router)
+    app.dependency_overrides[get_db] = lambda: db
+    return TestClient(app)
+
+
+def test_webhook_returns_200_when_handler_raises(db, monkeypatch, caplog):
+    event = {
+        "type": "invoice.payment_failed",
+        "data": {"object": _invoice_obj(customer="cus_boom")},
+    }
+    monkeypatch.setattr(
+        billing.stripe.Webhook, "construct_event", lambda payload, sig, secret: event
+    )
+
+    def _boom(invoice, db):
+        raise RuntimeError("handler exploded")
+
+    monkeypatch.setattr(billing, "_handle_payment_failed", _boom)
+
+    with caplog.at_level("ERROR", logger="marrow.routers.billing"):
+        response = _webhook_client(db).post("/api/billing/webhook", content=b"{}")
+
+    assert response.status_code == 200
+    assert response.json() == {"received": True}
+    assert any("handler failed" in r.message for r in caplog.records)
+
+
+def test_webhook_returns_400_on_bad_signature(db, monkeypatch):
+    def _bad(payload, sig, secret):
+        raise stripe.error.SignatureVerificationError("bad sig", sig)
+
+    monkeypatch.setattr(billing.stripe.Webhook, "construct_event", _bad)
+
+    response = _webhook_client(db).post("/api/billing/webhook", content=b"{}")
+    assert response.status_code == 400
