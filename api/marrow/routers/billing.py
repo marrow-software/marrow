@@ -1,7 +1,5 @@
 """Stripe billing — checkout, portal, webhook, and reconcile endpoints."""
 
-from __future__ import annotations
-
 import logging
 import os
 from uuid import UUID
@@ -227,25 +225,19 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     except stripe.error.SignatureVerificationError:
         raise HTTPException(400, "Invalid Stripe signature")
 
-    event_type = getattr(event, "type", None)
-    event_data = getattr(event, "data", None)
-    event_object = getattr(event_data, "object", None)
-
+    # A handler bug must not make Stripe retry: the reconcile endpoint is the
+    # self-heal path, so log and still acknowledge with a 200.
     try:
-        if event_type == "checkout.session.completed":
-            _handle_checkout_completed(event_object, db)
-        elif event_type == "customer.subscription.updated":
-            _handle_subscription_updated(event_object, db)
-        elif event_type == "customer.subscription.deleted":
-            _handle_subscription_deleted(event_object, db)
-        elif event_type == "invoice.payment_failed":
-            _handle_payment_failed(event_object, db)
+        if event["type"] == "checkout.session.completed":
+            _handle_checkout_completed(event["data"]["object"], db)
+        elif event["type"] == "customer.subscription.updated":
+            _handle_subscription_updated(event["data"]["object"], db)
+        elif event["type"] == "customer.subscription.deleted":
+            _handle_subscription_deleted(event["data"]["object"], db)
+        elif event["type"] == "invoice.payment_failed":
+            _handle_payment_failed(event["data"]["object"], db)
     except Exception:
-        logger.exception(
-            "billing: Stripe webhook handler failed for event_type=%s; returning 200 "
-            "so reconcile can self-heal without a Stripe retry storm",
-            event_type,
-        )
+        logger.exception("billing: handler failed for event type %s", event["type"])
 
     return JSONResponse({"received": True})
 
@@ -256,16 +248,14 @@ def _org_by_customer(customer_id: str, db: Session) -> Organization | None:
     ).scalar_one_or_none()
 
 
-def _tier_from_subscription(subscription: stripe.Subscription) -> tuple[str, str] | None:
+def _tier_from_subscription(subscription: "stripe.Subscription") -> tuple[str, str] | None:
     """Return (tier, interval) from the first line item's price ID, or None."""
     items = getattr(getattr(subscription, "items", None), "data", None) or []
     if not items:
         return None
-    price = getattr(items[0], "price", None)
-    price_id = getattr(price, "id", None)
-    interval = getattr(getattr(price, "recurring", None), "interval", None)
-    if not (price_id and interval):
-        return None
+    price = items[0].price
+    price_id = price.id
+    interval = price.recurring.interval  # 'month' or 'year'
     tier_info = _PRICE_TO_TIER.get(price_id)
     if not tier_info:
         return None
@@ -276,7 +266,7 @@ def _tier_from_subscription(subscription: stripe.Subscription) -> tuple[str, str
 
 def _apply_subscription(
     org: Organization,
-    subscription: stripe.Subscription,
+    subscription: "stripe.Subscription",
     db: Session,
     *,
     subscription_id: str | None = None,
@@ -302,6 +292,8 @@ def _apply_subscription(
     org.stripe_subscription_id = subscription_id or getattr(subscription, "id", None)
     org.tier = tier
     org.billing_interval = billing_interval
+    # default_status covers checkout, where the subscription was just created
+    # with a trial period.
     org.subscription_status = _map_stripe_status(
         getattr(subscription, "status", None) or default_status
     )
@@ -309,7 +301,7 @@ def _apply_subscription(
     return True
 
 
-def _handle_checkout_completed(session: stripe.checkout.Session, db: Session) -> None:
+def _handle_checkout_completed(session: "stripe.checkout.Session", db: Session) -> None:
     customer_id = getattr(session, "customer", None)
     subscription_id = getattr(session, "subscription", None)
     org_id = getattr(getattr(session, "metadata", None), "org_id", None)
@@ -351,7 +343,7 @@ def _handle_checkout_completed(session: stripe.checkout.Session, db: Session) ->
         )
 
 
-def _handle_subscription_updated(subscription: stripe.Subscription, db: Session) -> None:
+def _handle_subscription_updated(subscription: "stripe.Subscription", db: Session) -> None:
     customer_id = getattr(subscription, "customer", None)
     org = _org_by_customer(customer_id, db)
     if org is None:
@@ -364,7 +356,7 @@ def _handle_subscription_updated(subscription: stripe.Subscription, db: Session)
     _apply_subscription(org, subscription, db)
 
 
-def _handle_subscription_deleted(subscription: stripe.Subscription, db: Session) -> None:
+def _handle_subscription_deleted(subscription: "stripe.Subscription", db: Session) -> None:
     customer_id = getattr(subscription, "customer", None)
     org = _org_by_customer(customer_id, db)
     if org is None:
@@ -381,7 +373,7 @@ def _handle_subscription_deleted(subscription: stripe.Subscription, db: Session)
     db.commit()
 
 
-def _handle_payment_failed(invoice: stripe.Invoice, db: Session) -> None:
+def _handle_payment_failed(invoice: "stripe.Invoice", db: Session) -> None:
     """Mark the org past_due on a failed invoice payment. Stripe keeps retrying."""
     customer_id = getattr(invoice, "customer", None)
     org = _org_by_customer(customer_id, db)
