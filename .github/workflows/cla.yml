@@ -1,0 +1,79 @@
+name: CLA
+
+# Gates external pull requests on a signed Marrow ICLA (see CLA.md).
+#
+# Signatures are committed to .github/cla/signatures.json in THIS repository —
+# deliberately not a third-party gist. The project's legal record lives in the
+# same place as its source. See issue #270.
+#
+# pull_request_target (not pull_request) is required: fork PRs need a token
+# with write access to commit the signature file. This workflow runs the base
+# branch's definition and never checks out or executes PR code.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  actions: write
+  contents: write # commit the signature file
+  pull-requests: write # comment on the PR
+  statuses: write # publish the CLA status check
+
+jobs:
+  cla:
+    name: CLA — signature check
+    runs-on: ubuntu-latest
+    # Only run on the sign-the-CLA comment, or on PR events.
+    if: >
+      (github.event.comment.body == 'recheck' ||
+       github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA') ||
+      github.event_name == 'pull_request_target'
+    steps:
+      - name: CLA Assistant Lite
+        # Pinned to a SHA, not a tag: tags are mutable, and this step runs under
+        # pull_request_target with contents: write.
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: '.github/cla/signatures.json'
+          path-to-document: 'https://github.com/marrow-software/marrow/blob/main/CLA.md'
+
+          # Signatures are committed to an unprotected side branch, NOT to main.
+          # The `Requirements` ruleset makes main PR-only with no bypass actors,
+          # so GITHUB_TOKEN cannot push there and every signature would fail.
+          # GitHub Actions is not installable as a bypass actor on this org, so
+          # the alternative was a PAT or deploy key — a credential to rotate,
+          # for no gain. The #270 requirement is that the legal record lives in
+          # THIS repo rather than a third party's gist; that holds either way.
+          branch: 'cla-signatures'
+
+          # Literal block (|), not folded (>): folded style collapses blank lines
+          # to a single newline and the comment renders as one run-on paragraph.
+          # The action appends the sign phrase below this text between two
+          # horizontal rules, so ending on a colon is correct.
+          custom-notsigned-prcomment: |
+            Thanks for the pull request — this is genuinely appreciated.
+
+            Before it can be merged, Marrow needs you to sign the
+            [Contributor License Agreement](https://github.com/marrow-software/marrow/blob/main/CLA.md).
+            **Please read it rather than skimming it** — Marrow is solo-maintained,
+            and the CLA preserves the option to license *future* versions
+            commercially. You keep the copyright on your code, and every release
+            already published stays Apache 2.0 irrevocably.
+            [CONTRIBUTING.md](https://github.com/marrow-software/marrow/blob/main/CONTRIBUTING.md)
+            explains the reasoning in full, including why you might reasonably
+            decline.
+
+            If you agree, reply to this thread with exactly:
+          custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
+          custom-allsigned-prcomment: |
+            CLA signed — thank you. This covers all your future contributions to
+            Marrow; you won't be asked again.
+
+          # The maintainer's own commits are covered by copyright ownership, and
+          # bots cannot hold copyright.
+          allowlist: 'spmcgraw,dependabot[bot],github-actions[bot],renovate[bot]'

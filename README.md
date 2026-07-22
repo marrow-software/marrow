@@ -160,6 +160,8 @@ cd docs && npm run build                    # docs site
 
 Marrow is open source because the philosophy demands it. A sovereign knowledge base built behind closed doors would be a contradiction.
 
+Start with **[CONTRIBUTING.md](./CONTRIBUTING.md)** — setup, workflow, and a straight answer about the [CLA](./CLA.md) before you spend your time.
+
 Before writing code, read the **[Restore guarantee](./docs/src/content/docs/concepts/restore-guarantee.md)**. Any contribution that compromises the export/restore round-trip will not be merged.
 
 ---
