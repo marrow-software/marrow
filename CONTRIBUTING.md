@@ -173,3 +173,5 @@ form.
 
 Marrow is [Apache 2.0](./LICENSE). Contributions are accepted under the
 [Marrow ICLA](./CLA.md).
+
+<!-- CI probe for #280: observing CLA status-check context name. This branch/PR is throwaway. -->
