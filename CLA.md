@@ -1,17 +1,20 @@
 # Marrow Individual Contributor License Agreement
 
-**Version 1.0**
+**Version 1.1**
 
 Thank you for your interest in contributing to Marrow.
 
 This Contributor License Agreement ("Agreement") is adapted from the Apache
 Software Foundation Individual Contributor License Agreement v2.0, with one
-substantive addition: **Section 2a**, which grants the right to license Your
-Contributions under terms other than Apache 2.0.
+substantive addition: **Section 2a**, a relicensing grant modeled on Project
+Harmony's contributor-license template (its License option plus the most
+permissive outbound option). It lets Us offer Your Contributions under
+additional license terms of Our choosing, while guaranteeing that Your
+Contributions always remain available under the Apache License 2.0.
 
-Please read this document carefully. **Section 8 ("What this means in plain
+Please read this document carefully. **Section 9 ("What this means in plain
 language") is not legal text — it is a summary provided in good faith.** The
-operative terms are Sections 1 through 7.
+operative terms are Sections 1 through 8.
 
 You accept and agree to the following terms and conditions for Your present
 and future Contributions submitted to Marrow. Except for the license granted
@@ -33,8 +36,8 @@ such entity, whether by contract or otherwise, or (ii) ownership of fifty
 percent (50%) or more of the outstanding shares, or (iii) beneficial ownership
 of such entity.
 
-**"Marrow Software"** (or **"We"**, **"Us"**) means the maintainer of the
-Marrow project.
+**"Marrow Software"** (or **"We"**, **"Us"**) means **Marrow Software LLC**, the
+legal entity that maintains the Marrow project.
 
 **"Contribution"** means any original work of authorship, including any
 modifications or additions to an existing work, that is intentionally
@@ -60,23 +63,27 @@ sublicense, and distribute Your Contributions and such derivative works.
 
 ### 2a. Grant of Relicensing Rights
 
-You further grant to Us the perpetual, worldwide, non-exclusive, no-charge,
-royalty-free, irrevocable, and **sublicensable** right to license and
-relicense Your Contributions, and derivative works thereof, **under any
-license terms We choose**, including proprietary or commercial terms, and to
-distribute Your Contributions under such terms as part of the Work or any
-derivative of it.
+You further grant to Us a **perpetual, worldwide, non-exclusive, no-charge,
+royalty-free, irrevocable** license under the Copyright covering Your
+Contributions, **with the right to sublicense such rights through multiple tiers
+of sublicensees**, to license and relicense Your Contributions, and derivative
+works thereof, **under any license terms We choose** — including copyleft,
+permissive, commercial, or proprietary licenses — and to distribute Your
+Contributions under such terms as part of the Work or any derivative of it.
+
+This relicensing right is granted **on the condition that We also continue to
+license Your Contributions under the license terms in effect for the Work on the
+date of Your Contribution — the Apache License 2.0.** Your Contributions, and the
+Work incorporating them, therefore **always remain available under the Apache
+License 2.0**: the grant above lets Us offer them *additionally* under other
+terms, but never authorizes Us to withdraw, revoke, or replace their
+availability under the Apache License 2.0 — neither for already-published
+releases nor for future versions.
 
 This right is granted in addition to, and does not limit or replace, the
 license granted in Section 2. **You retain copyright ownership of Your
 Contributions** and remain free to license them to any other party on any
 terms.
-
-**This grant does not permit Us to retroactively change the license of any
-version of the Work that has already been publicly released.** Every release
-made under the Apache License 2.0 remains available under the Apache License
-2.0 in perpetuity, and this Agreement does not authorize Us to revoke,
-withdraw, or alter that license for any already-published release.
 
 ---
 
@@ -153,24 +160,41 @@ that would make these representations inaccurate in any respect.
 
 ---
 
-## 8. What this means in plain language
+## 8. Governing Law
+
+This Agreement is governed by and construed in accordance with the laws of the
+State of Oregon, United States of America, without regard to its
+conflict-of-laws principles.
+
+This choice of law governs the interpretation of this Agreement only. It does
+not alter, restrict, or add any condition to the Apache License 2.0 or any other
+license under which the Work or Your Contributions are distributed.
+
+---
+
+## 9. What this means in plain language
 
 *This section is a good-faith summary and is not operative legal text. Where
-it differs from Sections 1–7, those sections govern.*
+it differs from Sections 1–8, those sections govern.*
 
 - **You keep your copyright.** This is a license, not an assignment. Your code
   stays yours, and you can license it to anyone else however you like.
-- **We can relicense future versions.** Section 2a lets Marrow ship future
-  versions — including versions containing your Contribution — under
-  commercial or proprietary terms. Marrow is solo-maintained and this
-  preserves commercial optionality.
-- **Already-published releases stay Apache 2.0, permanently.** Nothing here
-  lets us reach back and un-license a release that already went out. That
-  promise is written into Section 2a itself, not just this summary.
+- **We can offer future versions under additional terms — but never take Apache
+  2.0 away.** Section 2a lets Marrow license your Contribution under other terms
+  too, including commercial or proprietary ones, so a future Marrow could be
+  *dual-licensed*. What it deliberately cannot do is stop offering your
+  Contribution under Apache 2.0.
+- **Your Contribution always stays available under Apache 2.0.** Not just
+  already-published releases — every version, including future ones. Section 2a
+  is conditioned on Marrow continuing to license your Contribution under Apache
+  2.0 in perpetuity. That promise is in the operative text, not just this
+  summary.
 - **We are telling you this directly.** CLAs carry history — several projects
-  have used this exact machinery to relicense away from their communities.
-  You would work the implication out yourself; we would rather you hear it
-  from us. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the fuller reasoning.
+  have used a relicensing CLA to close their source and leave their communities
+  behind. Section 2a is deliberately the *weaker* form: it permits additional
+  licenses but keeps Apache 2.0 permanently on offer, so the close-the-source
+  move isn't available here. We'd rather you see that in the text than take it
+  on faith. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the fuller reasoning.
 
 ---
 
