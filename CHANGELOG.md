@@ -16,7 +16,8 @@ steps) on its [GitHub release](https://github.com/marrow-software/marrow/release
   commercial/proprietary terms, but is bound to keep every version — past and
   future — available under Apache 2.0; the earlier "already-published releases
   only" carve-out is replaced by a perpetual dual-availability guarantee.
-  `CONTRIBUTING.md` framing updated to match. (#281, #286)
+  `CONTRIBUTING.md` framing updated to match. The CLA grantee ("We"/"Us") is now
+  defined as **Marrow Software LLC** rather than an unnamed maintainer. (#281, #286)
 
 ## [0.4.0] — 2026-07-10
 

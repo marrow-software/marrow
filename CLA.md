@@ -36,8 +36,8 @@ such entity, whether by contract or otherwise, or (ii) ownership of fifty
 percent (50%) or more of the outstanding shares, or (iii) beneficial ownership
 of such entity.
 
-**"Marrow Software"** (or **"We"**, **"Us"**) means the maintainer of the
-Marrow project.
+**"Marrow Software"** (or **"We"**, **"Us"**) means **Marrow Software LLC**, the
+legal entity that maintains the Marrow project.
 
 **"Contribution"** means any original work of authorship, including any
 modifications or additions to an existing work, that is intentionally
