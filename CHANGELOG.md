@@ -17,7 +17,8 @@ steps) on its [GitHub release](https://github.com/marrow-software/marrow/release
   future — available under Apache 2.0; the earlier "already-published releases
   only" carve-out is replaced by a perpetual dual-availability guarantee.
   `CONTRIBUTING.md` framing updated to match. The CLA grantee ("We"/"Us") is now
-  defined as **Marrow Software LLC** rather than an unnamed maintainer. (#281, #286)
+  defined as **Marrow Software LLC** rather than an unnamed maintainer, and a
+  **governing-law clause** (State of Oregon, USA) was added as §8. (#281, #286)
 
 ## [0.4.0] — 2026-07-10
 

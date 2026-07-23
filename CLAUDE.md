@@ -566,7 +566,7 @@ External contributions require a signed CLA before merge. Decided in [#270](http
 
 - The sign-off phrase (`I have read the CLA Document and I hereby sign the CLA`) appears in the workflow `if:` condition, `custom-pr-sign-comment`, `CLA.md`, and `CONTRIBUTING.md`. **All four must match exactly** — a typo in one silently breaks the gate.
 - Use literal block scalars (`|`) for the custom PR comments, never folded (`>`): folded style collapses blank lines and the bot comment renders as one run-on paragraph.
-- **§2a has not been reviewed by a lawyer** ([#281](https://github.com/marrow-software/marrow/issues/281)). It was aligned to the vetted Project Harmony template in v1.1 ([#286](https://github.com/marrow-software/marrow/issues/286)) and the grantee is now defined as **Marrow Software LLC** (§1), which together close the two dominant risks. Remaining template-level gap: **no governing-law clause** (Q4). Don't promote the CLA as settled, or lean on the relicensing option commercially, until reviewed.
+- **§2a has not been reviewed by a lawyer** ([#281](https://github.com/marrow-software/marrow/issues/281)). It was aligned to the vetted Project Harmony template in v1.1 ([#286](https://github.com/marrow-software/marrow/issues/286)), the grantee is now defined as **Marrow Software LLC** (§1), and a **governing-law clause** (Oregon, USA — §8) was added, closing the substantive gaps #281 raised. What remains is an optional confirmatory lawyer pass before promoting the CLA / leaning on relicensing commercially — not a blocker.
 
 ---
 

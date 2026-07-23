@@ -12,9 +12,9 @@ permissive outbound option). It lets Us offer Your Contributions under
 additional license terms of Our choosing, while guaranteeing that Your
 Contributions always remain available under the Apache License 2.0.
 
-Please read this document carefully. **Section 8 ("What this means in plain
+Please read this document carefully. **Section 9 ("What this means in plain
 language") is not legal text — it is a summary provided in good faith.** The
-operative terms are Sections 1 through 7.
+operative terms are Sections 1 through 8.
 
 You accept and agree to the following terms and conditions for Your present
 and future Contributions submitted to Marrow. Except for the license granted
@@ -160,10 +160,22 @@ that would make these representations inaccurate in any respect.
 
 ---
 
-## 8. What this means in plain language
+## 8. Governing Law
+
+This Agreement is governed by and construed in accordance with the laws of the
+State of Oregon, United States of America, without regard to its
+conflict-of-laws principles.
+
+This choice of law governs the interpretation of this Agreement only. It does
+not alter, restrict, or add any condition to the Apache License 2.0 or any other
+license under which the Work or Your Contributions are distributed.
+
+---
+
+## 9. What this means in plain language
 
 *This section is a good-faith summary and is not operative legal text. Where
-it differs from Sections 1–7, those sections govern.*
+it differs from Sections 1–8, those sections govern.*
 
 - **You keep your copyright.** This is a license, not an assignment. Your code
   stays yours, and you can license it to anyone else however you like.
