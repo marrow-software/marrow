@@ -15,32 +15,41 @@ sign the [Marrow Individual Contributor License Agreement](./CLA.md). A bot
 handles it; it takes one comment.
 
 **Here's what the CLA actually does.** You keep the copyright on your code — the
-CLA is a license, not an assignment. But it grants Marrow the right to license
-your contribution under *any* terms, including commercial ones. In practice
-that means: **a future version of Marrow could ship under a non-open licence,
-and your contribution could be in it.**
+CLA is a license, not an assignment. It grants Marrow the right to license your
+contribution under *additional* terms, including commercial or proprietary ones
+— but **on the condition that your contribution always stays available under
+Apache 2.0 as well.** In practice that means: a future version of Marrow could
+be *dual-licensed* — an Apache track plus a commercial one — and your
+contribution could be in both. What it can't be is taken *out* of Apache 2.0.
+The clause is modeled on [Project Harmony](https://www.harmonyagreements.org)'s
+contributor-licence template (its License option plus the most permissive
+outbound option).
 
-**You should know why that's there.** CLAs have scar tissue. HashiCorp, Elastic
-and Redis all had exactly this machinery in place, and all three used it to
-relicense away from the communities that helped build them. If you're the kind
-of person who evaluates a self-hosted knowledge base on whether it respects
-your ownership of your own data, you are exactly the kind of person who
-remembers that. You would work this out on your own. We'd rather tell you.
+**You should know why that shape exists.** CLAs have scar tissue. HashiCorp,
+Elastic and Redis all had relicensing CLAs in place, and all three used them to
+move their source *off* open licences, away from the communities that helped
+build them. Marrow's clause deliberately stops short of that: it can add a
+commercial track, but it cannot remove the Apache 2.0 one. If you're the kind of
+person who evaluates a self-hosted knowledge base on whether it respects your
+ownership of your own data, you are exactly the kind of person who remembers
+those relicensings — so here's the difference in writing rather than left for
+you to infer.
 
 **What it's actually for:** Marrow is trying to be a sustainable product built
-by one person. The CLA keeps commercial options open on *future* work. That's
-the whole reason. There's no plan on the table today — but pretending the
-option isn't there would be dishonest, and the option is worth more than the
-pretence.
+by one person. The CLA keeps a commercial option open on *future* work — the
+ability to offer a paid or proprietary track *alongside* the open one. That's
+the whole reason. There's no plan on the table today. What it deliberately does
+*not* keep open is the ability to take the open track away.
 
 **And here's the part that isn't optional.** Every version of Marrow already
-released is Apache 2.0, **irrevocably**. That's not a promise of good
-behaviour, it's how the Apache License works — a released version can't be
-un-released. Section 2a of the CLA states it explicitly anyway: nothing in the
-CLA authorises us to retroactively change the licence of anything already
-published. If Marrow ever did relicense, every release up to that day stays
-free, forkable, and yours. That is the guarantee, and it's the same guarantee
-whether you like the direction the project takes or not.
+released is Apache 2.0, **irrevocably** — that's not a promise of good
+behaviour, it's how the Apache License works; a released version can't be
+un-released. Section 2a goes further: it keeps your contribution available under
+Apache 2.0 for *future* versions too, not only past ones. Marrow can add other
+licence terms on top, but the Apache 2.0 track stays open in perpetuity. If
+Marrow ever does add a commercial track, every release — past and future — is
+still free, forkable, and yours. That is the guarantee, and it holds whether or
+not you like the direction the project takes.
 
 If that trade isn't one you want to make, that's a completely reasonable call,
 and no hard feelings. Filing issues, reporting bugs, and writing docs are all

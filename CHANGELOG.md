@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Each release also has fuller narrative notes (highlights, breaking changes, upgrade
 steps) on its [GitHub release](https://github.com/marrow-software/marrow/releases).
 
+## [Unreleased]
+
+### Changed
+- CLA `CLA.md` bumped to **v1.1**: Section 2a (relicensing grant) aligned to the
+  Project Harmony contributor-license template (License option + most-permissive
+  outbound option). Marrow may now dual-license future versions under additional
+  commercial/proprietary terms, but is bound to keep every version — past and
+  future — available under Apache 2.0; the earlier "already-published releases
+  only" carve-out is replaced by a perpetual dual-availability guarantee.
+  `CONTRIBUTING.md` framing updated to match. (#281, #286)
+
 ## [0.4.0] — 2026-07-10
 
 ### Added
