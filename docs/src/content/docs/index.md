@@ -3,7 +3,7 @@ title: Marrow
 description: Self-hosted, open-source knowledge base built around a non-negotiable restore guarantee.
 ---
 
-Marrow is a self-hosted, open-source knowledge base. Every workspace can be exported to a transparent, human-readable bundle, and any export bundle can be restored to an exact replica of the original workspace.
+Marrow is a self-hosted, open-source knowledge base. Every workspace can be exported to a transparent, human-readable bundle, and any export bundle restores its workspace content with full fidelity — the node tree, revisions, attachments, properties, and links, verified field-for-field in CI. "Full fidelity" means workspace content parity over the exported scope, not every database row or per-user overlay; see the [restore guarantee scope table](/concepts/restore-guarantee/#what-round-trips-today) for exactly what round-trips today.
 
 ## Where to start
 
@@ -15,7 +15,7 @@ Marrow is a self-hosted, open-source knowledge base. Every workspace can be expo
 
 ## Core principles
 
-1. **Restore guarantee.** Every export bundle is restorable to a byte-faithful workspace.
+1. **Restore guarantee.** Every export bundle restores its workspace content with full fidelity over the [exported scope](/concepts/restore-guarantee/#what-round-trips-today).
 2. **Append-only history.** Every save is a new revision. Old revisions are never modified.
 3. **Transparent format.** Bundles are plain Markdown + JSON in a zip.
 4. **Self-hosted.** Your data never leaves the infrastructure you control.

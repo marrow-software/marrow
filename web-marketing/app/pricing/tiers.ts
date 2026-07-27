@@ -40,7 +40,7 @@ export const tiers: Tier[] = [
     tagline: "Run it yourself, own everything.",
     price: { monthly: 0, yearly: 0 },
     cta: "Get started free",
-    ctaHref: "https://github.com/spmcgraw/marrow",
+    ctaHref: "https://github.com/marrow-software/marrow",
     highlighted: false,
     features: [
       "Unlimited workspaces & spaces",

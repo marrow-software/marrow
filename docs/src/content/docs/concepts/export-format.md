@@ -95,7 +95,9 @@ Every attachment, named by attachment ID with the original extension.
 
 ### `links.json`
 
-Internal node-to-node links, broken links, and orphaned nodes. Used to reconstruct cross-references on restore. The `orphaned_nodes` array lists nodes with no inbound links from other exported nodes.
+Internal node-to-node links (`internal_links`), broken links (`broken_links`), and orphaned nodes (`orphaned_nodes`). Used to reconstruct cross-references on restore. The `orphaned_nodes` array lists nodes with no inbound links from other exported nodes.
+
+In v4, `broken_links` is **always `[]`** — the export serializes only the live `node_links` index, which by construction contains resolvable node-to-node links, so no broken links can be recorded. The field is retained for schema stability.
 
 ## Bundle schema versions
 
@@ -118,6 +120,9 @@ unzip -p marrow-export-mydocs-20260101T120000Z.zip manifest.json | jq .
 If you want to verify a backup is restorable without disturbing your live instance, restore it into a fresh database:
 
 ```bash
-docker compose up -d  # fresh dev DB
-cd api && marrow restore /path/to/bundle.zip
+# `-v` drops the Postgres volume so the DB is genuinely empty — otherwise
+# restore collides on slugs that already exist in a non-empty database.
+docker compose down -v && docker compose up -d
+cd api && alembic upgrade head
+marrow restore /path/to/bundle.zip
 ```

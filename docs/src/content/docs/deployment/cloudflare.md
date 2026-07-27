@@ -1,6 +1,6 @@
 ---
 title: Cloudflare deployment
-description: Deploy Marrow to Cloudflare Workers + Containers, with Auth0 for OIDC, Neon for Postgres, and R2 for attachments.
+description: Deploy Marrow to Cloudflare Workers (web) + Fly.io (API), with Auth0 for OIDC, Neon for Postgres, and R2 for attachments.
 ---
 
 The full Cloudflare stack is supported as of **v0.2**. This guide walks through a first-time production deployment.
@@ -12,7 +12,7 @@ The full Cloudflare stack is supported as of **v0.2**. This guide walks through 
 | Product app (`app.marrow.so`) | Cloudflare Workers (`@opennextjs/cloudflare`) |
 | Marketing site (`marrow.so`) | Cloudflare Pages (static export) |
 | Docs site (`docs.marrow.so`) | Cloudflare Pages (static Astro) |
-| Backend API (`api.marrow.so`) | Cloudflare Containers (image from GHCR) |
+| Backend API (`api.marrow.so`) | [Fly.io](https://fly.io) (`marrow-api` app, image from GHCR) |
 | Database | [Neon](https://neon.tech) Postgres (free tier) |
 | Attachments | Cloudflare R2 |
 | Auth | [Auth0](https://auth0.com) (GitHub + Google social connections) |
@@ -20,12 +20,13 @@ The full Cloudflare stack is supported as of **v0.2**. This guide walks through 
 
 ## Prerequisites
 
-- A Cloudflare account with Workers and Containers enabled.
-- `wrangler` CLI installed and authenticated (`npm i -g wrangler && wrangler login`).
+- A Cloudflare account with Workers enabled (product app, marketing, docs, DNS, R2).
+- `wrangler` CLI installed and authenticated (`npm i -g wrangler && wrangler login`) — used for the web/marketing/docs and R2.
+- A [Fly.io](https://fly.io) account and `flyctl` installed and authenticated (`flyctl auth login`) — used for the API.
 - A Neon project with a Postgres database.
 - An Auth0 account (free tier: 7,500 MAU).
 - A Stripe account (for billing).
-- GitHub secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` set in your repo.
+- GitHub secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (web/marketing/docs) and `FLY_API_TOKEN` (API deploy) set in your repo.
 
 ## 1. Cloudflare API token
 
@@ -69,30 +70,33 @@ Auth0 acts as a single OIDC issuer and lets users sign in with GitHub or Google.
 
 ## 5. Stripe
 
-Create products and prices for your tiers in the [Stripe dashboard](https://stripe.com). After the API is deployed, register a webhook at `https://api.marrow.so/api/billing/webhook` for events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`.
+Create products and prices for your tiers in the [Stripe dashboard](https://stripe.com). After the API is deployed, register a webhook at `https://api.marrow.so/api/billing/webhook` for events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `customer.subscription.trial_will_end`, `invoice.payment_failed`.
 
-## 6. Configure API wrangler secrets
+## 6. Configure API secrets on Fly.io
 
-Run from the `api/` directory:
+The API runs on Fly.io (`marrow-api` app; config in `api/fly.toml`). Set the secret values with `flyctl secrets set` — they are stored encrypted by Fly, never in the repo:
 
 ```bash
-wrangler secret put SECRET_KEY            # 64-char random string
-wrangler secret put DATABASE_URL          # Neon pooled connection string
-wrangler secret put R2_ENDPOINT_URL       # https://<account-id>.r2.cloudflarestorage.com
-wrangler secret put R2_ACCESS_KEY_ID
-wrangler secret put R2_SECRET_ACCESS_KEY
-wrangler secret put R2_BUCKET             # marrow-attachments
-wrangler secret put OIDC_CLIENT_SECRET    # Auth0 client secret
-wrangler secret put STRIPE_SECRET_KEY
-wrangler secret put STRIPE_WEBHOOK_SECRET # from Stripe webhook step above
+flyctl secrets set -a marrow-api \
+  SECRET_KEY="<64-char random string>" \
+  DATABASE_URL="<Neon pooled connection string>" \
+  R2_ENDPOINT_URL="https://<account-id>.r2.cloudflarestorage.com" \
+  R2_ACCESS_KEY_ID="<...>" \
+  R2_SECRET_ACCESS_KEY="<...>" \
+  R2_BUCKET="marrow-attachments" \
+  OIDC_CLIENT_SECRET="<Auth0 client secret>" \
+  STRIPE_SECRET_KEY="<sk_live_...>" \
+  STRIPE_WEBHOOK_SECRET="<whsec_... from the Stripe webhook step above>"
 ```
 
-## 7. Update api/wrangler.toml vars
+`api/fly.toml`'s `[deploy] release_command = "alembic upgrade head"` runs migrations in a temporary machine (same image + secrets) before traffic shifts; a failure there aborts the deploy.
 
-Edit `api/wrangler.toml` and fill in the non-secret vars:
+## 7. Set non-secret API vars in api/fly.toml
+
+Non-secret configuration lives in the `[env]` block of `api/fly.toml` (checked in). Fill in your values:
 
 ```toml
-[vars]
+[env]
 OIDC_ISSUER       = "https://<your-auth0-domain>/"   # trailing slash required
 OIDC_CLIENT_ID    = "<auth0-client-id>"
 OIDC_REDIRECT_URI = "https://api.marrow.so/api/auth/callback"
@@ -132,9 +136,15 @@ In the Cloudflare dashboard → **marrow.so → DNS**, add:
 | `app` | CNAME | `marrow-web.<account>.workers.dev` | Proxied |
 | `docs` | CNAME | `marrow-docs.pages.dev` | Proxied |
 
-The `api.marrow.so` subdomain is configured automatically when you run `wrangler deploy` from `api/`.
+For `api.marrow.so`, point a record at the Fly app and register the hostname as a Fly certificate:
 
-Then add each subdomain as a custom domain in the respective Pages / Workers dashboard.
+```bash
+flyctl certs add api.marrow.so -a marrow-api
+```
+
+Follow the DNS record it prints (a `CNAME` to `marrow-api.fly.dev`, DNS-only / unproxied so Fly can issue the TLS cert).
+
+Then add each Cloudflare subdomain as a custom domain in the respective Pages / Workers dashboard.
 
 ## 10. Deploy
 
@@ -146,7 +156,7 @@ git tag v0.2.0 && git push origin v0.2.0
 
 GitHub Actions (`release.yml`) will:
 1. Build and push the API container image to GHCR.
-2. Deploy the API via `wrangler deploy` (Cloudflare Containers).
+2. Deploy the API to Fly.io — `flyctl deploy --image ghcr.io/marrow-software/marrow-api:<tag> --strategy rolling`, authenticated with the `FLY_API_TOKEN` secret. Migrations run automatically via the `release_command` in `api/fly.toml`.
 3. Build the web app with OpenNext and deploy it as a Cloudflare Worker.
 
 The marketing workflow (`marketing.yml`) deploys the static site on any push to `main` that touches `web-marketing/`.

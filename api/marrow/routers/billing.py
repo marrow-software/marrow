@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..dependencies import AuthContext, get_db
-from ..email import send_email, subscription_confirmation_html
+from ..email import send_email, subscription_confirmation_html, trial_ending_html
 from ..models import Organization, OrgRole
 from ..rbac import require_org_role
 from ..subscriptions import is_org_active
@@ -138,11 +138,19 @@ def create_checkout_session(
     org.stripe_customer_id = customer_id
     db.commit()
 
+    # No card up front: "14 days, no credit card required". Stripe requires an
+    # explicit missing_payment_method end-behaviour when payment collection is
+    # optional — "cancel" ends the trial cleanly on day 14 with nothing owed
+    # (Stripe fires customer.subscription.deleted, reusing our canceled gate).
     session = stripe.checkout.Session.create(
         customer=customer_id,
         line_items=[{"price": price_id, "quantity": line_quantity}],
         mode="subscription",
-        subscription_data={"trial_period_days": 14},
+        payment_method_collection="if_required",
+        subscription_data={
+            "trial_period_days": 14,
+            "trial_settings": {"end_behavior": {"missing_payment_method": "cancel"}},
+        },
         success_url=f"{frontend_url}/subscribe/success?org={org_id}",
         cancel_url=f"{frontend_url}/subscribe?org={org_id}&canceled=1",
         metadata={"org_id": str(org_id)},
@@ -234,6 +242,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             _handle_subscription_updated(event["data"]["object"], db)
         elif event["type"] == "customer.subscription.deleted":
             _handle_subscription_deleted(event["data"]["object"], db)
+        elif event["type"] == "customer.subscription.trial_will_end":
+            _handle_trial_will_end(event["data"]["object"], db)
         elif event["type"] == "invoice.payment_failed":
             _handle_payment_failed(event["data"]["object"], db)
     except Exception:
@@ -371,6 +381,47 @@ def _handle_subscription_deleted(subscription: "stripe.Subscription", db: Sessio
     org.billing_interval = None
     org.subscription_status = "canceled"
     db.commit()
+
+
+def _handle_trial_will_end(subscription: "stripe.Subscription", db: Session) -> None:
+    """Send a single trial-ending reminder (~3 days out) for a no-card trial.
+
+    Stripe fires this once, ~3 days before the trial ends. We only send a
+    heads-up email — no status change — so a customer on a card-less trial
+    knows it will cancel cleanly unless they add a payment method. The email is
+    best-effort and never blocks the webhook 200.
+    """
+    customer_id = getattr(subscription, "customer", None)
+    org = _org_by_customer(customer_id, db)
+    if org is None:
+        logger.warning(
+            "billing: customer.subscription.trial_will_end matched no org (customer=%s)",
+            customer_id,
+        )
+        return
+
+    recipient = None
+    if customer_id:
+        try:
+            customer = stripe.Customer.retrieve(customer_id)
+            recipient = getattr(customer, "email", None)
+        except Exception:  # noqa: BLE001 — best-effort lookup; log and continue
+            logger.exception(
+                "billing: failed to retrieve customer %s for trial reminder", customer_id
+            )
+    if not recipient:
+        logger.warning(
+            "billing: trial_will_end has no recipient email (org=%s customer=%s); no reminder sent",
+            org.id,
+            customer_id,
+        )
+        return
+
+    send_email(
+        to=recipient,
+        subject="Your Marrow trial ends in 3 days",
+        html=trial_ending_html(org.name),
+    )
 
 
 def _handle_payment_failed(invoice: "stripe.Invoice", db: Session) -> None:

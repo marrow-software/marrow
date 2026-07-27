@@ -244,7 +244,7 @@ export function Landing() {
         }}
       >
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <Eyebrow>From the field</Eyebrow>
+          <Eyebrow>Why Marrow</Eyebrow>
           <blockquote
             style={{
               margin: "20px 0 0",
@@ -256,38 +256,13 @@ export function Landing() {
               fontVariationSettings: '"SOFT" 80',
             }}
           >
-            &ldquo;Our Confluence exports had been sitting in a zip file for three years. Moving to Marrow took a
-            weekend. The docs are{" "}
+            Your knowledge base should outlive any vendor. Marrow exports to plain Markdown and JSON, and every
+            bundle restores your workspace content with full fidelity &mdash; so your docs stay{" "}
             <em style={{ color: "var(--color-accent)", fontVariationSettings: '"SOFT" 100, "WONK" 1' }}>
-              finally
-            </em>{" "}
-            somewhere we&apos;ll actually read them.&rdquo;
+              yours
+            </em>
+            , wherever you run it.
           </blockquote>
-          <div style={{ marginTop: 32, display: "flex", alignItems: "center", gap: 14 }}>
-            <div
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                background: "var(--color-surface-elevated)",
-                color: "var(--color-accent)",
-                border: "1px solid var(--color-border)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontFamily: "var(--font-display)",
-                fontSize: 18,
-              }}
-            >
-              L
-            </div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 500, color: "var(--color-text-primary)" }}>Lena Osei</div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
-                Staff Engineer, Haven Infrastructure
-              </div>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -885,27 +860,23 @@ function TerminalBlock() {
           whiteSpace: "pre-wrap",
         }}
       >
-        <span style={{ color: "var(--color-text-muted)" }}>{`# 1. Pull the image`}</span>
+        <span style={{ color: "var(--color-text-muted)" }}>{`# 1. Pull the API image`}</span>
         {`
 $ docker pull `}
-        <span style={{ color: "var(--color-accent)" }}>{`ghcr.io/marrow/marrow:latest`}</span>
+        <span style={{ color: "var(--color-accent)" }}>{`ghcr.io/marrow-software/marrow-api:latest`}</span>
         {`
 
 `}
-        <span style={{ color: "var(--color-text-muted)" }}>{`# 2. Point at a volume and a Postgres`}</span>
+        <span style={{ color: "var(--color-text-muted)" }}>{`# 2. Configure and bring up the stack (db + api + web)`}</span>
         {`
-$ docker run -d \\
-    -v `}
-        <span style={{ color: "var(--color-accent)" }}>{`./pages`}</span>
-        {`:/data \\
-    -e DATABASE_URL=`}
-        <span style={{ color: "var(--color-accent)" }}>{`$DATABASE_URL`}</span>
-        {` \\
-    -p 8080:8080 marrow/marrow
+$ cp .env.prod.example .env   `}
+        <span style={{ color: "var(--color-text-muted)" }}>{`# set POSTGRES_PASSWORD, SECRET_KEY, …`}</span>
+        {`
+$ docker compose -f docker-compose.prod.yml up -d
 
 `}
-        <span style={{ color: "var(--color-success)" }}>{`✓ ready on :8080 — `}</span>
-        {`3.4s
+        <span style={{ color: "var(--color-success)" }}>{`✓ api on :8000  ✓ web on :3000`}</span>
+        {`
 `}
       </pre>
     </div>

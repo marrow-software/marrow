@@ -57,3 +57,16 @@ def subscription_confirmation_html(org_name: str, tier: str) -> str:
   <p>You can manage your plan any time from your organization settings.</p>
   <p style="color: #888; font-size: 13px;">— The Marrow team</p>
 </div>"""
+
+
+def trial_ending_html(org_name: str) -> str:
+    """Render the trial-ending reminder email body (~3 days before trial end)."""
+    return f"""\
+<div style="font-family: -apple-system, system-ui, sans-serif; max-width: 480px; margin: 0 auto;">
+  <h1 style="font-size: 20px;">Your Marrow trial ends soon</h1>
+  <p>The free trial for <strong>{org_name}</strong> ends in about 3 days.</p>
+  <p>You didn't need a card to start, and you won't be charged when the trial
+  ends. To keep Marrow running, add a payment method from your organization
+  settings — otherwise your subscription will cancel with nothing owed.</p>
+  <p style="color: #888; font-size: 13px;">— The Marrow team</p>
+</div>"""

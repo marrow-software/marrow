@@ -93,8 +93,10 @@ Restore proves the bundle is self-contained. Use a **disposable** database so yo
 ### Option A — wipe dev Postgres (simplest)
 
 ```bash
-# Stop API first if it holds connections
-docker compose down
+# Stop API first if it holds connections.
+# `-v` drops the Postgres volume so the database is genuinely empty —
+# without it the old rows survive and restore collides on existing slugs.
+docker compose down -v
 docker compose up -d
 cd api && alembic upgrade head
 
