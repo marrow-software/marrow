@@ -9,10 +9,10 @@ export const APP_URL = "https://app.marrow.so";
 export const SELF_HOST_DOCS_URL = "https://docs.marrow.so/deployment/docker-compose/";
 
 const navLinks = [
-  { href: "/", label: "Product" },
+  { href: "/product", label: "Product" },
   { href: "/pricing", label: "Pricing" },
   { href: "https://docs.marrow.so", label: "Docs" },
-  { href: "https://github.com/spmcgraw/marrow", label: "GitHub" },
+  { href: "https://github.com/marrow-software/marrow", label: "GitHub" },
 ];
 
 export function SiteNav() {
@@ -156,8 +156,8 @@ export function SiteFooter() {
           {[
             { href: "/pricing", label: "Pricing" },
             { href: "https://docs.marrow.so", label: "Docs" },
-            { href: "https://github.com/spmcgraw/marrow", label: "GitHub" },
-            { href: "https://github.com/spmcgraw/marrow/blob/main/LICENSE", label: "Apache 2.0" },
+            { href: "https://github.com/marrow-software/marrow", label: "GitHub" },
+            { href: "https://github.com/marrow-software/marrow/blob/main/LICENSE", label: "Apache 2.0" },
           ].map((link) => (
             <Link
               key={link.href}

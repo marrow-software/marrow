@@ -533,7 +533,7 @@ export default function PricingPage() {
           </p>
           <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
             <Link
-              href="https://github.com/spmcgraw/marrow"
+              href="https://github.com/marrow-software/marrow"
               style={{
                 display: "inline-block",
                 padding: "0.75rem 1.75rem",

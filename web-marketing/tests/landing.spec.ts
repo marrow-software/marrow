@@ -12,8 +12,43 @@ test.describe("marketing landing", () => {
   test("nav exposes Product and Pricing with the right hrefs", async ({ page }) => {
     await page.goto("/");
     const nav = page.locator("header nav");
-    await expect(nav.getByRole("link", { name: "Product", exact: true })).toHaveAttribute("href", "/");
+    await expect(nav.getByRole("link", { name: "Product", exact: true })).toHaveAttribute("href", "/product");
     await expect(nav.getByRole("link", { name: "Pricing", exact: true })).toHaveAttribute("href", "/pricing");
+  });
+
+  test("every GitHub link resolves to marrow-software/marrow (no spmcgraw)", async ({ page }) => {
+    await page.goto("/");
+    // No link anywhere points at the old personal repo.
+    await expect(page.locator('a[href*="spmcgraw"]')).toHaveCount(0);
+
+    const githubLinks = page.locator('a[href*="github.com"]');
+    const count = await githubLinks.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i++) {
+      const href = await githubLinks.nth(i).getAttribute("href");
+      expect(href).toContain("github.com/marrow-software/marrow");
+    }
+  });
+
+  test("no fabricated testimonial attribution in the Why-Marrow section", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByText("Lena Osei")).toHaveCount(0);
+    await expect(page.getByText("Staff Engineer, Haven Infrastructure")).toHaveCount(0);
+    await expect(page.getByText("From the field")).toHaveCount(0);
+  });
+
+  test("self-host terminal references the real image and ports", async ({ page }) => {
+    await page.goto("/");
+    const main = page.getByRole("main");
+    await expect(main.getByText(/ghcr\.io\/marrow-software\/marrow-api/)).toBeVisible();
+    await expect(main.getByText(/docker-compose\.prod\.yml/)).toBeVisible();
+    await expect(main.getByText(/:8000/)).toBeVisible();
+    await expect(main.getByText(/:3000/)).toBeVisible();
+
+    // The invented image, port, and boot time must be gone.
+    await expect(page.getByText("ghcr.io/marrow/marrow")).toHaveCount(0);
+    await expect(page.getByText(":8080")).toHaveCount(0);
+    await expect(page.getByText("3.4s")).toHaveCount(0);
   });
 
   test("header renders the MarrowGlyph (viewBox 0 0 32 32)", async ({ page }) => {

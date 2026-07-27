@@ -28,7 +28,7 @@ An API key grants **superuser access**: it bypasses org RBAC (same as the CLI). 
    MARROW_API_KEY=your-generated-key-here
    ```
 
-4. Start Postgres, API, and web as in [steps 2–4](#2-start-postgresql) below. The browser sends the key automatically; no login screen.
+4. Start Postgres, API, and web as in [steps 2–4](#2-start-postgresql) below. The browser sends the key automatically; the app still routes through `/login` and lands on `/workspaces` (there is no separate identity — the API key is a shared superuser credential, not a per-user login).
 
 **CLI** talks to Postgres directly (not the HTTP API). With `api/.env` configured and venv active:
 
@@ -89,6 +89,8 @@ cp .env.example .env
 alembic upgrade head
 uvicorn main:app --reload
 ```
+
+The API is **fail-closed** — it refuses to start unless an auth method is configured. For a zero-config local instance, uncomment `MARROW_ALLOW_ANONYMOUS=true` in `api/.env` (localhost only — it bypasses all access control). Alternatively set an `API_KEY` (see [Solo self-host without OIDC](#solo-self-host-without-oidc)) or configure [OIDC](/configuration/oidc/).
 
 The API runs at `http://localhost:8000`.
 

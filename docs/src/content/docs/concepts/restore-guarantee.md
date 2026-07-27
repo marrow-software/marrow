@@ -32,13 +32,13 @@ Bundles are zip files containing Markdown, JSON, and a `manifest.json`. No propr
 
 ### 3. The round-trip test
 
-`api/tests/test_round_trip.py` is a regression anchor: it creates a workspace with multiple spaces, a folder/page node tree, revisions, attachments, properties, and links, exports it, wipes the database, restores from the bundle, and verifies the result is byte-equivalent to the original. This test must pass at all times. It runs in CI on every change.
+`api/tests/test_round_trip.py` is a regression anchor: it creates a workspace with one space, a folder/page node tree, revisions, attachments, properties, and links, exports it, wipes the database, restores from the bundle, and asserts **field-level parity over the exported scope** — organization, workspace, space, node, and revision fields all match, and attachment bytes are compared **byte-for-byte** (plus a SHA-256 check). It verifies the exported categories, not every row in the database. This test must pass at all times. It runs in CI on every change.
 
 **You are not required to run export→restore yourself.** The guarantee is enforced by automated tests on every commit, not by customer onboarding. If you want to verify a backup by hand, see [Inspecting a bundle](/concepts/export-format/#inspecting-a-bundle) and the [export/restore walkthrough](/getting-started/export-restore-demo/).
 
 ### 4. Legacy bundle compatibility
 
-`marrow restore` accepts bundles from earlier Marrow versions, including bundles produced before the project was renamed (the `freehold-export-*.zip` filename prefix is still recognized). The restore guarantee is a forward promise — old bundles must continue to restore on new versions.
+`marrow restore` accepts bundles from earlier Marrow versions, including bundles produced before the project was renamed (the `freehold-export-*.zip` filename prefix is still recognized). The restore guarantee is **backward-compatible**: a new Marrow reads old bundles, bounded to schema **v1–v4**. (It is not a forward promise — an older Marrow is not expected to read a newer bundle.)
 
 Marrow 0.2 introduces bundle schema **v4**, which carries the new `nodes` tree shape (folders + pages in one self-referential structure) and node soft-delete state. Older v1/v2/v3 bundles still restore: their legacy collection/page structure is auto-upgraded into the node tree on read, so a backup taken on 0.1 restores cleanly on 0.2 with no manual steps.
 

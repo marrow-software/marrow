@@ -34,7 +34,7 @@ MARROW_API_URL=https://api.example.com
 MARROW_OIDC_ENABLED=true
 ```
 
-`MARROW_OIDC_ENABLED` enables the `/login` page and route-protection middleware. Without it the frontend assumes anonymous mode.
+`MARROW_OIDC_ENABLED` enables the `/login` page. Route protection is handled without middleware — server layouts `redirect("/login")` on a 401 and the client API helper redirects to the OIDC login endpoint on any 401 (there is deliberately no Next.js middleware). Without `MARROW_OIDC_ENABLED` the frontend assumes anonymous mode.
 
 ## Cookie domain
 

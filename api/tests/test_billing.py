@@ -198,6 +198,94 @@ def test_handlers_noop_for_unknown_customer(db):
 
 
 # ---------------------------------------------------------------------------
+# Checkout — no-card trial params (#289)
+# ---------------------------------------------------------------------------
+
+
+def test_checkout_creates_no_card_trial_session(db, monkeypatch, known_price):
+    monkeypatch.setattr(
+        billing, "_CLOUD_PRICES", {"business": {"monthly": "price_business_monthly"}}
+    )
+    monkeypatch.setattr(
+        billing.stripe.Customer, "create", lambda **kw: _stripe_obj({"id": "cus_new"})
+    )
+
+    captured: dict = {}
+
+    def _fake_create(**kwargs):
+        captured.update(kwargs)
+        return _stripe_obj({"url": "https://checkout.stripe.test/session"})
+
+    monkeypatch.setattr(billing.stripe.checkout.Session, "create", _fake_create)
+
+    org = _seed_org(db, customer=None)
+    result = billing.create_checkout_session(
+        org.id, billing.CheckoutRequest(tier="business", interval="monthly"), db=db, auth=None
+    )
+
+    assert result == {"url": "https://checkout.stripe.test/session"}
+    assert captured["payment_method_collection"] == "if_required"
+    assert captured["subscription_data"]["trial_period_days"] == 14
+    assert (
+        captured["subscription_data"]["trial_settings"]["end_behavior"]["missing_payment_method"]
+        == "cancel"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Trial-ending reminder — exactly one email, best-effort (#289)
+# ---------------------------------------------------------------------------
+
+
+def test_trial_will_end_sends_single_reminder(db, monkeypatch, stub_email):
+    _seed_org(db, customer="cus_trial")
+    monkeypatch.setattr(
+        billing.stripe.Customer, "retrieve", lambda cid: _stripe_obj({"email": "buyer@example.com"})
+    )
+
+    billing._handle_trial_will_end(
+        _stripe_obj({"object": "subscription", "id": "sub_trial", "customer": "cus_trial"}), db
+    )
+
+    assert len(stub_email) == 1
+    assert stub_email[0]["to"] == "buyer@example.com"
+    assert "trial ends" in stub_email[0]["subject"].lower()
+
+
+def test_trial_will_end_unknown_customer_logs(db, caplog, stub_email):
+    with caplog.at_level("WARNING", logger="marrow.routers.billing"):
+        billing._handle_trial_will_end(
+            _stripe_obj({"object": "subscription", "customer": "cus_missing"}), db
+        )
+    assert stub_email == []
+    assert any("matched no org" in r.message for r in caplog.records)
+
+
+def test_trial_will_end_email_failure_does_not_raise(db, monkeypatch):
+    _seed_org(db, customer="cus_trial2")
+    monkeypatch.setattr(
+        billing.stripe.Customer, "retrieve", lambda cid: _stripe_obj({"email": "buyer@example.com"})
+    )
+
+    def _boom(to, subject, html):
+        raise RuntimeError("email exploded")
+
+    monkeypatch.setattr(billing, "send_email", _boom)
+
+    # The webhook wraps handlers in try/except, but the handler itself should
+    # let send_email be best-effort. send_email never raises in production; here
+    # we assert the raise propagates only to the webhook's guard, so exercise
+    # through the webhook endpoint to confirm the 200.
+    event = {
+        "type": "customer.subscription.trial_will_end",
+        "data": {"object": _stripe_obj({"object": "subscription", "customer": "cus_trial2"})},
+    }
+    monkeypatch.setattr(billing.stripe.Webhook, "construct_event", lambda p, s, sec: event)
+    response = _webhook_client(db).post("/api/billing/webhook", content=b"{}")
+    assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # Webhook observability — every early-return must log (#214)
 # ---------------------------------------------------------------------------
 
