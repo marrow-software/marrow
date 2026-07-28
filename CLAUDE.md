@@ -100,7 +100,10 @@ CORS_ORIGINS=http://localhost:3000
 
 # Billing / subscriptions (SaaS only — set SAAS_MODE=true to enforce the gate)
 # SAAS_MODE=true
-# STRIPE_SECRET_KEY=, STRIPE_WEBHOOK_SECRET=, STRIPE_*_PRICE_* (see api/.env.example)
+# STRIPE_SECRET_KEY=, STRIPE_WEBHOOK_SECRET= (see api/.env.example)
+# Cloud per-seat prices: STRIPE_{STARTER,BUSINESS,GROWTH}_PRICE_{MONTHLY,YEARLY}
+# Self-hosted per-seat annual prices: STRIPE_SH_BUSINESS_PRICE_YEARLY, STRIPE_SH_ENTERPRISE_PRICE_YEARLY
+#   (both consumed by routers/billing.py's price→tier map; there are no SH monthly prices)
 # Transactional email (Resend) — confirmation emails on checkout; best-effort.
 # RESEND_API_KEY=re_...
 # EMAIL_FROM="Marrow <hello@marrow.so>"
@@ -134,11 +137,11 @@ cd api && alembic revision --autogenerate -m "description"
 cd api && alembic upgrade head
 cd api && alembic downgrade -1
 
-# CLI (export/restore/trash)
+# CLI (export/restore/billing) — the Typer app exposes exactly these three commands
 cd api && marrow export --workspace <slug> --output <path>
 cd api && marrow restore <bundle.zip>
-cd api && marrow purge-trash --older-than-days 30   # hard-delete old trashed nodes (cron'able)
 cd api && marrow reset-org-billing <slug>           # reset billing+onboarding state for repeatable testing (#214)
+# Note: there is no `marrow purge-trash` command; hard-delete is per-node via DELETE /api/nodes/{id}/purge.
 
 # Product frontend (web/)
 cd web && npm run dev
@@ -388,16 +391,16 @@ All routes are prefixed with `/api`. Authentication is enforced via session cook
 | DELETE | /api/orgs/{oid}/members/{mid} | Remove member | owner |
 | POST | /api/orgs/{oid}/workspaces | Create workspace in org (#129) | editor |
 | GET | /api/workspaces/ | List workspaces | viewer |
-| POST | /api/workspaces/ | **410 Gone** — use POST /api/orgs/{oid}/workspaces | — |
+| POST | /api/workspaces/ | Create workspace (`201`); session users default to their first org, API-key/anon must pass `org_id`. `POST /api/orgs/{oid}/workspaces` is the org-scoped alternative | session |
 | GET/DELETE | /api/workspaces/{id} | Get / delete workspace | viewer/owner |
 | GET | /api/workspaces/{id}/tree | Full hierarchy (sidebar) | viewer |
+| GET | /api/workspaces/{id}/home | Workspace home payload (recent pages etc.) | viewer |
 | GET | /api/workspaces/{id}/search?q= | Full-text search across workspace pages | viewer |
 | GET | /api/workspaces/{id}/export?slim=false&include_trash=false | Download workspace as zip bundle | viewer |
 | GET | /api/workspaces/{id}/export/estimate | Pre-compression byte estimates for full & slim exports | viewer |
 | POST | /api/workspaces/restore | Restore a workspace from an uploaded export bundle zip | — |
 | GET/POST | /api/workspaces/{id}/spaces/ | List / create spaces | viewer/editor |
 | GET/DELETE | /api/workspaces/{id}/spaces/{sid} | Get / delete space | viewer/owner |
-| GET | /api/workspaces/{id}/trash | List top-level trashed nodes | viewer |
 | POST | /api/nodes/{id}/restore | Restore a trashed node + subtree (422 if parent still trashed) | editor |
 | DELETE | /api/nodes/{id}/purge | Hard-delete a trashed node and its subtree | owner |
 | GET/POST | /api/nodes/{node_id}/share-links | List / create view-only share links | viewer/editor |

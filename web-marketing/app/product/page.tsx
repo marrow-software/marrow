@@ -32,14 +32,14 @@ const SECTIONS = [
     id: "search",
     label: "Search",
     heading: "Find it in a keystroke.",
-    body: "Full-text search across every page in a workspace. Hit Cmd+K anywhere, start typing, and land on the right page — with a ranked snippet so you know you're in the right place before you click.",
+    body: "Full-text search across page names, bodies, and properties in a workspace. Hit Cmd+K anywhere in a workspace, start typing, and land on the right page — with a ranked snippet so you know you're in the right place before you click.",
     demo: SearchDemo,
   },
   {
     id: "history",
     label: "History",
     heading: "Every save, forever.",
-    body: "Revisions are append-only by design — nothing is ever overwritten. Browse the full history of any page, restore a previous version, or export the entire revision chain. Your notes do not disappear.",
+    body: "Revisions are append-only by design — a database trigger blocks any edit, so no save is ever silently overwritten. Browse the full history of any page, restore a previous version, or export the entire revision chain. (Deleting a page moves it to trash; purging trash removes it for good.)",
     demo: HistoryDemo,
   },
 ] as const;
@@ -75,7 +75,17 @@ export default function ProductPage() {
             style={{ color: "var(--muted-foreground)" }}
           >
             Marrow is a self-hosted knowledge base built around a single promise: your
-            export bundle is always restorable to an exact replica of your workspace.
+            export bundle restores to an exact replica of your workspace content — the node
+            tree, revisions, attachments, properties, and links it carries.{" "}
+            <a
+              href="https://docs.marrow.so/concepts/restore-guarantee/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--color-accent)", textDecoration: "underline" }}
+            >
+              See exactly what round-trips
+            </a>
+            .
           </p>
         </section>
 
