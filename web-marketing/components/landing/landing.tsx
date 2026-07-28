@@ -264,6 +264,19 @@ export function Landing() {
             </em>
             , wherever you run it.
           </blockquote>
+          <p style={{ fontSize: 15, color: "var(--color-text-secondary)", marginTop: 24, maxWidth: 620 }}>
+            &ldquo;Workspace content&rdquo; means the node tree, revisions, attachments, properties, and links a
+            bundle carries. Comments, share links, and folder views are slated for a later bundle version.{" "}
+            <a
+              href="https://docs.marrow.so/concepts/restore-guarantee/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "var(--color-accent)", textDecoration: "underline" }}
+            >
+              See exactly what round-trips
+            </a>
+            .
+          </p>
         </div>
       </section>
 

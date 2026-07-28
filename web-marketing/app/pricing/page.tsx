@@ -70,6 +70,7 @@ function BillingToggle({
 function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly" }) {
   const price = tier.price[billing];
   const isContactSales = price === null;
+  const priceNum = price ?? 0;
 
   return (
     <div
@@ -139,7 +140,7 @@ function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly"
           </p>
         ) : (
           <div style={{ display: "flex", alignItems: "baseline", gap: "0.25rem" }}>
-            {tier.priceFrom && price! > 0 && (
+            {tier.priceFrom && priceNum > 0 && (
               <span style={{ fontSize: "0.9375rem", color: "var(--color-text-secondary)", marginRight: "0.15rem" }}>
                 from
               </span>
@@ -155,7 +156,7 @@ function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly"
             >
               ${price}
             </span>
-            {price! > 0 && (
+            {priceNum > 0 && (
               <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>
                 / mo
               </span>
@@ -167,9 +168,9 @@ function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly"
             )}
           </div>
         )}
-        {billing === "yearly" && !isContactSales && price! > 0 && (
+        {billing === "yearly" && !isContactSales && priceNum > 0 && (
           <p style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}>
-            Billed ${price! * 12}/yr per band
+            Billed ${priceNum * 12}/yr per band
           </p>
         )}
         {tier.priceNote && (
