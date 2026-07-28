@@ -77,8 +77,8 @@ export function Landing() {
                   color: "var(--color-text-secondary)",
                 }}
               >
-                Marrow is a quiet, self-hosted knowledge base — plain Markdown on your disk, a
-                restore guarantee you can audit, and no vendor lock-in.
+                Marrow is a quiet, self-hosted knowledge base — a restore guarantee you can audit,
+                an export bundle you can read by hand, and no vendor lock-in.
               </p>
               <div style={{ display: "flex", gap: 12, marginTop: 36 }}>
                 <Button variant="primary" size="lg" href={SELF_HOST_DOCS_URL}>
@@ -189,8 +189,8 @@ export function Landing() {
               Keyboard-first. Markdown underneath. No&nbsp;surprises.
             </h2>
             <p style={{ fontSize: 16, color: "var(--color-text-secondary)", marginTop: 20, maxWidth: 620 }}>
-              Slash commands, wiki-links, drag-to-reorder blocks. Every keystroke is durable, every page exports
-              to a flat .md file on disk.
+              Slash commands, wiki-links, drag-to-reorder blocks. Every save is versioned, and every page exports
+              to a flat .md file.
             </p>
           </div>
           <EditorPeek />
@@ -215,13 +215,14 @@ export function Landing() {
             <div>
               <Eyebrow>Self-host</Eyebrow>
               <h2 style={{ fontSize: 40, marginTop: 12, fontVariationSettings: '"SOFT" 60' }}>
-                One container.
+                One compose file.
                 <br />
-                One volume. Done.
+                Done.
               </h2>
               <p style={{ fontSize: 16, color: "var(--color-text-secondary)", marginTop: 20, maxWidth: 500 }}>
-                Marrow ships as a single Docker image. Postgres for metadata, the filesystem for your pages. Back
-                up by copying a folder.
+                One Docker Compose file brings up three services: the API image, the web image, and a Postgres
+                database. Pages and history live in Postgres; attachments on the filesystem or S3/R2. Back it up
+                by backing up the database and attachment store.
               </p>
               <div style={{ marginTop: 32, display: "flex", gap: 12 }}>
                 <Button variant="primary" href={SELF_HOST_DOCS_URL}>
@@ -559,22 +560,22 @@ const FEATURES: Feature[] = [
   {
     icon: IconBranch,
     title: "Backlinks that mean something",
-    body: "Every page knows what links to it. Break one and Marrow tells you where.",
+    body: "Every page knows what links to it — the backlink index is rebuilt on every save.",
   },
   {
     icon: IconHistory,
-    title: "Every keystroke versioned",
-    body: "Diff two snapshots side-by-side. Roll back without ceremony.",
+    title: "Every save versioned",
+    body: "Append-only history: every save is a new revision you can roll back to.",
   },
   {
     icon: IconHash,
     title: "Cmd+K, and that's it",
-    body: "Search is the navigation. Titles, bodies, attachments, comments — one field, one answer.",
+    body: "Search is the navigation. Page names, bodies, and properties — one field, one answer, anywhere in a workspace.",
   },
   {
     icon: IconServer,
-    title: "Your data, your disk",
-    body: "Pages are plain Markdown. Attachments are regular files. Your backup is a folder.",
+    title: "Your data, yours to take",
+    body: "Pages and history live in Postgres, attachments on disk or S3/R2 — and any workspace exports to a readable Markdown + JSON zip.",
   },
   {
     icon: IconUsers,
@@ -728,10 +729,10 @@ Related:: [[RFC-0142]] [[Runbook / Ingest]]
 
 function Comparison() {
   const rows = [
-    { feat: "Your data is in", marrow: "Plain Markdown on your disk", others: "A proprietary DB you lease" },
+    { feat: "Your data is in", marrow: "Postgres you run, plus a readable export bundle", others: "A proprietary DB you lease" },
     { feat: "Hosting", marrow: "Self-host, or Cloud", others: "Cloud only" },
     { feat: "Built-in AI", marrow: "None — just your words", others: "Mandatory. Upsold." },
-    { feat: "Pricing model", marrow: "Per workspace, not per seat", others: "Per seat, escalating" },
+    { feat: "Pricing model", marrow: "Per org, with a seat allowance", others: "Per seat, escalating" },
     { feat: "When the vendor folds", marrow: "You keep the files", others: "You keep the zip, good luck" },
   ];
   return (

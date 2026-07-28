@@ -139,6 +139,11 @@ function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly"
           </p>
         ) : (
           <div style={{ display: "flex", alignItems: "baseline", gap: "0.25rem" }}>
+            {tier.priceFrom && price! > 0 && (
+              <span style={{ fontSize: "0.9375rem", color: "var(--color-text-secondary)", marginRight: "0.15rem" }}>
+                from
+              </span>
+            )}
             <span
               style={{
                 fontFamily: "var(--font-heading)",
@@ -150,7 +155,7 @@ function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly"
             >
               ${price}
             </span>
-            {price > 0 && (
+            {price! > 0 && (
               <span style={{ fontSize: "0.875rem", color: "var(--color-text-secondary)" }}>
                 / mo
               </span>
@@ -162,9 +167,14 @@ function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly"
             )}
           </div>
         )}
-        {billing === "yearly" && !isContactSales && price > 0 && (
+        {billing === "yearly" && !isContactSales && price! > 0 && (
           <p style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}>
-            Billed ${price * 12}/yr
+            Billed ${price! * 12}/yr per band
+          </p>
+        )}
+        {tier.priceNote && (
+          <p style={{ fontSize: "0.8125rem", color: "var(--color-text-muted)", marginTop: "0.25rem" }}>
+            {tier.priceNote}
           </p>
         )}
       </div>
@@ -190,6 +200,44 @@ function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly"
       >
         {tier.cta}
       </Link>
+
+      {tier.bands && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+            marginBottom: "1.5rem",
+            paddingBottom: "1.5rem",
+            borderBottom: "1px solid var(--color-border)",
+          }}
+        >
+          <p
+            style={{
+              fontSize: "0.6875rem",
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--color-text-muted)",
+            }}
+          >
+            Seat bands
+          </p>
+          {tier.bands.map((band) => (
+            <div
+              key={band.name}
+              style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "0.5rem" }}
+            >
+              <span style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)" }}>
+                <strong style={{ color: "var(--color-text-primary)" }}>{band.name}</strong> · {band.seats}
+              </span>
+              <span style={{ fontSize: "0.8125rem", color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>
+                ${band.price[billing]}/mo
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
         {tier.features.map((feature) => (
