@@ -142,7 +142,7 @@ export const comparisonRows: ComparisonRow[] = [
   { feature: "Data residency options", "self-host": false, cloud: false, enterprise: "By contract", category: "Infrastructure" },
   // Support
   { feature: "Community support", "self-host": true, cloud: true, enterprise: true, category: "Support" },
-  { feature: "Priority email support", "self-host": false, cloud: true, enterprise: true, category: "Support" },
+  { feature: "Priority email support", "self-host": false, cloud: "Business & up", enterprise: true, category: "Support" },
   { feature: "SLA-backed support", "self-host": false, cloud: false, enterprise: "By contract", category: "Support" },
   { feature: "Onboarding & migration", "self-host": false, cloud: false, enterprise: "By contract", category: "Support" },
   // Roadmap — planned, not shipped today
