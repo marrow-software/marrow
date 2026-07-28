@@ -49,6 +49,14 @@ export interface FaqItem {
   answer: string;
 }
 
+// Cloud seat bands, ordered cheapest-first. The Cloud tier's "from" floor price
+// is derived from the first band so the two never drift apart.
+const CLOUD_BANDS: SeatBand[] = [
+  { name: "Starter", price: { monthly: 12, yearly: 10 }, seats: "Up to 10 members" },
+  { name: "Business", price: { monthly: 49, yearly: 41 }, seats: "Up to 50 members" },
+  { name: "Growth", price: { monthly: 199, yearly: 166 }, seats: "Up to 250 members" },
+];
+
 export const tiers: Tier[] = [
   {
     id: "self-host",
@@ -76,15 +84,11 @@ export const tiers: Tier[] = [
     id: "cloud",
     name: "Cloud",
     tagline: "Managed hosting, zero ops.",
-    // Floor price = Starter. Bands below carry the full ladder.
-    price: { monthly: 12, yearly: 10 },
+    // Floor price = cheapest band (Starter). CLOUD_BANDS carries the full ladder.
+    price: CLOUD_BANDS[0].price,
     priceFrom: true,
     priceNote: "per organization · billed by seat band",
-    bands: [
-      { name: "Starter", price: { monthly: 12, yearly: 10 }, seats: "Up to 10 members" },
-      { name: "Business", price: { monthly: 49, yearly: 41 }, seats: "Up to 50 members" },
-      { name: "Growth", price: { monthly: 199, yearly: 166 }, seats: "Up to 250 members" },
-    ],
+    bands: CLOUD_BANDS,
     cta: "Start free trial",
     ctaHref: "https://app.marrow.so",
     highlighted: true,
