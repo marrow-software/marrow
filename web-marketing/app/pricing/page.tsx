@@ -168,9 +168,11 @@ function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly"
             )}
           </div>
         )}
-        {billing === "yearly" && !isContactSales && priceNum > 0 && (
+        {/* Banded tiers show a per-band annual in the seat-band list below, so
+            a single card-level annual would misstate the other bands. */}
+        {billing === "yearly" && !isContactSales && priceNum > 0 && !tier.bands && (
           <p style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)", marginTop: "0.25rem" }}>
-            Billed ${priceNum * 12}/yr per band
+            Billed ${priceNum * 12}/yr
           </p>
         )}
         {tier.priceNote && (
@@ -234,6 +236,11 @@ function TierCard({ tier, billing }: { tier: Tier; billing: "monthly" | "yearly"
               </span>
               <span style={{ fontSize: "0.8125rem", color: "var(--color-text-primary)", whiteSpace: "nowrap" }}>
                 ${band.price[billing]}/mo
+                {billing === "yearly" && (band.price.yearly ?? 0) > 0 && (
+                  <span style={{ color: "var(--color-text-muted)" }}>
+                    {" "}· ${(band.price.yearly ?? 0) * 12}/yr
+                  </span>
+                )}
               </span>
             </div>
           ))}
