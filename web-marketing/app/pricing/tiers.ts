@@ -190,6 +190,6 @@ export const faqItems: FaqItem[] = [
   {
     question: "What happens if I cancel my Cloud subscription?",
     answer:
-      "Cancelling ends the subscription and gates access to the workspace right away — there's no 30-day grace period. Export your data while the plan is still active (export is available on any active subscription), then self-host it for free or resubscribe whenever you like.",
+      "Cancelling stops the renewal — there's no separate 30-day grace period. You keep full access for the rest of the billing period you've already paid for; when that period ends the subscription closes and the workspace is gated. (Cancelling a card-less trial ends it there and then.) Export is available any time the subscription is still active, so grab a bundle before it lapses — then self-host it for free or resubscribe whenever you like.",
   },
 ];
