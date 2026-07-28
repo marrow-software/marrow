@@ -6,7 +6,7 @@
 
 **Your knowledge, owned outright. No landlords. No lock-in. No surprises.**
 
-Marrow is a self-hosted, open-source knowledge base built on one non-negotiable principle: if you have your data, you can always come back. Export, wipe, restore. Every time. No exceptions.
+Marrow is a self-hosted, open-source knowledge base built on one non-negotiable principle: if you have your data, you can always come back. Export a workspace, wipe it, restore it — and everything the bundle carries comes back identically.
 
 📖 **[Read the docs](./docs/)** for installation, deployment, and configuration guides.
 
@@ -24,9 +24,9 @@ Marrow is built on the opposite assumption. You should be able to leave at any t
 
 These are not aspirations. They are constraints that every architectural and product decision must respect.
 
-1. **Restore guarantee** — A Marrow export bundle is restorable to an exact replica of the original workspace. A failing restore test is a critical bug.
+1. **Restore guarantee** — A Marrow export bundle restores to an exact replica of the original workspace *content* — the node tree, revisions, attachments, properties, and links the bundle carries (see the [scope table](./docs/src/content/docs/concepts/restore-guarantee.md)). A failing restore test is a critical bug.
 2. **Transparent format** — Markdown, JSON, attachments in a zip. No proprietary blobs.
-3. **Append-only history** — Every save creates a revision. Old revisions are never modified or deleted (enforced by a database trigger).
+3. **Append-only history** — Every save creates a revision. A database trigger blocks any `UPDATE` against the revisions table, so existing revisions are never rewritten. (Revisions can still be hard-deleted — e.g. purging trash or cascading a node delete — the trigger guards edits, not removal.)
 4. **Pluggable storage** — Local filesystem or S3-compatible object storage. Business logic never bypasses the storage adapter.
 5. **Self-hosted by default** — Your data stays on infrastructure you control.
 
