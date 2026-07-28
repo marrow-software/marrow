@@ -40,10 +40,12 @@ test.describe("marketing landing", () => {
   test("self-host terminal references the real image and ports", async ({ page }) => {
     await page.goto("/");
     const main = page.getByRole("main");
-    await expect(main.getByText(/ghcr\.io\/marrow-software\/marrow-api/)).toBeVisible();
-    await expect(main.getByText(/docker-compose\.prod\.yml/)).toBeVisible();
-    await expect(main.getByText(/:8000/)).toBeVisible();
-    await expect(main.getByText(/:3000/)).toBeVisible();
+    // Substring string matches (not regexes): these look like hostnames, and an
+    // unanchored regex on a URL trips CodeQL's missing-regexp-anchor query.
+    await expect(main.getByText("ghcr.io/marrow-software/marrow-api", { exact: false })).toBeVisible();
+    await expect(main.getByText("docker-compose.prod.yml", { exact: false })).toBeVisible();
+    await expect(main.getByText(":8000", { exact: false })).toBeVisible();
+    await expect(main.getByText(":3000", { exact: false })).toBeVisible();
 
     // The invented image, port, and boot time must be gone.
     await expect(page.getByText("ghcr.io/marrow/marrow")).toHaveCount(0);
