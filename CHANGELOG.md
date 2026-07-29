@@ -9,7 +9,51 @@ steps) on its [GitHub release](https://github.com/marrow-software/marrow/release
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07-28
+
+This release clears the public MVP launch bar (wayfinder map [#258](https://github.com/marrow-software/marrow/issues/258)): every public-facing claim is now true today, explicitly labelled roadmap, or gone ([#288](https://github.com/marrow-software/marrow/issues/288)). It also lands the contributor-licensing (CLA) machinery and the folder/sidebar UX refactor.
+
+### Added
+- Folder views stack (#238–#240) — `node_views` CRUD (table/board/list) with a
+  presentational renderer and view-settings UI. Product UI is deferred behind a
+  future database-page type; the sidebar is a Confluence-style tree (folders
+  expand/collapse, pages navigate).
+- No-card 14-day trial (#289): Checkout uses
+  `payment_method_collection="if_required"` + a trial-end `cancel` behaviour, so a
+  card-less trial ends cleanly via `subscription.deleted → canceled` (no dunning).
+  A `customer.subscription.trial_will_end` webhook sends one best-effort reminder
+  email.
+- Contributor licensing: `CLA.md` (adapted Apache ICLA), CLA Assistant Lite gate
+  (`.github/workflows/cla.yml`, signatures on the `cla-signatures` side branch),
+  and `CONTRIBUTING.md`. (#270, #275)
+
 ### Changed
+- **Launch honesty pass (#288 / #289–#296)** — one honest sweep across every
+  public surface (marketing site, docs, README, `CLAUDE.md`, pricing):
+  - Removed the fabricated "Lena Osei / Haven Infrastructure" testimonial;
+    fixed all `spmcgraw/marrow` → `marrow-software/marrow` links; nav Product →
+    `/product`; self-host terminal now uses the real image
+    (`ghcr.io/marrow-software/marrow-api`), ports (8000/3000), and compose flow.
+  - Restore-guarantee copy scoped to workspace-content parity (links the scope
+    table); named the bundle-v5 gap (comments, share links, folder views);
+    removed unbuilt diff-UI / broken-link-detection claims; "every keystroke" →
+    "every save".
+  - Markdown reframed as an export artifact (pages/history in Postgres);
+    deployment copy → "one compose file" naming the two images + database.
+  - Docs: fail-closed auth default documented (`MARROW_ALLOW_ANONYMOUS`),
+    Cloudflare guide's API half rewritten around Fly.io, env-var reference
+    completed, round-trip test described accurately, forward- → backward-
+    compatible (v1–v4).
+  - Pricing: comparison grid on the deployment axis with Cloud seat bands; every
+    price maps to a checkout-accepted tier; SAML / audit log / custom domain /
+    uptime SLA → Roadmap or By-contract; cancel-behaviour and restore-guarantee
+    FAQs corrected.
+  - `CLAUDE.md` reconciled against the tree (live `POST /api/workspaces/`,
+    added `/home`, removed the non-existent trash route and `marrow purge-trash`
+    CLI, documented Cloud + `STRIPE_SH_*_YEARLY` price env vars).
+- Centralized page-save side effects in `persist_page_revision` — single save
+  path for revision append, link reconcile, mention delivery, and watch fan-out.
+  (#255)
 - CLA `CLA.md` bumped to **v1.1**: Section 2a (relicensing grant) aligned to the
   Project Harmony contributor-license template (License option + most-permissive
   outbound option). Marrow may now dual-license future versions under additional
@@ -19,6 +63,10 @@ steps) on its [GitHub release](https://github.com/marrow-software/marrow/release
   `CONTRIBUTING.md` framing updated to match. The CLA grantee ("We"/"Us") is now
   defined as **Marrow Software LLC** rather than an unnamed maintainer, and a
   **governing-law clause** (State of Oregon, USA) was added as §8. (#281, #286)
+
+### Fixed
+- CodeQL: replaced unanchored URL regexes in `landing.spec.ts` with substring
+  matches (missing-regexp-anchor).
 
 ## [0.4.0] — 2026-07-10
 
