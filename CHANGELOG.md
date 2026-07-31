@@ -9,7 +9,7 @@ steps) on its [GitHub release](https://github.com/marrow-software/marrow/release
 
 ## [Unreleased]
 
-## [0.5.0] — 2026-07-28
+## [0.5.0] — 2026-07-30
 
 This release clears the public MVP launch bar (wayfinder map [#258](https://github.com/marrow-software/marrow/issues/258)): every public-facing claim is now true today, explicitly labelled roadmap, or gone ([#288](https://github.com/marrow-software/marrow/issues/288)). It also lands the contributor-licensing (CLA) machinery and the folder/sidebar UX refactor.
 
