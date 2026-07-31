@@ -1,0 +1,583 @@
+<title>Marrow — Shell & IA direction (#307)</title>
+<!--
+  PROTOTYPE — throwaway. Ticket #307 (child of wayfinder map #302).
+  Question: lock the app shell & information architecture.
+  Identity is FIXED (Signal / "M·Merged", decided in #306) — same tokens in every
+  variant, light + dark. Only the STRUCTURE varies, so the eye judges shell/IA, not skin.
+
+  Three shells, each viewable across three surfaces (Page / Home / Admin):
+    A · Rail + Tree     — icon rail (global) + tree sidebar (workspace) + docked panel
+    B · Unified Sidebar — one sidebar (global strip + tree + account), overlay panel
+    C · Focus / Top-bar — full-width top bar (global + command), collapsible tree, slide-over panel
+-->
+<style>
+  :root {
+    --frame-bg: #0c0d10; --frame-panel: #15171c; --frame-border: #262a33;
+    --frame-text: #e7eaf0; --frame-muted: #939bab; --frame-accent: #22a58c;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--frame-bg); color: var(--frame-text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased; display: flex; flex-direction: column; min-height: 100dvh;
+  }
+
+  /* ---------- Prototype frame chrome (always dark — it is a tool) ---------- */
+  .bar { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--frame-panel); border-bottom: 1px solid var(--frame-border); flex-wrap: wrap; }
+  .bar h1 { font-size: 13px; font-weight: 600; letter-spacing: .02em; margin: 0; display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+  .bar h1 .dot { width: 9px; height: 9px; border-radius: 3px; background: var(--frame-accent); display: inline-block; }
+  .bar h1 .sub { color: var(--frame-muted); font-weight: 400; }
+  .spring { flex: 1 1 20px; }
+  .grouplbl { font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--frame-muted); margin-right: -6px; }
+
+  .segset { display: flex; gap: 6px; }
+  .seg { appearance: none; border: 1px solid var(--frame-border); background: transparent; color: var(--frame-muted); font: inherit; font-size: 12px; padding: 6px 12px; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; transition: background .15s, color .15s, border-color .15s; }
+  .seg b { font-weight: 600; font-size: 12.5px; }
+  .seg small { font-size: 10.5px; opacity: .75; }
+  .seg:hover { color: var(--frame-text); border-color: #384050; }
+  .seg[aria-pressed="true"] { color: #fff; border-color: transparent; background: linear-gradient(180deg, #2b3444, #20262f); box-shadow: inset 0 0 0 1px #3d4757; }
+
+  .toggle { display: flex; border: 1px solid var(--frame-border); border-radius: 8px; overflow: hidden; }
+  .toggle button { appearance: none; border: 0; background: transparent; color: var(--frame-muted); font: inherit; font-size: 12px; padding: 6px 12px; cursor: pointer; }
+  .toggle button[aria-pressed="true"] { background: #262c37; color: #fff; }
+
+  /* ---------- Stage ---------- */
+  .stage-wrap { flex: 1; display: flex; justify-content: center; padding: 20px; min-height: 0; }
+  .stage {
+    position: relative; width: 100%; max-width: 1200px; height: 720px; border-radius: 14px; overflow: hidden;
+    box-shadow: 0 24px 70px -20px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.04);
+    background: var(--bg); color: var(--text);
+    --font-ui: system-ui,-apple-system,"Segoe UI",sans-serif;
+    --font-mono: ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    font-family: var(--font-ui);
+  }
+  .stage[hidden] { display: none; }
+  /* house grain — light only (locked in #306) */
+  .stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 20; opacity: 0; mix-blend-mode: soft-light;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .stage[data-mode="light"]::after { opacity: .05; }
+
+  /* ===== LOCKED Signal tokens — M·Merged (#306). Identical across all shells. ===== */
+  .stage[data-mode="dark"]{
+    --bg:#0f1215; --rail:#0f1215; --sidebar:#0f1215; --panel:#171b1f; --elev:#1c2226;
+    --border:#232a30; --border-strong:#323b42; --text:#e6ebef; --muted:#93a0a8; --faint:#5f6c74;
+    --accent:#3aa88f; --accent-ink:#04140f; --accent-soft:rgba(58,168,143,.12); --ring:#3aa88f;
+    --title-weight:640; --radius:6px;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 20px -10px rgba(0,0,0,.4);
+    --scrim: rgba(0,0,0,.42);
+  }
+  .stage[data-mode="light"]{
+    --bg:#f3f6f4; --rail:#f3f6f4; --sidebar:#f3f6f4; --panel:#ffffff; --elev:#ffffff;
+    --border:#dde7e1; --border-strong:#c4d3ca; --text:#152521; --muted:#5a6f66; --faint:#93a69d;
+    --accent:#0f766e; --accent-ink:#ffffff; --accent-soft:rgba(15,118,110,.09); --ring:#0f766e;
+    --title-weight:660; --radius:6px;
+    --shadow:0 0 0 1px rgba(20,40,35,.03), 0 4px 8px rgba(20,40,35,.06), 0 22px 38px -14px rgba(20,40,35,.13);
+    --scrim: rgba(20,40,35,.28);
+  }
+
+  /* ---------- shared atoms ---------- */
+  .glyph { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 800; font-size: 16px; letter-spacing: -.03em; }
+  .av { border-radius: 99px; background: linear-gradient(135deg,#4a8,#276); color:#fff; display: grid; place-items: center; font-weight: 600; }
+  .icn { display: grid; place-items: center; color: var(--muted); }
+  .icn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+  .btn { font: inherit; font-size: 12.5px; font-weight: 550; padding: 6px 13px; border-radius: var(--radius); border: 1px solid var(--border-strong); background: var(--panel); color: var(--text); cursor: pointer; box-shadow: var(--shadow); white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+  .iconbtn { width: 30px; height: 30px; border-radius: var(--radius); border: 1px solid var(--border); background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; flex-shrink: 0; }
+  .iconbtn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .search { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--panel); color: var(--faint); font-size: 12.5px; }
+  .search svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .search .k { margin-left: auto; font-family: var(--font-mono); font-size: 10px; border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+
+  /* ---------- rail (A only) ---------- */
+  .rail { background: var(--rail); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 0; }
+  .rail .glyph { margin-bottom: 12px; }
+  .railbtn { position: relative; width: 34px; height: 34px; border-radius: var(--radius); display: grid; place-items: center; color: var(--muted); cursor: pointer; }
+  .railbtn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+  .railbtn.active { color: var(--accent); background: var(--accent-soft); }
+  .railbtn.active::before { content:""; position:absolute; left:-12px; top:8px; bottom:8px; width:2.5px; border-radius:2px; background: var(--accent); }
+  .railbadge { position: absolute; top: 2px; right: 2px; min-width: 15px; height: 15px; padding: 0 3px; border-radius: 99px; background: var(--accent); color: var(--accent-ink); font-size: 9.5px; font-weight: 700; display: grid; place-items: center; font-family: var(--font-mono); }
+  .railspring { flex: 1; }
+
+  /* ---------- sidebar ---------- */
+  .side { background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  .wsswitch { display: flex; align-items: center; gap: 9px; padding: 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .wsswitch .wsav { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .wsswitch .wsname { font-size: 13px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wsswitch .chev { color: var(--faint); }
+  .navstrip { padding: 8px 8px 4px; display: flex; flex-direction: column; gap: 1px; }
+  .navstrip .nrow { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: var(--radius); font-size: 13px; color: var(--text); cursor: pointer; }
+  .navstrip .nrow:hover { background: var(--accent-soft); }
+  .navstrip .nrow.active { background: var(--accent-soft); color: var(--accent); font-weight: 550; }
+  .navstrip .nrow svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+  .navstrip .nrow .ct { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 0 6px; }
+  .navdiv { height: 1px; background: var(--border); margin: 6px 12px; }
+  .tree { padding: 4px 6px 8px; overflow-y: auto; flex: 1; font-size: 13px; }
+  .grouplabel { font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); padding: 12px 8px 4px; display: flex; align-items: center; gap: 7px; }
+  .grouplabel .badge { width: 17px; height: 17px; border-radius: 5px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-size: 9px; font-weight: 700; font-family: var(--font-mono); }
+  .row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: var(--radius); color: var(--text); cursor: pointer; }
+  .row:hover { background: var(--accent-soft); }
+  .row.sel { background: var(--accent-soft); color: var(--accent); font-weight: 550; }
+  .row .ico { width: 15px; height: 15px; color: var(--muted); display: grid; place-items: center; }
+  .row.sel .ico { color: var(--accent); }
+  .row .ico svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+  .row .tw { color: var(--faint); width: 12px; display:grid; place-items:center; }
+  .row .tw svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .indent { padding-left: 20px; } .indent2 { padding-left: 38px; }
+  .acct { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-top: 1px solid var(--border); cursor: pointer; }
+  .acct .av { width: 26px; height: 26px; font-size: 11px; flex-shrink: 0; }
+  .acct .an { font-size: 12.5px; font-weight: 550; flex: 1; min-width: 0; }
+  .acct .as { font-size: 11px; color: var(--faint); }
+
+  /* ---------- main ---------- */
+  .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); position: relative; }
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--border); min-height: 53px; }
+  .crumbs { display: flex; align-items: center; gap: 7px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); flex: 1; min-width: 0; }
+  .crumbs .cur { color: var(--accent); } .crumbs .sep { color: var(--faint); }
+  .topttl { font-size: 15px; font-weight: 600; flex: 1; }
+  .saved { font-size: 11.5px; color: var(--faint); display: flex; align-items: center; gap: 5px; font-family: var(--font-mono); }
+  .saved .tick { width: 6px; height: 6px; border-radius: 99px; background: var(--accent); }
+
+  .canvas { overflow-y: auto; flex: 1; min-height: 0; }
+  .measure { max-width: 720px; margin: 0 auto; padding: 38px 44px 60px; }
+  .kicker { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .kicker::before { content: ""; width: 16px; height: 2px; background: var(--accent); border-radius: 2px; }
+  .ptitle { font-weight: var(--title-weight); letter-spacing: -.022em; font-size: 34px; line-height: 1.1; margin: 0 0 16px; text-wrap: balance; }
+  .props { display: flex; flex-wrap: wrap; gap: 8px 22px; padding: 0 0 20px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .prop { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+  .prop .k { color: var(--muted); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .05em; font-size: 10.5px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 550; background: var(--accent-soft); color: var(--accent); }
+  .chip.n { background: transparent; border: 1px solid var(--border-strong); color: var(--text); font-weight: 500; font-family: var(--font-mono); font-size: 11px; }
+  .miniav { width: 18px; height: 18px; border-radius: 99px; background: linear-gradient(135deg,#4a8,#276); color:#fff; display:inline-grid; place-items:center; font-size:9px; font-weight:700; }
+  .canvas p { font-size: 15px; line-height: 1.65; margin: 0 0 16px; }
+  .canvas p.lede { font-size: 16.5px; color: var(--muted); }
+  .h2 { font-weight: var(--title-weight); font-size: 20px; letter-spacing: -.01em; margin: 28px 0 12px; }
+  ul.list { margin: 0 0 16px; padding-left: 4px; list-style: none; }
+  ul.list li { position: relative; padding-left: 20px; margin-bottom: 8px; font-size: 15px; line-height: 1.6; }
+  ul.list li::before { content: ""; position: absolute; left: 4px; top: 10px; width: 5px; height: 5px; border-radius: 99px; background: var(--accent); }
+  ul.list li b { font-family: var(--font-mono); font-weight: 600; font-size: 13.5px; }
+  .code { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); margin: 8px 0 22px; overflow: hidden; box-shadow: var(--shadow); }
+  .code .chdr { display: flex; align-items: center; gap: 8px; padding: 7px 13px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--faint); }
+  .code .chdr .lang { color: var(--accent); }
+  .code pre { margin: 0; padding: 14px 16px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; overflow-x: auto; }
+  .tok-c { color: var(--faint); } .tok-k { color: var(--accent); }
+
+  /* ---------- docked panel (context: comments) ---------- */
+  .panel { background: var(--bg); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  .panel .phdr { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; }
+  .panel .phdr .pclose { margin-left: auto; }
+  .panel .pbody { padding: 14px; overflow-y: auto; flex: 1; }
+  .cmt { display: flex; gap: 10px; margin-bottom: 16px; }
+  .cmt .cav { width: 26px; height: 26px; border-radius: 99px; flex-shrink: 0; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
+  .cmt .cmeta { font-size: 12.5px; margin-bottom: 3px; } .cmt .cmeta b { font-weight: 600; }
+  .cmt .cmeta span { color: var(--faint); margin-left: 7px; font-size: 11px; font-family: var(--font-mono); }
+  .cmt .ctext { font-size: 13.5px; line-height: 1.5; }
+
+  /* ---------- home surface ---------- */
+  .home { max-width: 940px; margin: 0 auto; padding: 34px 44px 60px; }
+  .home .hgreet { font-weight: var(--title-weight); letter-spacing: -.02em; font-size: 26px; margin: 0 0 4px; }
+  .home .hsub { color: var(--muted); font-size: 14px; margin: 0 0 26px; }
+  .hgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .widget { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; }
+  .widget.wide { grid-column: 1 / -1; }
+  .whdr { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .whdr .wct { margin-left: auto; color: var(--faint); }
+  .wrow { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13.5px; cursor: pointer; border-bottom: 1px solid var(--border); }
+  .wrow:last-child { border-bottom: 0; }
+  .wrow:hover { background: var(--accent-soft); }
+  .wrow .wico { color: var(--muted); display: grid; place-items: center; } .wrow .wico svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+  .wrow .wt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wrow .wm { font-size: 11px; color: var(--faint); font-family: var(--font-mono); }
+  .wsgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding: 14px; }
+  .wscard { border: 1px solid var(--border); border-radius: 8px; padding: 14px; cursor: pointer; }
+  .wscard:hover { border-color: var(--accent); }
+  .wscard .wsc-av { width: 30px; height: 30px; border-radius: 7px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+  .wscard .wsc-n { font-size: 13.5px; font-weight: 600; } .wscard .wsc-m { font-size: 11px; color: var(--faint); margin-top: 2px; }
+
+  /* ---------- admin surface ---------- */
+  .admin { display: grid; grid-template-columns: 190px 1fr; height: 100%; min-height: 0; }
+  .adminnav { border-right: 1px solid var(--border); padding: 16px 10px; }
+  .adminnav .anh { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--faint); padding: 0 8px 8px; font-weight: 600; }
+  .adminnav .arow { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: var(--radius); font-size: 13px; cursor: pointer; color: var(--text); }
+  .adminnav .arow.active { background: var(--accent-soft); color: var(--accent); font-weight: 550; }
+  .adminnav .arow:hover { background: var(--accent-soft); }
+  .adminmain { padding: 28px 32px; overflow-y: auto; }
+  .adminmain h2 { font-weight: var(--title-weight); font-size: 22px; letter-spacing: -.015em; margin: 0 0 4px; }
+  .adminmain .amsub { color: var(--muted); font-size: 13.5px; margin: 0 0 22px; }
+  table.mtable { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+  table.mtable th { text-align: left; font-family: var(--font-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+  table.mtable td { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+  table.mtable tr:last-child td { border-bottom: 0; }
+  table.mtable .tuser { display: flex; align-items: center; gap: 9px; }
+  table.mtable .tuser .av { width: 24px; height: 24px; font-size: 10px; }
+  .rolechip { font-family: var(--font-mono); font-size: 10.5px; border: 1px solid var(--border-strong); border-radius: 99px; padding: 2px 8px; color: var(--text); }
+  .rolechip.owner { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+  /* ---------- overlay / slide-over scrim ---------- */
+  .scrim { position: absolute; inset: 0; background: var(--scrim); z-index: 12; }
+  .overlaypanel { position: absolute; top: 0; right: 0; bottom: 0; width: 340px; z-index: 13; box-shadow: -12px 0 40px -16px rgba(0,0,0,.5); }
+  .slideover { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; z-index: 13; box-shadow: -12px 0 40px -16px rgba(0,0,0,.5); }
+
+  /* ---------- collapsible tree affordance (C) ---------- */
+  .collapsebtn { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--faint); padding: 8px 14px; cursor: pointer; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .05em; }
+  .collapsebtn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .topnav { display: flex; align-items: center; gap: 4px; }
+  .topnav .tnitem { display: flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: var(--radius); font-size: 13px; color: var(--muted); cursor: pointer; }
+  .topnav .tnitem svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+  .topnav .tnitem.active { color: var(--accent); background: var(--accent-soft); font-weight: 550; }
+  .topnav .tnitem .ct { font-family: var(--font-mono); font-size: 10px; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 0 5px; }
+
+  /* ---------- dossier ---------- */
+  .dossier { background: var(--frame-panel); border-top: 1px solid var(--frame-border); padding: 16px 22px; }
+  .dossier-in { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 26px; }
+  .dossier h2 { font-size: 15px; margin: 0 0 6px; display: flex; align-items: center; gap: 9px; }
+  .dossier h2 .sw { width: 13px; height: 13px; border-radius: 4px; background: var(--frame-accent); }
+  .dossier .thesis { font-size: 13px; line-height: 1.55; color: var(--frame-text); margin: 0 0 8px; }
+  .dossier .kv { font-size: 12px; color: var(--frame-muted); line-height: 1.7; }
+  .dossier .kv b { color: var(--frame-text); font-weight: 600; }
+  .dossier .bet { font-size: 12px; line-height: 1.5; }
+  .dossier .bet .lab { font-weight: 700; letter-spacing: .04em; text-transform: uppercase; font-size: 10px; display: block; margin-bottom: 2px; }
+  .dossier .bet .up { color: #7fd6a8; } .dossier .bet .dn { color: #e79a86; }
+  .hint { font-size: 11px; color: var(--frame-muted); }
+  kbd { font-family: var(--font-mono); background:#232833; border:1px solid #333b47; border-radius:4px; padding:1px 5px; font-size:10.5px; }
+  @media (prefers-reduced-motion: reduce){ * { transition: none !important; } }
+</style>
+
+<div class="bar">
+  <h1><span class="dot"></span> Marrow&nbsp;·&nbsp;<span class="sub">Shell &amp; IA — ticket #307</span></h1>
+  <div class="spring"></div>
+  <span class="grouplbl">Shell</span>
+  <div class="segset" id="shellset" role="group" aria-label="Shell">
+    <button class="seg" data-shell="A" aria-pressed="true"><b>A · Rail + Tree</b><small>docked panel</small></button>
+    <button class="seg" data-shell="B" aria-pressed="false"><b>B · Unified Sidebar</b><small>overlay panel</small></button>
+    <button class="seg" data-shell="C" aria-pressed="false"><b>C · Focus / Top-bar</b><small>slide-over</small></button>
+  </div>
+  <span class="grouplbl">Surface</span>
+  <div class="toggle" id="surfset" role="group" aria-label="Surface">
+    <button data-surf="page" aria-pressed="true">Page</button>
+    <button data-surf="home" aria-pressed="false">Home</button>
+    <button data-surf="admin" aria-pressed="false">Admin</button>
+  </div>
+  <div class="toggle" id="modeset" role="group" aria-label="Theme">
+    <button data-mode="dark" aria-pressed="true">Dark</button>
+    <button data-mode="light" aria-pressed="false">Light</button>
+  </div>
+  <span class="hint">shell&nbsp;<kbd>←</kbd><kbd>→</kbd></span>
+</div>
+
+<div class="stage-wrap">
+  <!-- ============ SHELL A · Rail + Tree ============ -->
+  <div class="stage" id="stageA" data-mode="dark" data-surf="page" style="display:grid; grid-template-columns:54px 250px minmax(0,1fr);">
+    <nav class="rail">
+      <div class="glyph">M</div>
+      <div class="railbtn" title="Home"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg></div>
+      <div class="railbtn" title="Search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+      <div class="railbtn active" title="Workspace"><svg viewBox="0 0 24 24"><path d="M3 5h7v14H3z"/><path d="M13 5h8v9h-8z"/></svg></div>
+      <div class="railbtn" title="Inbox"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 3z"/></svg><span class="railbadge">3</span></div>
+      <div class="railspring"></div>
+      <div class="railbtn" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
+      <div class="av" style="width:28px;height:28px;font-size:11px" title="Account">SM</div>
+    </nav>
+    <aside class="side" data-role="tree"></aside>
+    <section class="main" data-role="main"></section>
+  </div>
+
+  <!-- ============ SHELL B · Unified Sidebar ============ -->
+  <div class="stage" id="stageB" data-mode="dark" data-surf="page" hidden style="display:grid; grid-template-columns:264px minmax(0,1fr);">
+    <aside class="side" data-role="sidebarB"></aside>
+    <section class="main" data-role="main"></section>
+  </div>
+
+  <!-- ============ SHELL C · Focus / Top-bar ============ -->
+  <div class="stage" id="stageC" data-mode="dark" data-surf="page" hidden style="display:flex; flex-direction:column;">
+    <div class="topbar" data-role="ctop" style="gap:14px;"></div>
+    <div data-role="cbody" style="flex:1; display:grid; grid-template-columns:230px minmax(0,1fr); min-height:0;"></div>
+  </div>
+</div>
+
+<div class="dossier"><div class="dossier-in" id="dossier"></div></div>
+
+<script>
+/* ---------------- shared content fragments ---------------- */
+const ICON = {
+  page: '<svg viewBox="0 0 24 24"><path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5"/></svg>',
+  folderC: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
+  folderO: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+  home: '<svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>',
+  inbox: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 3z"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .5-4.6 4 1.4 6L12 16l-5.4 3.1 1.4-6-4.6-4 6-.5z"/></svg>',
+  clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
+  share: '<svg viewBox="0 0 24 24"><path d="M4 12v7h16v-7"/><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/></svg>',
+  dots: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>',
+  cmt: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 3z"/></svg>',
+  search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+};
+
+const treeInner = `
+  <div class="grouplabel"><span class="badge">EN</span> Engineering</div>
+  <div class="row indent"><span class="tw">${ICON.folderC}</span><span class="ico">${ICON.folderO.replace('6 9l6 6 6-6','3 7h5l2 2h11v9H3z')}</span> RFCs</div>
+  <div class="row indent"><span class="tw">${ICON.folderO}</span><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v9H3z"/></svg></span> Runbooks</div>
+  <div class="row indent2 sel"><span class="ico">${ICON.page}</span> Incident response</div>
+  <div class="row indent2"><span class="ico">${ICON.page}</span> On-call rotation</div>
+  <div class="row indent"><span class="tw"></span><span class="ico">${ICON.page}</span> Architecture overview</div>
+  <div class="grouplabel"><span class="badge">PR</span> Product</div>
+  <div class="row indent"><span class="tw"></span><span class="ico">${ICON.page}</span> Roadmap 2026</div>`;
+
+/* ------- page/editor canvas (identity hero, shared) ------- */
+const pageCanvas = `
+  <div class="measure">
+    <div class="kicker">Runbook · Sev-1 → Sev-4</div>
+    <h1 class="ptitle">Incident response</h1>
+    <div class="props">
+      <div class="prop"><span class="k">Status</span><span class="chip">● Active</span></div>
+      <div class="prop"><span class="k">Owner</span><span class="miniav">SM</span></div>
+      <div class="prop"><span class="k">Updated</span><span class="chip n">Jul 31</span></div>
+    </div>
+    <p class="lede">When something breaks in production, this runbook is the single place to start. Declare, don't deliberate — page first, diagnose second.</p>
+    <p>Every incident begins the moment a human or an alert says it has. The person who notices owns the response until they explicitly hand it off. There is no penalty for over-declaring; there is a real one for a silent outage.</p>
+    <div class="h2">Severity levels</div>
+    <ul class="list">
+      <li><b>SEV-1</b> — full outage or data loss. Page the on-call and the incident commander immediately.</li>
+      <li><b>SEV-2</b> — major feature degraded for many users. Page on-call; commander mandatory.</li>
+      <li><b>SEV-3</b> — minor or contained. File it, fix it in hours, no page.</li>
+    </ul>
+    <div class="h2">Declare an incident</div>
+    <p>Run the CLI from anywhere. It opens the channel, starts the timeline, and pages the current on-call.</p>
+    <div class="code">
+      <div class="chdr"><span class="lang">bash</span><span>· incident.sh</span></div>
+      <pre><span class="tok-c"># open a SEV-1 and page the commander</span>
+marrow incident open <span class="tok-k">--sev</span> 1 <span class="tok-k">--page</span> commander</pre>
+    </div>
+  </div>`;
+
+const commentsBody = `
+  <div class="cmt"><div class="cav" style="background:#2f8f79">LC</div><div><div class="cmeta"><b>Lena Cho</b><span>2h</span></div><div class="ctext">Should SEV-2 also auto-page the commander? We got burned last week.</div></div></div>
+  <div class="cmt"><div class="cav" style="background:#3a6b8a">SM</div><div><div class="cmeta"><b>Sean McGraw</b><span>1h</span></div><div class="ctext">Agreed — commander mandatory for SEV-1 and SEV-2 now.</div></div></div>`;
+
+/* ------- home surface (shared) ------- */
+const homeCanvas = `
+  <div class="home">
+    <h1 class="hgreet">Good afternoon, Sean</h1>
+    <p class="hsub">3 workspaces · 2 unread · last edited Incident response</p>
+    <div class="hgrid">
+      <div class="widget">
+        <div class="whdr">${ICON.clock ? '' : ''}Recently edited<span class="wct">across all workspaces</span></div>
+        <div class="wrow"><span class="wico">${ICON.page}</span><span class="wt">Incident response</span><span class="wm">2m</span></div>
+        <div class="wrow"><span class="wico">${ICON.page}</span><span class="wt">Roadmap 2026</span><span class="wm">1h</span></div>
+        <div class="wrow"><span class="wico">${ICON.page}</span><span class="wt">Q3 pricing memo</span><span class="wm">yesterday</span></div>
+      </div>
+      <div class="widget">
+        <div class="whdr">Starred<span class="wct">3</span></div>
+        <div class="wrow"><span class="wico">${ICON.star}</span><span class="wt">Architecture overview</span><span class="wm">Acme HQ</span></div>
+        <div class="wrow"><span class="wico">${ICON.star}</span><span class="wt">On-call rotation</span><span class="wm">Acme HQ</span></div>
+        <div class="wrow"><span class="wico">${ICON.star}</span><span class="wt">Brand guidelines</span><span class="wm">Marketing</span></div>
+      </div>
+      <div class="widget wide">
+        <div class="whdr">Inbox<span class="wct">2 unread</span></div>
+        <div class="wrow"><span class="wico" style="color:var(--accent)">${ICON.cmt}</span><span class="wt"><b>Lena Cho</b> replied on Incident response</span><span class="wm">2h</span></div>
+        <div class="wrow"><span class="wico" style="color:var(--accent)">${ICON.star}</span><span class="wt"><b>Priya N.</b> mentioned you in Roadmap 2026</span><span class="wm">5h</span></div>
+      </div>
+      <div class="widget wide">
+        <div class="whdr">Workspaces</div>
+        <div class="wsgrid">
+          <div class="wscard"><div class="wsc-av">A</div><div class="wsc-n">Acme HQ</div><div class="wsc-m">14 pages · 5 members</div></div>
+          <div class="wscard"><div class="wsc-av">M</div><div class="wsc-n">Marketing</div><div class="wsc-m">22 pages · 3 members</div></div>
+          <div class="wscard"><div class="wsc-av">R</div><div class="wsc-n">Research</div><div class="wsc-m">8 pages · 2 members</div></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+
+/* ------- admin surface (shared) ------- */
+const adminCanvas = `
+  <div class="admin">
+    <nav class="adminnav">
+      <div class="anh">Organization</div>
+      <div class="arow active"><span class="icn">${ICON.star.replace('12 3l2.6','12 2a5 5 0 015 5')}</span>Members</div>
+      <div class="arow">Workspaces</div>
+      <div class="arow">Billing</div>
+      <div class="arow">Security</div>
+      <div class="anh" style="margin-top:14px">Settings</div>
+      <div class="arow">General</div>
+      <div class="arow">Export &amp; restore</div>
+    </nav>
+    <div class="adminmain">
+      <h2>Members</h2>
+      <p class="amsub">5 members in Acme HQ · owners can invite and change roles</p>
+      <table class="mtable">
+        <thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Last active</th></tr></thead>
+        <tbody>
+          <tr><td><div class="tuser"><span class="av">SM</span> Sean McGraw</div></td><td>sean@acme.co</td><td><span class="rolechip owner">owner</span></td><td>now</td></tr>
+          <tr><td><div class="tuser"><span class="av" style="background:linear-gradient(135deg,#8a4,#472)">LC</span> Lena Cho</div></td><td>lena@acme.co</td><td><span class="rolechip">editor</span></td><td>2h</td></tr>
+          <tr><td><div class="tuser"><span class="av" style="background:linear-gradient(135deg,#48a,#247)">PN</span> Priya N.</div></td><td>priya@acme.co</td><td><span class="rolechip">editor</span></td><td>5h</td></tr>
+          <tr><td><div class="tuser"><span class="av" style="background:linear-gradient(135deg,#a58,#734)">RT</span> Ravi T.</div></td><td>ravi@acme.co</td><td><span class="rolechip">viewer</span></td><td>1d</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+
+/* ---------------- shell renderers ---------------- */
+const acct = `<div class="acct"><span class="av">SM</span><div style="flex:1"><div class="an">Sean McGraw</div><div class="as">Acme HQ · owner</div></div><span class="icn" style="color:var(--faint)">${ICON.dots}</span></div>`;
+const wsswitch = `<div class="wsswitch"><span class="wsav">A</span><span class="wsname">Acme HQ</span><span class="chev">▾</span></div>`;
+
+function topbarPage(withPanelBtn){
+  return `<div class="topbar">
+    <div class="crumbs"><span>Engineering</span><span class="sep">/</span><span>Runbooks</span><span class="sep">/</span><span class="cur">Incident response</span></div>
+    <span class="saved"><span class="tick"></span> Saved</span>
+    <button class="btn primary">Share</button>
+    ${withPanelBtn ? `<button class="iconbtn" title="Comments">${ICON.cmt}</button>`:''}
+    <button class="iconbtn">${ICON.dots}</button>
+  </div>`;
+}
+const topbarHome = `<div class="topbar"><div class="topttl">Home</div><div class="search" style="width:220px">${ICON.search}<span>Search…</span><span class="k">⌘K</span></div></div>`;
+const topbarAdmin = `<div class="topbar"><div class="crumbs"><span>Acme HQ</span><span class="sep">/</span><span class="cur">Settings</span></div></div>`;
+
+function mainFor(surf, shell){
+  if (surf === 'home')  return topbarHome + `<div class="canvas">${homeCanvas}</div>`;
+  if (surf === 'admin') return topbarAdmin + `<div class="canvas" style="padding:0">${adminCanvas}</div>`;
+  // page
+  if (shell === 'A'){
+    // docked panel is a grid sibling, handled in renderA
+    return topbarPage(true) + `<div class="canvas">${pageCanvas}</div>`;
+  }
+  return topbarPage(true) + `<div class="canvas">${pageCanvas}</div>`;
+}
+
+function renderA(stage, surf){
+  stage.querySelector('[data-role="tree"]').innerHTML = wsswitch + `<div class="tree">${treeInner}</div>`;
+  const main = stage.querySelector('[data-role="main"]');
+  main.innerHTML = mainFor(surf, 'A');
+  // remove any prior docked panel
+  const old = stage.querySelector('.panel.docked'); if (old) old.remove();
+  if (surf === 'page'){
+    stage.style.gridTemplateColumns = '54px 250px minmax(0,1fr) 300px';
+    const p = document.createElement('aside');
+    p.className = 'panel docked';
+    p.innerHTML = `<div class="phdr">${ICON.cmt} Comments <span class="pclose icn" style="color:var(--faint)">×</span></div><div class="pbody">${commentsBody}</div>`;
+    stage.appendChild(p);
+  } else {
+    stage.style.gridTemplateColumns = '54px 250px minmax(0,1fr)';
+  }
+}
+
+function renderB(stage, surf){
+  const side = stage.querySelector('[data-role="sidebarB"]');
+  side.innerHTML = wsswitch +
+    `<div class="navstrip">
+       <div class="nrow"><span class="icn" style="color:inherit">${ICON.home}</span>Home</div>
+       <div class="nrow"><span class="icn" style="color:inherit">${ICON.search}</span>Search<span class="ct">⌘K</span></div>
+       <div class="nrow"><span class="icn" style="color:inherit">${ICON.inbox}</span>Inbox<span class="ct">3</span></div>
+       <div class="nrow"><span class="icn" style="color:inherit">${ICON.share}</span>Shared with me</div>
+     </div>
+     <div class="navdiv"></div>
+     <div class="tree">${treeInner}</div>` + acct;
+  const main = stage.querySelector('[data-role="main"]');
+  main.innerHTML = mainFor(surf, 'B');
+  // overlay panel
+  const oldS = stage.querySelector('.scrim'); if (oldS) oldS.remove();
+  const oldP = stage.querySelector('.overlaypanel'); if (oldP) oldP.remove();
+  if (surf === 'page'){
+    const scrim = document.createElement('div'); scrim.className = 'scrim';
+    const p = document.createElement('aside'); p.className = 'panel overlaypanel';
+    p.innerHTML = `<div class="phdr">${ICON.cmt} Comments <span class="pclose icn" style="color:var(--faint)">×</span></div><div class="pbody">${commentsBody}</div>`;
+    main.appendChild(scrim); main.appendChild(p);
+  }
+}
+
+function renderC(stage, surf){
+  const active = s => surf===s ? ' active' : '';
+  stage.querySelector('[data-role="ctop"]').innerHTML = `
+    <div class="glyph" style="width:26px;height:26px;font-size:14px">M</div>
+    <div class="wsswitch" style="border:0;padding:0;gap:7px"><span class="wsname" style="font-size:13px">Acme HQ</span><span class="chev">▾</span></div>
+    <div class="topnav" style="margin-left:6px">
+      <div class="tnitem${active('home')}">${ICON.home} Home</div>
+      <div class="tnitem${surf==='page'?' active':''}">${ICON.page.replace('6 2h9','7 3h8')} Workspace</div>
+      <div class="tnitem">${ICON.inbox} Inbox <span class="ct">3</span></div>
+    </div>
+    <div class="spring" style="flex:1"></div>
+    <div class="search" style="width:240px">${ICON.search}<span>Search or jump to…</span><span class="k">⌘K</span></div>
+    <div class="av" style="width:28px;height:28px;font-size:11px">SM</div>`;
+  const body = stage.querySelector('[data-role="cbody"]');
+  if (surf === 'admin'){
+    body.style.gridTemplateColumns = '1fr';
+    body.innerHTML = `<section class="main"><div class="canvas" style="padding:0">${adminCanvas}</div></section>`;
+    return;
+  }
+  if (surf === 'home'){
+    body.style.gridTemplateColumns = '1fr';
+    body.innerHTML = `<section class="main"><div class="canvas">${homeCanvas}</div></section>`;
+    return;
+  }
+  // page: collapsible tree + main + slide-over
+  body.style.gridTemplateColumns = '230px minmax(0,1fr)';
+  body.innerHTML = `
+    <aside class="side">
+      <div class="collapsebtn"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg> Collapse</div>
+      <div class="tree">${treeInner}</div>
+    </aside>
+    <section class="main" style="position:relative">
+      <div class="canvas">${pageCanvas}</div>
+      <div class="scrim"></div>
+      <aside class="panel slideover"><div class="phdr">${ICON.cmt} Comments <span class="pclose icn" style="color:var(--faint)">×</span></div><div class="pbody">${commentsBody}</div></aside>
+    </section>`;
+}
+
+/* ---------------- state + wiring ---------------- */
+const stages = { A: document.getElementById('stageA'), B: document.getElementById('stageB'), C: document.getElementById('stageC') };
+const renderers = { A: renderA, B: renderB, C: renderC };
+const ORDER = ['A','B','C'];
+let cur = { shell: 'A', surf: 'page', mode: 'dark' };
+
+function paint(){
+  ORDER.forEach(k => {
+    const st = stages[k];
+    st.hidden = (k !== cur.shell);
+    st.dataset.mode = cur.mode;
+    st.dataset.surf = cur.surf;
+  });
+  renderers[cur.shell](stages[cur.shell], cur.surf);
+  document.querySelectorAll('#shellset .seg').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.shell===cur.shell)));
+  document.querySelectorAll('#surfset button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.surf===cur.surf)));
+  document.querySelectorAll('#modeset button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode===cur.mode)));
+  renderDossier(cur.shell);
+}
+
+document.querySelectorAll('#shellset .seg').forEach(b => b.addEventListener('click', () => { cur.shell=b.dataset.shell; paint(); }));
+document.querySelectorAll('#surfset button').forEach(b => b.addEventListener('click', () => { cur.surf=b.dataset.surf; paint(); }));
+document.querySelectorAll('#modeset button').forEach(b => b.addEventListener('click', () => { cur.mode=b.dataset.mode; paint(); }));
+document.addEventListener('keydown', e => {
+  const tag=(e.target.tagName||'').toLowerCase();
+  if (tag==='input'||tag==='textarea'||e.target.isContentEditable) return;
+  if (e.key!=='ArrowLeft'&&e.key!=='ArrowRight') return;
+  const i=ORDER.indexOf(cur.shell);
+  cur.shell = ORDER[e.key==='ArrowRight' ? (i+1)%3 : (i+2)%3]; paint();
+});
+
+/* ---------------- dossier ---------------- */
+const DOS = {
+  A: { name:'A · Rail + Tree', thesis:"The current shell, <b>finished</b>. An icon rail owns <b>global</b> destinations (Home, Search, Workspace, Inbox, Settings) — brand glyph pinned top, account avatar pinned bottom, which <b>resolves the logo/avatar collision</b> the audit flagged. The tree sidebar owns <b>workspace</b> scope only. Context panels (comments, properties) <b>dock as a 4th column</b> and reflow the editor narrower — never cover the text.",
+    kv:[['Columns','rail · tree · main · panel'],['Global nav','icon rail'],['Workspace nav','tree sidebar'],['Panel','docked / reflow'],['Home vs ws','rail destination vs tree']],
+    up:"Closest to today's code — cheapest to reach. Clear split: rail = where in Marrow, tree = where in this space. Panel never clips content (fixes audit #9).",
+    dn:"Two left columns eat ~304px before content. Rail icons need labels/tooltips or they're a guessing game. Densest chrome of the three." },
+  B: { name:'B · Unified Sidebar', thesis:"Outline / La Suite Docs family — <b>one</b> sidebar, no separate rail. Workspace switcher on top, a <b>global-nav strip</b> (Home · Search · Inbox · Shared) above the tree, account pinned at the bottom. Global and workspace nav live in one scannable column. The editor gets a full second column; context panels <b>overlay</b> from the right over a scrim.",
+    kv:[['Columns','sidebar · main'],['Global nav','strip atop sidebar'],['Workspace nav','tree (same column)'],['Panel','overlay + scrim'],['Home vs ws','both are sidebar rows']],
+    up:"One nav surface to learn; widest editor. Matches the closest reference (La Suite runs the same BlockNote engine). Text labels — nothing to decode.",
+    dn:"Sidebar carries a lot; long trees push global nav offscreen unless it's pinned. Overlay panel covers content while open (the thing audit #9 disliked)." },
+  C: { name:'C · Focus / Top-bar', thesis:"Document-forward. A <b>full-width top bar</b> carries brand, workspace switcher, global nav (Home · Workspace · Inbox) and the command/search box — so the vertical space goes to a <b>collapsible</b> tree + a wide editor. Home and Admin drop the tree entirely and go full-bleed. Context panels <b>slide over</b> from the edge.",
+    kv:[['Layout','top bar + [tree · main]'],['Global nav','top bar'],['Workspace nav','collapsible tree'],['Panel','slide-over'],['Home vs ws','top-bar switch; tree hides']],
+    up:"Most screen for the document; calmest reading surface. Global actions always one place (top). Collapse gives a true focus mode. Scales cleanly to home/admin (no tree).",
+    dn:"Top bar + topbar-per-page risks two horizontal bands. Global nav competes with per-page actions for the same strip. Furthest from current code." },
+};
+function renderDossier(shell){
+  const d = DOS[shell];
+  document.getElementById('dossier').innerHTML = `
+    <div><h2><span class="sw"></span>${d.name}</h2><p class="thesis">${d.thesis}</p></div>
+    <div class="kv">${d.kv.map(([k,v])=>`<div><b>${k}:</b> ${v}</div>`).join('')}</div>
+    <div class="bet">
+      <div style="margin-bottom:10px"><span class="lab up">The bet ▲</span>${d.up}</div>
+      <div><span class="lab dn">The risk ▼</span>${d.dn}</div>
+    </div>`;
+}
+
+paint();
+</script>
