@@ -123,7 +123,20 @@
   .row .ico svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.7; }
   .row .tw { color: var(--faint); width: 12px; display:grid; place-items:center; }
   .row .tw svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; }
-  .indent { padding-left: 20px; } .indent2 { padding-left: 38px; }
+  .indent { padding-left: 20px; } .indent2 { padding-left: 38px; } .indent3 { padding-left: 54px; }
+  .row.space { font-weight: 550; }
+  .acc-chev { margin-left: auto; color: var(--faint); font-size: 11px; }
+  .acc-body { padding: 2px 6px 4px; }
+  .viewall { font-size: 12px; color: var(--accent); padding: 6px 8px 6px 22px; cursor: pointer; }
+  .viewall:hover { text-decoration: underline; }
+  .backrow { display: flex; align-items: center; gap: 8px; padding: 11px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 550; color: var(--muted); cursor: pointer; }
+  .backrow:hover { color: var(--text); }
+  .backrow svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .setmenu { padding: 8px; flex: 1; overflow-y: auto; }
+  .setmenu .anh { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--faint); padding: 12px 8px 4px; font-weight: 600; }
+  .setmenu .arow { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: var(--radius); font-size: 13px; cursor: pointer; color: var(--text); }
+  .setmenu .arow.active { background: var(--accent-soft); color: var(--accent); font-weight: 550; }
+  .setmenu .arow:hover { background: var(--accent-soft); }
   .acct { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border-top: 1px solid var(--border); cursor: pointer; }
   .acct .av { width: 26px; height: 26px; font-size: 11px; flex-shrink: 0; }
   .acct .an { font-size: 12.5px; font-weight: 550; flex: 1; min-width: 0; }
@@ -249,8 +262,8 @@
   <div class="spring"></div>
   <span class="grouplbl">Shell</span>
   <div class="segset" id="shellset" role="group" aria-label="Shell">
-    <button class="seg" data-shell="A" aria-pressed="true"><b>A · Rail + Tree</b><small>docked panel</small></button>
-    <button class="seg" data-shell="B" aria-pressed="false"><b>B · Unified Sidebar</b><small>overlay panel</small></button>
+    <button class="seg" data-shell="A" aria-pressed="false"><b>A · Rail + Tree</b><small>docked panel</small></button>
+    <button class="seg" data-shell="B" aria-pressed="true"><b>B · Unified Sidebar ★</b><small>docked panel · chosen</small></button>
     <button class="seg" data-shell="C" aria-pressed="false"><b>C · Focus / Top-bar</b><small>slide-over</small></button>
   </div>
   <span class="grouplbl">Surface</span>
@@ -391,33 +404,34 @@ const homeCanvas = `
     </div>
   </div>`;
 
-/* ------- admin surface (shared) ------- */
-const adminCanvas = `
-  <div class="admin">
-    <nav class="adminnav">
-      <div class="anh">Organization</div>
-      <div class="arow active">Members</div>
-      <div class="arow">Workspaces</div>
-      <div class="arow">Billing</div>
-      <div class="arow">Security</div>
-      <div class="anh" style="margin-top:14px">Settings</div>
-      <div class="arow">General</div>
-      <div class="arow">Export &amp; restore</div>
-    </nav>
-    <div class="adminmain">
-      <h2>Members</h2>
-      <p class="amsub">5 members in Acme HQ · owners can invite and change roles</p>
-      <table class="mtable">
-        <thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Last active</th></tr></thead>
-        <tbody>
-          <tr><td><div class="tuser"><span class="av">SM</span> Sean McGraw</div></td><td>sean@acme.co</td><td><span class="rolechip owner">owner</span></td><td>now</td></tr>
-          <tr><td><div class="tuser"><span class="av" style="background:linear-gradient(135deg,#8a4,#472)">LC</span> Lena Cho</div></td><td>lena@acme.co</td><td><span class="rolechip">editor</span></td><td>2h</td></tr>
-          <tr><td><div class="tuser"><span class="av" style="background:linear-gradient(135deg,#48a,#247)">PN</span> Priya N.</div></td><td>priya@acme.co</td><td><span class="rolechip">editor</span></td><td>5h</td></tr>
-          <tr><td><div class="tuser"><span class="av" style="background:linear-gradient(135deg,#a58,#734)">RT</span> Ravi T.</div></td><td>ravi@acme.co</td><td><span class="rolechip">viewer</span></td><td>1d</td></tr>
-        </tbody>
-      </table>
-    </div>
+/* ------- admin surface ------- */
+// The settings menu items (used two ways: an in-sidebar menu for B, a left column for A/C).
+const adminMenuItems = `
+  <div class="anh">Organization</div>
+  <div class="arow active">Members</div>
+  <div class="arow">Workspaces</div>
+  <div class="arow">Billing</div>
+  <div class="arow">Security</div>
+  <div class="anh" style="margin-top:14px">Settings</div>
+  <div class="arow">General</div>
+  <div class="arow">Export &amp; restore</div>`;
+// The settings content pane (shared by every shell).
+const adminMainContent = `
+  <div class="adminmain">
+    <h2>Members</h2>
+    <p class="amsub">5 members in Acme HQ · owners can invite and change roles</p>
+    <table class="mtable">
+      <thead><tr><th>Member</th><th>Email</th><th>Role</th><th>Last active</th></tr></thead>
+      <tbody>
+        <tr><td><div class="tuser"><span class="av">SM</span> Sean McGraw</div></td><td>sean@acme.co</td><td><span class="rolechip owner">owner</span></td><td>now</td></tr>
+        <tr><td><div class="tuser"><span class="av" style="background:linear-gradient(135deg,#8a4,#472)">LC</span> Lena Cho</div></td><td>lena@acme.co</td><td><span class="rolechip">editor</span></td><td>2h</td></tr>
+        <tr><td><div class="tuser"><span class="av" style="background:linear-gradient(135deg,#48a,#247)">PN</span> Priya N.</div></td><td>priya@acme.co</td><td><span class="rolechip">editor</span></td><td>5h</td></tr>
+        <tr><td><div class="tuser"><span class="av" style="background:linear-gradient(135deg,#a58,#734)">RT</span> Ravi T.</div></td><td>ravi@acme.co</td><td><span class="rolechip">viewer</span></td><td>1d</td></tr>
+      </tbody>
+    </table>
   </div>`;
+// A/C keep the self-contained two-column admin screen.
+const adminCanvas = `<div class="admin"><nav class="adminnav">${adminMenuItems}</nav>${adminMainContent}</div>`;
 
 /* ---------------- shell renderers ---------------- */
 const acct = `<div class="acct"><span class="av">SM</span><div style="flex:1"><div class="an">Sean McGraw</div><div class="as">Acme HQ · owner</div></div><span class="icn" style="color:var(--faint)">${ICON.dots}</span></div>`;
@@ -463,28 +477,63 @@ function renderA(stage, surf){
   }
 }
 
+// Sidebar in workspace context: nav strip + a "Spaces" accordion whose active
+// space (Engineering) expands inline into its folder/page tree.
+const sidebarB_workspace = (activeNav) => wsswitch +
+  `<div class="navstrip">
+     <div class="nrow${activeNav==='home'?' active':''}"><span class="icn" style="color:inherit">${ICON.home}</span>Home</div>
+     <div class="nrow"><span class="icn" style="color:inherit">${ICON.search}</span>Search<span class="ct">⌘K</span></div>
+     <div class="nrow"><span class="icn" style="color:inherit">${ICON.inbox}</span>Inbox<span class="ct">3</span></div>
+     <div class="nrow"><span class="icn" style="color:inherit">${ICON.share}</span>Shared with me</div>
+     <div class="nrow${activeNav==='spaces'?' active':''}"><span class="icn" style="color:inherit">${ICON.layout}</span>Spaces<span class="acc-chev">▾</span></div>
+   </div>
+   <div class="acc-body">
+     <div class="row space sel indent"><span class="tw">${ICON.folderO}</span> Engineering</div>
+     <div class="row indent2"><span class="tw">${ICON.folderC}</span><span class="ico">${ICON.folder}</span> RFCs</div>
+     <div class="row indent2"><span class="tw">${ICON.folderO}</span><span class="ico">${ICON.folder}</span> Runbooks</div>
+     <div class="row indent3 sel"><span class="ico">${ICON.page}</span> Incident response</div>
+     <div class="row indent3"><span class="ico">${ICON.page}</span> On-call rotation</div>
+     <div class="row indent2"><span class="tw"></span><span class="ico">${ICON.page}</span> Architecture overview</div>
+     <div class="row space indent"><span class="tw">${ICON.folderC}</span> Product</div>
+     <div class="row space indent"><span class="tw">${ICON.folderC}</span> Research</div>
+     <div class="viewall">View all spaces →</div>
+   </div>`;
+
+// Sidebar in settings context: the tree is REPLACED by the settings menu, with a
+// back affordance to the workspace it came from.
+const sidebarB_settings = wsswitch +
+  `<div class="backrow"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg> Back to Acme HQ</div>
+   <div class="setmenu">${adminMenuItems}</div>`;
+
 function renderB(stage, surf){
   const side = stage.querySelector('[data-role="sidebarB"]');
-  side.innerHTML = wsswitch +
-    `<div class="navstrip">
-       <div class="nrow"><span class="icn" style="color:inherit">${ICON.home}</span>Home</div>
-       <div class="nrow"><span class="icn" style="color:inherit">${ICON.search}</span>Search<span class="ct">⌘K</span></div>
-       <div class="nrow"><span class="icn" style="color:inherit">${ICON.inbox}</span>Inbox<span class="ct">3</span></div>
-       <div class="nrow"><span class="icn" style="color:inherit">${ICON.share}</span>Shared with me</div>
-     </div>
-     <div class="navdiv"></div>
-     <div class="tree">${treeInner}</div>` + acct;
   const main = stage.querySelector('[data-role="main"]');
-  main.innerHTML = mainFor(surf, 'B');
-  // overlay panel
-  const oldS = stage.querySelector('.scrim'); if (oldS) oldS.remove();
-  const oldP = stage.querySelector('.overlaypanel'); if (oldP) oldP.remove();
-  if (surf === 'page'){
-    const scrim = document.createElement('div'); scrim.className = 'scrim';
-    const p = document.createElement('aside'); p.className = 'panel overlaypanel';
-    p.innerHTML = `<div class="phdr">${ICON.cmt} Comments <span class="pclose icn" style="color:var(--faint)">×</span></div><div class="pbody">${commentsBody}</div>`;
-    main.appendChild(scrim); main.appendChild(p);
+  // clear any prior docked panel
+  const oldP = stage.querySelector('.panel.docked'); if (oldP) oldP.remove();
+
+  if (surf === 'admin'){
+    side.innerHTML = sidebarB_settings + acct;
+    main.innerHTML = `<div class="topbar"><div class="crumbs"><span>Acme HQ</span><span class="sep">/</span><span>Settings</span><span class="sep">/</span><span class="cur">Members</span></div></div>` +
+      `<div class="canvas" style="padding:0">${adminMainContent}</div>`;
+    stage.style.gridTemplateColumns = '264px minmax(0,1fr)';
+    return;
   }
+
+  if (surf === 'home'){
+    side.innerHTML = sidebarB_workspace('home') + acct;
+    main.innerHTML = mainFor('home', 'B');
+    stage.style.gridTemplateColumns = '264px minmax(0,1fr)';
+    return;
+  }
+
+  // page: workspace sidebar + editor + DOCKED comments panel (reflow, both usable)
+  side.innerHTML = sidebarB_workspace('spaces') + acct;
+  main.innerHTML = mainFor('page', 'B');
+  stage.style.gridTemplateColumns = '264px minmax(0,1fr) 340px';
+  const p = document.createElement('aside');
+  p.className = 'panel docked';
+  p.innerHTML = `<div class="phdr">${ICON.cmt} Comments <span class="pclose icn" style="color:var(--faint)">×</span></div><div class="pbody">${commentsBody}</div>`;
+  stage.appendChild(p);
 }
 
 function renderC(stage, surf){
@@ -530,7 +579,7 @@ const stages = { A: document.getElementById('stageA'), B: document.getElementByI
 const renderers = { A: renderA, B: renderB, C: renderC };
 const DISP = { A: 'grid', B: 'grid', C: 'flex' };  // active display per shell — beats inline style
 const ORDER = ['A','B','C'];
-let cur = { shell: 'A', surf: 'page', mode: 'dark' };
+let cur = { shell: 'B', surf: 'page', mode: 'dark' };
 
 function paint(){
   ORDER.forEach(k => {
@@ -564,10 +613,10 @@ const DOS = {
     kv:[['Columns','rail · tree · main · panel'],['Global nav','icon rail'],['Workspace nav','tree sidebar'],['Panel','docked / reflow'],['Home vs ws','rail destination vs tree']],
     up:"Closest to today's code — cheapest to reach. Clear split: rail = where in Marrow, tree = where in this space. Panel never clips content (fixes audit #9).",
     dn:"Two left columns eat ~304px before content. Rail icons need labels/tooltips or they're a guessing game. Densest chrome of the three." },
-  B: { name:'B · Unified Sidebar', thesis:"Outline / La Suite Docs family — <b>one</b> sidebar, no separate rail. Workspace switcher on top, a <b>global-nav strip</b> (Home · Search · Inbox · Shared) above the tree, account pinned at the bottom. Global and workspace nav live in one scannable column. The editor gets a full second column; context panels <b>overlay</b> from the right over a scrim.",
-    kv:[['Columns','sidebar · main'],['Global nav','strip atop sidebar'],['Workspace nav','tree (same column)'],['Panel','overlay + scrim'],['Home vs ws','both are sidebar rows']],
-    up:"One nav surface to learn; widest editor. Matches the closest reference (La Suite runs the same BlockNote engine). Text labels — nothing to decode.",
-    dn:"Sidebar carries a lot; long trees push global nav offscreen unless it's pinned. Overlay panel covers content while open (the thing audit #9 disliked)." },
+  B: { name:'B · Unified Sidebar ★ chosen', thesis:"<b>The direction (maintainer's call, refined).</b> One sidebar, no rail: workspace switcher on top, a global-nav strip (Home · Search · Inbox · Shared), then a <b>Spaces accordion</b> — the active space (Engineering) expands inline into its folder/page tree; other recent spaces sit collapsed with a <b>View all spaces</b> escape. Account pinned bottom. Comments <b>dock as a full side column</b> and reflow the editor — both stay usable, no overlay. Opening <b>Settings replaces the tree</b> in-place with the settings menu behind a <b>Back to workspace</b> row (main pane goes full-width).",
+    kv:[['Columns','sidebar · main · panel'],['Global nav','strip atop sidebar'],['Spaces','accordion → recent + view all'],['Panel','docked / reflow (both usable)'],['Settings','swaps tree + back button']],
+    up:"One nav surface to learn; matches the closest reference (La Suite = same BlockNote engine). Docked panel never covers text (fixes audit #9). Settings reuses the same chrome — no orphan admin screen; back button keeps you oriented.",
+    dn:"Sidebar carries a lot; with panel open on a small viewport it's three columns — the tree may need to collapse. Spaces accordion + tree in one scroll needs a sensible default depth." },
   C: { name:'C · Focus / Top-bar', thesis:"Document-forward. A <b>full-width top bar</b> carries brand, workspace switcher, global nav (Home · Workspace · Inbox) and the command/search box — so the vertical space goes to a <b>collapsible</b> tree + a wide editor. Home and Admin drop the tree entirely and go full-bleed. Context panels <b>slide over</b> from the edge.",
     kv:[['Layout','top bar + [tree · main]'],['Global nav','top bar'],['Workspace nav','collapsible tree'],['Panel','slide-over'],['Home vs ws','top-bar switch; tree hides']],
     up:"Most screen for the document; calmest reading surface. Global actions always one place (top). Collapse gives a true focus mode. Scales cleanly to home/admin (no tree).",
