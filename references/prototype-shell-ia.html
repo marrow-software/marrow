@@ -165,7 +165,8 @@
   /* ---------- docked panel (context: comments) ---------- */
   .panel { background: var(--bg); border-left: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
   .panel .phdr { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; }
-  .panel .phdr .pclose { margin-left: auto; }
+  .panel .phdr svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; color: var(--muted); flex-shrink: 0; }
+  .panel .phdr .pclose { margin-left: auto; cursor: pointer; }
   .panel .pbody { padding: 14px; overflow-y: auto; flex: 1; }
   .cmt { display: flex; gap: 10px; margin-bottom: 16px; }
   .cmt .cav { width: 26px; height: 26px; border-radius: 99px; flex-shrink: 0; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
@@ -303,6 +304,8 @@ const ICON = {
   page: '<svg viewBox="0 0 24 24"><path d="M6 2h9l4 4v16H6z"/><path d="M14 2v5h5"/></svg>',
   folderC: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
   folderO: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v9H3z"/></svg>',
+  layout: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>',
   home: '<svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>',
   inbox: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 3z"/></svg>',
   star: '<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .5-4.6 4 1.4 6L12 16l-5.4 3.1 1.4-6-4.6-4 6-.5z"/></svg>',
@@ -315,8 +318,8 @@ const ICON = {
 
 const treeInner = `
   <div class="grouplabel"><span class="badge">EN</span> Engineering</div>
-  <div class="row indent"><span class="tw">${ICON.folderC}</span><span class="ico">${ICON.folderO.replace('6 9l6 6 6-6','3 7h5l2 2h11v9H3z')}</span> RFCs</div>
-  <div class="row indent"><span class="tw">${ICON.folderO}</span><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v9H3z"/></svg></span> Runbooks</div>
+  <div class="row indent"><span class="tw">${ICON.folderC}</span><span class="ico">${ICON.folder}</span> RFCs</div>
+  <div class="row indent"><span class="tw">${ICON.folderO}</span><span class="ico">${ICON.folder}</span> Runbooks</div>
   <div class="row indent2 sel"><span class="ico">${ICON.page}</span> Incident response</div>
   <div class="row indent2"><span class="ico">${ICON.page}</span> On-call rotation</div>
   <div class="row indent"><span class="tw"></span><span class="ico">${ICON.page}</span> Architecture overview</div>
@@ -393,7 +396,7 @@ const adminCanvas = `
   <div class="admin">
     <nav class="adminnav">
       <div class="anh">Organization</div>
-      <div class="arow active"><span class="icn">${ICON.star.replace('12 3l2.6','12 2a5 5 0 015 5')}</span>Members</div>
+      <div class="arow active">Members</div>
       <div class="arow">Workspaces</div>
       <div class="arow">Billing</div>
       <div class="arow">Security</div>
@@ -491,7 +494,7 @@ function renderC(stage, surf){
     <div class="wsswitch" style="border:0;padding:0;gap:7px"><span class="wsname" style="font-size:13px">Acme HQ</span><span class="chev">▾</span></div>
     <div class="topnav" style="margin-left:6px">
       <div class="tnitem${active('home')}">${ICON.home} Home</div>
-      <div class="tnitem${surf==='page'?' active':''}">${ICON.page.replace('6 2h9','7 3h8')} Workspace</div>
+      <div class="tnitem${surf==='page'?' active':''}">${ICON.layout} Workspace</div>
       <div class="tnitem">${ICON.inbox} Inbox <span class="ct">3</span></div>
     </div>
     <div class="spring" style="flex:1"></div>
@@ -525,13 +528,15 @@ function renderC(stage, surf){
 /* ---------------- state + wiring ---------------- */
 const stages = { A: document.getElementById('stageA'), B: document.getElementById('stageB'), C: document.getElementById('stageC') };
 const renderers = { A: renderA, B: renderB, C: renderC };
+const DISP = { A: 'grid', B: 'grid', C: 'flex' };  // active display per shell — beats inline style
 const ORDER = ['A','B','C'];
 let cur = { shell: 'A', surf: 'page', mode: 'dark' };
 
 function paint(){
   ORDER.forEach(k => {
     const st = stages[k];
-    st.hidden = (k !== cur.shell);
+    // inline display:grid/flex overrides a [hidden] rule, so toggle display directly
+    st.style.display = (k === cur.shell) ? DISP[k] : 'none';
     st.dataset.mode = cur.mode;
     st.dataset.surf = cur.surf;
   });
