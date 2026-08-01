@@ -29,12 +29,7 @@ export function SideDrawer({ which, nodeId, workspaceId, onClose, onRestore }: P
       aria-label={TITLES[which]}
     >
       <header className="flex items-center gap-2.5 border-b border-border px-4 py-3">
-        <span
-          className="text-base font-normal"
-          style={{ fontVariationSettings: '"SOFT" 40' }}
-        >
-          {TITLES[which]}
-        </span>
+        <span className="text-base font-normal">{TITLES[which]}</span>
         <span className="flex-1" />
         <button
           type="button"

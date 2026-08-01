@@ -132,12 +132,7 @@ export function CommentsDrawer({
     >
       <header className="flex items-center gap-2.5 border-b border-border px-4 py-3">
         <MessageSquare className="h-4 w-4 text-muted-foreground" />
-        <span
-          className="text-base font-normal"
-          style={{ fontVariationSettings: '"SOFT" 40' }}
-        >
-          Comments
-        </span>
+        <span className="text-base font-normal">Comments</span>
         <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
           {openCount} open
         </span>

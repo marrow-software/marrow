@@ -30,34 +30,48 @@ const forbidden = [
   { pattern: "calc(var(--radius)", label: "wide radius-ramp derivation" },
 ];
 
-/** Signal contract — must be PRESENT in the token layer. */
+/**
+ * Signal contract — must be PRESENT in the token layer.
+ *
+ * `value` entries are matched as raw substrings (colour literals). `token`
+ * entries are matched as custom-property *declarations* (`--name:`), so
+ * `--s1` matches `--s1:` and never the substring inside `--s10` / `--s11` —
+ * the whole named scale is guarded member-by-member, not by a proxy token.
+ */
 const required = [
-  { pattern: "#0f766e", label: "spruce accent (light)" },
-  { pattern: "#3aa88f", label: "spruce accent (dark)" },
-  { pattern: "--shadow-signature", label: "signature shadow" },
-  { pattern: "--shadow-flat", label: "flat rest-state shadow" },
-  { pattern: "--ease-signature", label: "house easing curve" },
-  { pattern: "--texture-grain", label: "house grain" },
-  { pattern: "--measure", label: "reading measure" },
-  // Text scale
-  { pattern: "--text-2xs", label: "text scale (2xs)" },
-  { pattern: "--text-base", label: "text scale (base)" },
-  { pattern: "--text-md", label: "text scale (md)" },
-  { pattern: "--text-lg", label: "text scale (lg)" },
-  // Heading ramp
-  { pattern: "--h1", label: "heading ramp (h1)" },
-  { pattern: "--h6", label: "heading ramp (h6)" },
-  // Spacing scale
-  { pattern: "--s1", label: "spacing scale (s1)" },
-  { pattern: "--s11", label: "spacing scale (s11)" },
+  { value: "#0f766e", label: "spruce accent (light)" },
+  { value: "#3aa88f", label: "spruce accent (dark)" },
+  { token: "--shadow-signature", label: "signature shadow" },
+  { token: "--shadow-flat", label: "flat rest-state shadow" },
+  { token: "--ease-signature", label: "house easing curve" },
+  { token: "--texture-grain", label: "house grain" },
+  { token: "--measure", label: "reading measure" },
+  { token: "--focus-ring", label: "focus-ring spec" },
+  // Text scale (11 → 16)
+  ...["2xs", "xs", "sm", "base", "md", "lg"].map((k) => ({
+    token: `--text-${k}`,
+    label: `text scale (${k})`,
+  })),
+  // Heading ramp (h1 → h6)
+  ...[1, 2, 3, 4, 5, 6].map((n) => ({
+    token: `--h${n}`,
+    label: `heading ramp (h${n})`,
+  })),
+  // Spacing scale (s1 → s11)
+  ...Array.from({ length: 11 }, (_, i) => ({
+    token: `--s${i + 1}`,
+    label: `spacing scale (s${i + 1})`,
+  })),
   // Control heights
-  { pattern: "--ctl-sm", label: "control height (sm)" },
-  { pattern: "--ctl-md", label: "control height (md)" },
-  { pattern: "--ctl-lg", label: "control height (lg)" },
+  ...["sm", "md", "lg"].map((k) => ({
+    token: `--ctl-${k}`,
+    label: `control height (${k})`,
+  })),
   // Duration scale
-  { pattern: "--dur-hover", label: "duration (hover)" },
-  { pattern: "--dur-state", label: "duration (state)" },
-  { pattern: "--dur-enter", label: "duration (enter)" },
+  ...["hover", "state", "enter"].map((k) => ({
+    token: `--dur-${k}`,
+    label: `duration (${k})`,
+  })),
 ];
 
 const failures = [];
@@ -67,9 +81,12 @@ for (const { pattern, label } of forbidden) {
     failures.push(`  ✗ retired token present: ${pattern} (${label})`);
   }
 }
-for (const { pattern, label } of required) {
-  if (!css.includes(pattern)) {
-    failures.push(`  ✗ Signal token missing: ${pattern} (${label})`);
+for (const { token, value, label } of required) {
+  // A token must appear as a real declaration (`--name:`); a value as a literal.
+  const present = token ? css.includes(`${token}:`) : css.includes(value);
+  if (!present) {
+    const shown = token ?? value;
+    failures.push(`  ✗ Signal token missing: ${shown} (${label})`);
   }
 }
 
