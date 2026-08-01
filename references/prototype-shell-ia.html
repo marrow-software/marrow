@@ -139,6 +139,8 @@
   /* Floats as a card near the trigger — not a full-height edge panel — with
      a dimmed, blurred backdrop behind it (Confluence's Spaces switcher). */
   .spaces-scrim { position: absolute; inset: 0; z-index: 24; background: var(--scrim); backdrop-filter: blur(2px); }
+  /* top/left are set per-open in JS, anchored to the Spaces trigger row —
+     these are just a sane fallback if that ever fails to run. */
   .spaces-flyout { position: absolute; top: 18px; left: 18px; width: 320px; max-height: calc(100% - 36px); z-index: 25; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: 0 24px 60px -14px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04); display: flex; flex-direction: column; overflow: hidden; }
   .sf-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; font-size: 15px; font-weight: 650; flex-shrink: 0; }
   .sf-head .sf-x { color: var(--faint); cursor: pointer; width: 18px; height: 18px; display: grid; place-items: center; }
@@ -566,6 +568,15 @@ function wireSpacesFlyout(stage){
   if (trigger) trigger.addEventListener('click', () => { cur.spacesOpen = !cur.spacesOpen; paint(); });
   if (!cur.spacesOpen) return;
   stage.insertAdjacentHTML('beforeend', spacesFlyoutHTML());
+  // Anchor the card beside the Spaces row's arrow rather than the stage corner.
+  const flyout = stage.querySelector('.spaces-flyout');
+  const stageBox = stage.getBoundingClientRect();
+  const trigBox = trigger.getBoundingClientRect();
+  const top = Math.max(18, trigBox.top - stageBox.top - 6);
+  const left = trigBox.right - stageBox.left + 8;
+  flyout.style.top = top + 'px';
+  flyout.style.left = left + 'px';
+  flyout.style.maxHeight = Math.max(200, stageBox.height - top - 18) + 'px';
   const close = () => { cur.spacesOpen = false; paint(); };
   stage.querySelector('[data-role="spaces-scrim"]').addEventListener('click', close);
   stage.querySelector('[data-role="spaces-close"]').addEventListener('click', close);
