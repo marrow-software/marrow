@@ -136,14 +136,16 @@
   .viewall { font-size: 12px; color: var(--accent); padding: 6px 8px 6px 22px; cursor: pointer; }
   .viewall:hover { text-decoration: underline; }
   /* ---------- spaces switcher flyout ---------- */
-  .spaces-scrim { position: absolute; inset: 0; z-index: 24; background: transparent; }
-  .spaces-flyout { position: absolute; top: 0; bottom: 0; left: 0; width: 340px; z-index: 25; background: var(--panel); border-right: 1px solid var(--border-strong); box-shadow: 12px 0 40px -16px rgba(0,0,0,.55); display: flex; flex-direction: column; }
-  .sf-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; font-size: 15px; font-weight: 650; }
+  /* Floats as a card near the trigger — not a full-height edge panel — with
+     a dimmed, blurred backdrop behind it (Confluence's Spaces switcher). */
+  .spaces-scrim { position: absolute; inset: 0; z-index: 24; background: var(--scrim); backdrop-filter: blur(2px); }
+  .spaces-flyout { position: absolute; top: 18px; left: 18px; width: 320px; max-height: calc(100% - 36px); z-index: 25; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: 0 24px 60px -14px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04); display: flex; flex-direction: column; overflow: hidden; }
+  .sf-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; font-size: 15px; font-weight: 650; flex-shrink: 0; }
   .sf-head .sf-x { color: var(--faint); cursor: pointer; width: 18px; height: 18px; display: grid; place-items: center; }
   .sf-head .sf-x svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; }
-  .sf-search { display: flex; align-items: center; gap: 8px; margin: 2px 16px 12px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--faint); font-size: 13px; }
+  .sf-search { display: flex; align-items: center; gap: 8px; margin: 2px 16px 12px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--faint); font-size: 13px; flex-shrink: 0; }
   .sf-search svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; flex-shrink: 0; }
-  .sf-body { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+  .sf-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 8px; }
   .sf-label { font-size: 10.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); padding: 10px 10px 5px; }
   .sf-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius); cursor: pointer; }
   .sf-row:hover { background: var(--accent-soft); }
@@ -501,7 +503,7 @@ function renderA(stage, surf){
   // remove any prior docked panel
   const old = stage.querySelector('.panel.docked'); if (old) old.remove();
   if (surf === 'page'){
-    stage.style.gridTemplateColumns = '54px 250px minmax(0,1fr) 300px';
+    stage.style.gridTemplateColumns = '54px 250px minmax(0,1fr) minmax(220px, 24%)';
     const p = document.createElement('aside');
     p.className = 'panel docked';
     p.innerHTML = `<div class="phdr">${ICON.cmt} Comments <span class="pclose icn" style="color:var(--faint)">×</span></div><div class="pbody">${commentsBody}</div>`;
@@ -602,7 +604,9 @@ function renderB(stage, surf){
   // page: workspace sidebar + editor + DOCKED comments panel (reflow, both usable)
   side.innerHTML = sidebarB_workspace('spaces') + acct;
   main.innerHTML = mainFor('page', 'B');
-  stage.style.gridTemplateColumns = '264px minmax(0,1fr) 340px';
+  // Panel scales with the stage instead of holding a fixed px width, and is
+  // capped so it always stays narrower than the editor column next to it.
+  stage.style.gridTemplateColumns = '264px minmax(0,1fr) minmax(240px, 26%)';
   const p = document.createElement('aside');
   p.className = 'panel docked';
   p.innerHTML = `<div class="phdr">${ICON.cmt} Comments <span class="pclose icn" style="color:var(--faint)">×</span></div><div class="pbody">${commentsBody}</div>`;
