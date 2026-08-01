@@ -53,7 +53,7 @@ export function AppRail({
       <button
         type="button"
         title={`${workspaceName} workspace`}
-        className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-primary font-heading text-[17px] font-medium text-primary-foreground"
+        className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-[17px] font-medium text-primary-foreground"
       >
         {initials(workspaceName)[0]}
       </button>

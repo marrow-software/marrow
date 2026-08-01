@@ -43,7 +43,7 @@ export default async function WorkspaceHomePage({ params }: Props) {
             <Sparkles className="h-4 w-4" />
             For you
           </p>
-          <h1 className="mt-2 font-heading text-3xl font-semibold tracking-tight">
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
             {greeting}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -57,7 +57,7 @@ export default async function WorkspaceHomePage({ params }: Props) {
           <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border py-16 text-center">
             <FolderPlus className="h-10 w-10 text-muted-foreground/50" />
             <div className="space-y-1">
-              <h2 className="font-heading text-lg font-semibold">No spaces yet</h2>
+              <h2 className="text-lg font-semibold">No spaces yet</h2>
               <p className="mx-auto max-w-sm text-sm text-muted-foreground">
                 Spaces hold your folders and pages. Use the{" "}
                 <span className="font-medium text-foreground">Pages</span> panel in
