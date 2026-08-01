@@ -542,7 +542,6 @@ export function PageEditor({ initialPage }: Props) {
             fontSize: 40,
             fontWeight: 400,
             letterSpacing: "-0.015em",
-            fontVariationSettings: '"SOFT" 60',
           }}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
