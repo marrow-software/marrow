@@ -515,8 +515,10 @@ export function PageEditor({ initialPage }: Props) {
     <div
       className="relative grid h-full min-h-0 transition-[grid-template-columns] duration-[var(--dur-enter)] ease-[var(--ease-signature)]"
       style={{
+        // Docked panel sized minmax(256px, 26%) per #314 — 26% of the row,
+        // floored at 16rem so it never squishes; collapses to 0 when closed.
         gridTemplateColumns: commentsOpen
-          ? "minmax(0,1fr) clamp(15rem,26%,26rem)"
+          ? "minmax(0,1fr) max(16rem,26%)"
           : "minmax(0,1fr) 0rem",
       }}
     >

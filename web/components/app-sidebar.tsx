@@ -74,6 +74,22 @@ function initials(name?: string | null) {
   return letters || name[0]?.toUpperCase() || "?";
 }
 
+// Menu open-state + click-outside-to-dismiss, shared by the workspace switcher
+// and account menu so the dismiss scaffold lives in one place.
+function useDismissableMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+  return { open, setOpen, ref };
+}
+
 // ---------------------------------------------------------------------------
 // Tree-state persistence (open/closed folders) — per workspace per user
 // ---------------------------------------------------------------------------
@@ -108,13 +124,6 @@ function saveOpenState(key: string, state: Record<string, boolean>) {
 interface DragPayload {
   nodeId: string;
   spaceId: string;
-}
-
-interface DropTarget {
-  spaceId: string;
-  parentId: string | null;
-  before: string | null;
-  after: string | null;
 }
 
 function dropId(spaceId: string, parentId: string | null, slot: "before" | "after" | "inside", nodeId?: string) {
@@ -522,18 +531,8 @@ function WorkspaceSwitcher({
   workspaces: Workspace[];
   userRole: string | null;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const { open, setOpen, ref } = useDismissableMenu();
   const canCreateWorkspace = userRole === "owner" || userRole === null;
-
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
 
   return (
     <div ref={ref} className="relative border-b border-sidebar-border">
@@ -545,7 +544,7 @@ function WorkspaceSwitcher({
         className="signal-flat signal-focus flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent-soft"
       >
         <span className="flex size-6 shrink-0 items-center justify-center rounded bg-primary text-xs font-semibold text-primary-foreground">
-          {initials(tree.name)[0]}
+          {tree.name[0]?.toUpperCase() ?? "?"}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-base font-medium text-foreground">{tree.name}</span>
@@ -731,17 +730,7 @@ function SharedPanel() {
 // ---------------------------------------------------------------------------
 
 function AccountMenu({ user }: { user: User }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
+  const { open, setOpen, ref } = useDismissableMenu();
 
   return (
     <div ref={ref} className="relative mt-auto border-t border-sidebar-border">
@@ -752,7 +741,7 @@ function AccountMenu({ user }: { user: User }) {
         aria-label="Account menu"
         className="signal-flat signal-focus flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent-soft"
       >
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#4a6b8a] text-xs font-medium text-white">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted-foreground text-xs font-medium text-background">
           {initials(user.name)}
         </span>
         <span className="min-w-0 flex-1">
