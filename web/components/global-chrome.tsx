@@ -30,7 +30,7 @@ export function GlobalChrome({ user, workspaces, orgs, unreadCount }: Props) {
       <div className="flex items-center gap-1">
         <Link
           href="/home"
-          className="mr-2 font-heading text-lg font-semibold tracking-tight lowercase"
+          className="mr-2 text-lg font-semibold tracking-tight lowercase"
         >
           marrow
         </Link>

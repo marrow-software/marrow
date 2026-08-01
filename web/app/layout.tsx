@@ -1,19 +1,18 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import localFont from "next/font/local";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
+// Signal type system (#306/#309): one tuned sans everywhere, no serif; a
+// restrained mono voice (eyebrow + breadcrumb) on JetBrains Mono. Fraunces is
+// retired — see globals.css for the token layer.
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
-// Self-hosted Fraunces variable font — includes all four axes (wght, opsz,
-// SOFT, WONK) in a single file so `font-variation-settings` is reliable.
-const fraunces = localFont({
-  src: "../public/fonts/Fraunces.ttf",
-  variable: "--font-fraunces",
-  display: "swap",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
@@ -27,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <Script src="/config.js" strategy="beforeInteractive" />
       </head>
-      <body className={`${inter.variable} ${fraunces.variable} antialiased`}>
+      <body className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
           <TooltipProvider>
             {children}

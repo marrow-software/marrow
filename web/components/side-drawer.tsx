@@ -30,7 +30,7 @@ export function SideDrawer({ which, nodeId, workspaceId, onClose, onRestore }: P
     >
       <header className="flex items-center gap-2.5 border-b border-border px-4 py-3">
         <span
-          className="font-heading text-base font-normal"
+          className="text-base font-normal"
           style={{ fontVariationSettings: '"SOFT" 40' }}
         >
           {TITLES[which]}

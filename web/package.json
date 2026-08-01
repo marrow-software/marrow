@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:tokens": "node scripts/check-tokens.mjs",
     "pages:build": "CLOUDFLARE_BUILD=1 opennextjs-cloudflare build",
     "pages:deploy": "wrangler deploy"
   },

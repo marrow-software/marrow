@@ -537,7 +537,7 @@ export function PageEditor({ initialPage }: Props) {
       <div className="px-10 pt-14 pb-2">
         <input
           ref={titleInputRef}
-          className="w-full bg-transparent font-heading outline-none placeholder:text-muted-foreground"
+          className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
           style={{
             fontSize: 40,
             fontWeight: 400,

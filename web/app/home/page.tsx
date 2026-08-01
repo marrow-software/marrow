@@ -43,7 +43,7 @@ export default async function GlobalHomePage() {
           <Sparkles className="h-4 w-4" />
           For you
         </p>
-        <h1 className="mt-2 font-heading text-3xl font-semibold tracking-tight">{greeting}</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{greeting}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Everything across your workspaces, in one place.
         </p>
