@@ -61,15 +61,21 @@
  * Theme-independent, defined once. Colours, shadows, and grain vary per theme
  * in the :root / .dark blocks below.
  * ------------------------------------------------------------------------- */
-:root {
-  /* Text scale */
+/* Text scale (#309) lives in @theme so it both (a) generates the Signal-sized
+ * `text-2xs … text-lg` utilities — remapping Tailwind's `text-xs/sm/base/lg`
+ * onto the ramp and adding `text-2xs`/`text-md` — and (b) emits the raw
+ * `--text-*` custom properties to :root for the editor CSS and arbitrary refs.
+ * Chrome default is text-base (14px); editor reading body is text-md (15px). */
+@theme {
   --text-2xs: 11px; /* micro eyebrow / uppercase group labels */
   --text-xs: 12px; /* mono labels, property keys, timestamps, badges, kbd */
   --text-sm: 13px; /* secondary UI, breadcrumb, comment body, metadata */
   --text-base: 14px; /* UI chrome default — sidebar, nav, tree, buttons */
   --text-md: 15px; /* editor reading body */
   --text-lg: 16px; /* lede / intro paragraph */
+}
 
+:root {
   /* Heading ramp — size / line-height / weight / tracking (ratio ≈ 1.2) */
   --h1: 30px;
   --h2: 24px;
@@ -279,6 +285,99 @@ body::before {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Signature feedback set (#315, motion "Crisp" from #310). Reusable utilities
+ * the shell + editor + ui primitives share so interaction reads as Marrow, not
+ * a stock template. Every value is a token — no component hard-codes a duration,
+ * curve, or shadow.
+ *
+ *   .signal-raised   — raised control: rests on --shadow-flat, steps to
+ *                      --shadow-signature on hover (no translate), nudges down
+ *                      --press on :active and drops the shadow back to flat.
+ *   .signal-focus    — instant 3px accent ring on keyboard focus, NEVER animated
+ *                      (outline is outside the transition set, so it can't tween).
+ *   .signal-enter    — overlay entrance: fade + --pop-from upward-translate over
+ *                      --dur-enter using --ease-signature.
+ *   .signal-nav-active — selected nav row: static 2.5px accent bar + soft fill.
+ *
+ * Reduced motion is handled globally above (durations → ~0, --press/--pop-from
+ * → 0) so these collapse to instant colour/opacity changes automatically.
+ * ------------------------------------------------------------------------- */
+@layer components {
+  .signal-raised {
+    box-shadow: var(--shadow-flat);
+    transition:
+      box-shadow var(--dur-state) var(--ease-signature),
+      transform var(--dur-state) var(--ease-signature),
+      background-color var(--dur-hover) var(--ease-signature),
+      border-color var(--dur-hover) var(--ease-signature),
+      color var(--dur-hover) var(--ease-signature);
+  }
+  .signal-raised:hover {
+    box-shadow: var(--shadow-signature);
+  }
+  .signal-raised:active {
+    transform: translateY(var(--press));
+    box-shadow: var(--shadow-flat);
+  }
+
+  /* Flat control (ghost / link / tinted): colour tween on hover, 1px press
+   * nudge — no elevation. Companion to .signal-raised so both share tokens. */
+  .signal-flat {
+    transition:
+      background-color var(--dur-hover) var(--ease-signature),
+      border-color var(--dur-hover) var(--ease-signature),
+      color var(--dur-hover) var(--ease-signature);
+  }
+  .signal-flat:active {
+    transform: translateY(var(--press));
+  }
+
+  .signal-enter {
+    animation: signal-pop var(--dur-enter) var(--ease-signature) both;
+  }
+
+  /* Selected nav/tree row — a static accent bar + soft fill, no slide-in. */
+  .signal-nav-active {
+    position: relative;
+    background: var(--accent-soft);
+    color: var(--primary);
+  }
+  .signal-nav-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 60%;
+    width: 2.5px;
+    border-radius: 2px;
+    background: var(--primary);
+  }
+}
+
+@keyframes signal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(var(--pop-from));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Instant accent ring on keyboard focus. A real Tailwind utility (not a
+ * components-layer rule) so it beats the base `outline-none` utility on the
+ * same controls. Uses outline — outside every transition set — so the ring
+ * lands immediately and can never tween (#315 a11y requirement). */
+@utility signal-focus {
+  &:focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 1px;
   }
 }
 

@@ -508,7 +508,20 @@ export function PageEditor({ initialPage }: Props) {
   }
 
   return (
-    <div className="relative flex h-full flex-col">
+    // Comments dock + reflow (#314): a two-column grid whose second track
+    // animates open over --dur-enter with --ease-signature. The editor column
+    // reflows narrower — the panel never overlays it. Reduced motion collapses
+    // the reflow duration (global rule) while the docked layout stays usable.
+    <div
+      className="relative grid h-full min-h-0 transition-[grid-template-columns] duration-[var(--dur-enter)] ease-[var(--ease-signature)]"
+      style={{
+        gridTemplateColumns: commentsOpen
+          ? "minmax(0,1fr) clamp(15rem,26%,26rem)"
+          : "minmax(0,1fr) 0rem",
+      }}
+    >
+      {/* Editor column */}
+      <div className="relative flex min-w-0 flex-col overflow-hidden">
       <EditorHeader
         nodeId={initialPage.id}
         pageTitle={title || "Untitled"}
@@ -666,18 +679,21 @@ export function PageEditor({ initialPage }: Props) {
           onRestore={handleRestore}
         />
       )}
-
-      {commentsOpen && (
-        <CommentsDrawer
-          onClose={() => setCommentsOpen(false)}
-          comments={commentsCtl.comments}
-          loading={commentsCtl.loading}
-          error={commentsCtl.error}
-          post={commentsCtl.post}
-          setResolved={commentsCtl.setResolved}
-          remove={commentsCtl.remove}
-        />
-      )}
+      </div>
+      {/* Comments dock — the grid cell clips the panel while the row reflows. */}
+      <div className="min-h-0 overflow-hidden">
+        {commentsOpen && (
+          <CommentsDrawer
+            onClose={() => setCommentsOpen(false)}
+            comments={commentsCtl.comments}
+            loading={commentsCtl.loading}
+            error={commentsCtl.error}
+            post={commentsCtl.post}
+            setResolved={commentsCtl.setResolved}
+            remove={commentsCtl.remove}
+          />
+        )}
+      </div>
     </div>
   );
 }

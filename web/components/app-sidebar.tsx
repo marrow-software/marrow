@@ -1,17 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Check,
   ChevronDown,
   ChevronRight,
+  ChevronsUpDown,
   FileText,
   FilePlus,
   Folder,
   FolderPlus,
+  Home,
+  Inbox,
+  LogOut,
   Plus,
+  Search as SearchIcon,
   Settings,
+  Share2,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/utils";
+import { logout } from "@/lib/api";
 import {
   DndContext,
   DragOverlay,
@@ -31,26 +41,37 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { InlineCreateRow } from "@/components/sidebar/inline-create-row";
 import { createNode, createSpace, slugify, updateNode } from "@/lib/api";
 import { SearchPanel } from "@/components/rail-panels/search-panel";
-import { StarredPanel } from "@/components/rail-panels/starred-panel";
 import { InboxPanel } from "@/components/rail-panels/inbox-panel";
-import type { RailPanel } from "@/components/app-rail";
-import type { NodeTreeItem, SpaceTreeItem, User, WorkspaceTree } from "@/lib/types";
+import type { NodeTreeItem, SpaceTreeItem, User, Workspace, WorkspaceTree } from "@/lib/types";
+
+// The four global-nav destinations that share the unified sidebar (#313). The
+// active space's tree is the default ("pages") body; Search / Inbox / Shared
+// surface their panel in place of the tree; Home navigates away to /home.
+export type RailPanel = "pages" | "search" | "inbox" | "shared";
 
 interface Props {
   tree: WorkspaceTree;
   user?: User | null;
   panel: RailPanel;
+  onPanelChange: (panel: RailPanel) => void;
   memberCount: number | null;
   showOrgSettings?: boolean;
+  workspaces: Workspace[];
+  userRole: string | null;
+  inboxUnread?: number;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   onInboxUnreadChange?: (count: number) => void;
+}
+
+function initials(name?: string | null) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  const letters = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
+  return letters || name[0]?.toUpperCase() || "?";
 }
 
 // ---------------------------------------------------------------------------
@@ -403,7 +424,7 @@ function SpaceSection({
           className="flex flex-1 cursor-pointer items-center gap-2"
           onClick={() => ctx.setOpen(headerKey, !isOpen)}
         >
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/10 text-[10px] font-semibold text-primary">
+          <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/10 text-2xs font-semibold text-primary">
             {space.name[0]?.toUpperCase()}
           </span>
           {space.name}
@@ -481,35 +502,291 @@ function SpaceSection({
   );
 }
 
-function WorkspaceHeader({ tree, memberCount, showOrgSettings }: { tree: WorkspaceTree; memberCount: number | null; showOrgSettings?: boolean }) {
+// ---------------------------------------------------------------------------
+// Workspace switcher — pinned to the TOP of the unified sidebar. Opening it
+// floats a lightweight menu (workspace list + create + export + org settings)
+// anchored below the trigger. No brand glyph here — the brand/avatar collision
+// the audit flagged is gone; the account lives at the bottom.
+// ---------------------------------------------------------------------------
+
+function WorkspaceSwitcher({
+  tree,
+  memberCount,
+  showOrgSettings,
+  workspaces,
+  userRole,
+}: {
+  tree: WorkspaceTree;
+  memberCount: number | null;
+  showOrgSettings?: boolean;
+  workspaces: Workspace[];
+  userRole: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const canCreateWorkspace = userRole === "owner" || userRole === null;
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
   return (
-    <div className="flex items-center gap-2 border-b border-sidebar-border px-3.5 py-3 group">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13.5px] font-medium text-foreground">{tree.name}</div>
-        <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-          {memberCount !== null ? `${memberCount} member${memberCount === 1 ? "" : "s"}` : "workspace"}
-        </div>
-      </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        <ExportDialog workspaceId={tree.id} workspaceName={tree.name} />
-        {showOrgSettings && (
-          <a
-            href={`/orgs/${tree.org_id}/settings`}
-            className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="Organization settings"
-          >
-            <Settings className="h-3.5 w-3.5" />
-          </a>
-        )}
-      </div>
+    <div ref={ref} className="relative border-b border-sidebar-border">
       <button
         type="button"
-        className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-        title="Workspace menu"
-        aria-label="Workspace menu"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="Switch workspace"
+        className="signal-flat signal-focus flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent-soft"
       >
-        <ChevronDown className="h-3.5 w-3.5" />
+        <span className="flex size-6 shrink-0 items-center justify-center rounded bg-primary text-xs font-semibold text-primary-foreground">
+          {initials(tree.name)[0]}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-base font-medium text-foreground">{tree.name}</span>
+          <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
+            {memberCount !== null ? `${memberCount} member${memberCount === 1 ? "" : "s"}` : "workspace"}
+          </span>
+        </span>
+        <ChevronsUpDown className="h-4 w-4 shrink-0 text-faint" />
       </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="signal-enter absolute left-2 right-2 top-[calc(100%+4px)] z-50 rounded-md border border-border-strong bg-popover py-1 shadow-[var(--shadow-signature)]"
+        >
+          {workspaces.length > 0 && (
+            <>
+              <p className="px-3 pb-1 pt-1 font-mono text-2xs font-semibold uppercase tracking-widest text-faint">
+                Workspaces
+              </p>
+              <div className="max-h-56 overflow-y-auto">
+                {workspaces.map((ws) => {
+                  const isCurrent = ws.id === tree.id;
+                  return (
+                    <a
+                      key={ws.id}
+                      href={`/w/${ws.id}`}
+                      role="menuitem"
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-2 px-3 py-1.5 text-base hover:bg-accent-soft"
+                    >
+                      <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/10 text-2xs font-semibold text-primary">
+                        {ws.name[0]?.toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-foreground">{ws.name}</span>
+                      {isCurrent && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                    </a>
+                  );
+                })}
+              </div>
+              {canCreateWorkspace && (
+                <a
+                  href="/workspaces"
+                  role="menuitem"
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 px-3 py-1.5 text-base text-muted-foreground hover:bg-accent-soft hover:text-foreground"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Create workspace
+                </a>
+              )}
+              <div className="my-1 border-t border-border" />
+            </>
+          )}
+          <div className="flex items-center gap-1 px-2 py-0.5">
+            <ExportDialog workspaceId={tree.id} workspaceName={tree.name} />
+            <span className="text-sm text-muted-foreground">Export workspace</span>
+          </div>
+          {showOrgSettings && (
+            <a
+              href={`/orgs/${tree.org_id}/settings`}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-1.5 text-base text-muted-foreground hover:bg-accent-soft hover:text-foreground"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Organization settings
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Global-nav strip — Home · Search · Inbox · Shared with me. Replaces the old
+// icon rail; the panels surface here in place of a separate rail flyout.
+// ---------------------------------------------------------------------------
+
+function NavRow({
+  Icon,
+  label,
+  active,
+  badge,
+  count,
+  href,
+  onClick,
+}: {
+  Icon: typeof Home;
+  label: string;
+  active?: boolean;
+  badge?: number;
+  count?: string;
+  href?: string;
+  onClick?: () => void;
+}) {
+  const cls = cn(
+    "signal-flat signal-focus flex h-[var(--ctl-md)] items-center gap-2.5 rounded-md px-2 text-base text-foreground hover:bg-accent-soft",
+    active && "signal-nav-active",
+  );
+  const inner = (
+    <>
+      <Icon className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "text-muted-foreground")} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {count && (
+        <span className="rounded-full bg-accent-soft px-1.5 font-mono text-2xs text-primary">{count}</span>
+      )}
+      {badge !== undefined && badge > 0 && (
+        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-2xs font-medium leading-none text-primary-foreground">
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
+    </>
+  );
+  if (href) {
+    return (
+      <a href={href} className={cls} aria-current={active ? "page" : undefined}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} aria-pressed={active} className={cn(cls, "w-full text-left")}>
+      {inner}
+    </button>
+  );
+}
+
+function NavStrip({
+  panel,
+  onPanelChange,
+  inboxUnread,
+}: {
+  panel: RailPanel;
+  onPanelChange: (panel: RailPanel) => void;
+  inboxUnread: number;
+}) {
+  return (
+    <nav className="flex flex-col gap-px px-2 pb-1 pt-2">
+      <NavRow Icon={Home} label="Home" href="/home" />
+      <NavRow
+        Icon={SearchIcon}
+        label="Search"
+        count="⌘K"
+        active={panel === "search"}
+        onClick={() => onPanelChange(panel === "search" ? "pages" : "search")}
+      />
+      <NavRow
+        Icon={Inbox}
+        label="Inbox"
+        badge={inboxUnread}
+        active={panel === "inbox"}
+        onClick={() => onPanelChange(panel === "inbox" ? "pages" : "inbox")}
+      />
+      <NavRow
+        Icon={Share2}
+        label="Shared with me"
+        active={panel === "shared"}
+        onClick={() => onPanelChange(panel === "shared" ? "pages" : "shared")}
+      />
+    </nav>
+  );
+}
+
+// Shared-with-me is a nav destination without a backend yet (#313 wires the
+// strip; the feed lands later). An honest empty state keeps the nav coherent.
+function SharedPanel() {
+  return (
+    <div className="px-4 py-8 text-center">
+      <Share2 className="mx-auto h-5 w-5 text-muted-foreground/60" />
+      <p className="mt-2 text-sm font-medium text-foreground">Nothing shared with you yet</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Pages other people share directly will appear here.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Account — pinned to the BOTTOM of the sidebar. Absorbs the rail's user menu
+// and the standalone settings popover (appearance + sign out) into one row.
+// ---------------------------------------------------------------------------
+
+function AccountMenu({ user }: { user: User }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative mt-auto border-t border-sidebar-border">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="Account menu"
+        className="signal-flat signal-focus flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-accent-soft"
+      >
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-[#4a6b8a] text-xs font-medium text-white">
+          {initials(user.name)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-base font-medium text-foreground">{user.name}</span>
+          <span className="block truncate text-xs text-faint">{user.email}</span>
+        </span>
+        <Settings className="h-4 w-4 shrink-0 text-faint" />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="signal-enter absolute bottom-[calc(100%+4px)] left-2 right-2 z-50 rounded-md border border-border-strong bg-popover py-1 shadow-[var(--shadow-signature)]"
+        >
+          <div className="flex items-center justify-between px-3 py-1.5">
+            <span className="text-base text-foreground">Appearance</span>
+            <ThemeToggle />
+          </div>
+          <div className="my-1 border-t border-border" />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={async () => {
+              setOpen(false);
+              const logoutUrl = await logout();
+              window.location.href = logoutUrl ?? "/login";
+            }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-base text-foreground hover:bg-accent-soft"
+          >
+            <LogOut className="h-3.5 w-3.5 text-muted-foreground" />
+            Sign out
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -698,7 +975,7 @@ function PagesPanel({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto py-1">
       <div className="flex items-center justify-between px-3 py-1 group">
-        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+        <span className="font-mono text-2xs uppercase tracking-[0.12em] text-muted-foreground">
           Spaces
         </span>
         <button
@@ -716,7 +993,7 @@ function PagesPanel({
           placeholder="Space name"
           className="flex items-center gap-2 px-3 py-1"
           icon={
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/10 text-[10px] font-semibold text-primary">
+            <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/10 text-2xs font-semibold text-primary">
               ·
             </span>
           }
@@ -758,7 +1035,19 @@ function PagesPanel({
   );
 }
 
-export function AppSidebar({ tree, user, panel, memberCount, showOrgSettings, searchInputRef, onInboxUnreadChange }: Props) {
+export function AppSidebar({
+  tree,
+  user,
+  panel,
+  onPanelChange,
+  memberCount,
+  showOrgSettings,
+  workspaces,
+  userRole,
+  inboxUnread = 0,
+  searchInputRef,
+  onInboxUnreadChange,
+}: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -766,16 +1055,38 @@ export function AppSidebar({ tree, user, panel, memberCount, showOrgSettings, se
     router.refresh();
   }
 
+  // One unified column (#313): switcher (top) → global-nav strip → the active
+  // space's tree / a surfaced panel → account (bottom). Shares the editor's
+  // background (bg-sidebar === bg-background) separated only by a 1px hairline;
+  // one shared 14px type scale (base font-size on the column) across every
+  // region — nav strip, tree, and menus.
   return (
-    <aside className="flex h-full w-[272px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <WorkspaceHeader tree={tree} memberCount={memberCount} showOrgSettings={showOrgSettings} />
+    <aside
+      className="flex h-full w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-base text-sidebar-foreground"
+      aria-label="Workspace navigation"
+    >
+      <WorkspaceSwitcher
+        tree={tree}
+        memberCount={memberCount}
+        showOrgSettings={showOrgSettings}
+        workspaces={workspaces}
+        userRole={userRole}
+      />
 
-      {panel === "pages" && (
-        <PagesPanel tree={tree} activePath={pathname} refresh={refresh} user={user} />
-      )}
-      {panel === "search" && <SearchPanel workspaceId={tree.id} inputRef={searchInputRef} />}
-      {panel === "starred" && <StarredPanel workspaceId={tree.id} />}
-      {panel === "inbox" && <InboxPanel onUnreadChange={onInboxUnreadChange} />}
+      <NavStrip panel={panel} onPanelChange={onPanelChange} inboxUnread={inboxUnread} />
+
+      <div className="mx-3 border-t border-sidebar-border" />
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        {panel === "pages" && (
+          <PagesPanel tree={tree} activePath={pathname} refresh={refresh} user={user} />
+        )}
+        {panel === "search" && <SearchPanel workspaceId={tree.id} inputRef={searchInputRef} />}
+        {panel === "inbox" && <InboxPanel onUnreadChange={onInboxUnreadChange} />}
+        {panel === "shared" && <SharedPanel />}
+      </div>
+
+      {user && <AccountMenu user={user} />}
     </aside>
   );
 }

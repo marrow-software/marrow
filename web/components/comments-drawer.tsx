@@ -126,8 +126,11 @@ export function CommentsDrawer({
   }
 
   return (
+    // Docked side column (#314): sits in a grid cell beside the editor and
+    // reflows it rather than overlaying. min-w keeps content from squishing
+    // while the cell width animates; .signal-enter pops the panel in on open.
     <aside
-      className="absolute inset-y-0 right-0 z-15 flex w-[380px] flex-col border-l border-border bg-card shadow-[-20px_0_40px_-20px_rgba(0,0,0,0.3)]"
+      className="signal-enter flex h-full w-full min-w-60 flex-col border-l border-border bg-background"
       aria-label="Comments"
     >
       <header className="flex items-center gap-2.5 border-b border-border px-4 py-3">
