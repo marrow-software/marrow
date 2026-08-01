@@ -138,7 +138,7 @@
   /* ---------- spaces switcher flyout ---------- */
   /* Floats as a card near the trigger — not a full-height edge panel — with
      a dimmed, blurred backdrop behind it (Confluence's Spaces switcher). */
-  .spaces-scrim { position: absolute; inset: 0; z-index: 24; background: var(--scrim); backdrop-filter: blur(2px); }
+  .spaces-scrim { position: absolute; inset: 0; z-index: 24; background: var(--scrim); }
   /* top/left are set per-open in JS, anchored to the Spaces trigger row —
      these are just a sane fallback if that ever fails to run. */
   .spaces-flyout { position: absolute; top: 18px; left: 18px; width: 320px; max-height: calc(100% - 36px); z-index: 25; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: 0 24px 60px -14px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04); display: flex; flex-direction: column; overflow: hidden; }
