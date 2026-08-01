@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { AppRail, type RailPanel } from "@/components/app-rail";
-import { AppSidebar } from "@/components/app-sidebar";
+import { AppSidebar, type RailPanel } from "@/components/app-sidebar";
 import { WorkspaceTreeProvider } from "@/components/workspace-tree-context";
 import { listNotifications } from "@/lib/api";
 import type { User, Workspace, WorkspaceTree } from "@/lib/types";
@@ -57,26 +56,20 @@ export function WorkspaceShell({ tree, user, memberCount, showOrgSettings, works
 
   return (
     <SidebarProvider>
+      {/* One continuous surface (#313): the unified sidebar shares the editor's
+          background and is set off only by its own 1px hairline border-r. */}
       <div className="flex h-svh w-full overflow-hidden bg-background text-foreground">
-        <AppRail
-          workspaceName={tree.name}
-          currentWorkspaceId={tree.id}
-          panel={panel}
-          onPanelChange={setPanel}
-          sidebarOpen={sidebarOpen}
-          onSidebarToggle={() => setSidebarOpen((v) => !v)}
-          user={user}
-          inboxUnread={inboxUnread}
-          workspaces={workspaces}
-          userRole={userRole}
-        />
         {sidebarOpen && (
           <AppSidebar
             tree={tree}
             user={user}
             panel={panel}
+            onPanelChange={setPanel}
             memberCount={memberCount}
             showOrgSettings={showOrgSettings}
+            workspaces={workspaces}
+            userRole={userRole}
+            inboxUnread={inboxUnread}
             searchInputRef={searchInputRef}
             onInboxUnreadChange={setInboxUnread}
           />
