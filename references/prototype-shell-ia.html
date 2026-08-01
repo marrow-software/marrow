@@ -127,7 +127,12 @@
   .row.space { font-weight: 550; }
   .acc-chev { margin-left: auto; color: var(--faint); font-size: 11px; display: flex; }
   .acc-chev svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
-  .acc-body { padding: 2px 6px 4px; }
+  /* Explicit 13px: this region doesn't share an ancestor with .tree (which
+     also sets 13px for shells A/C), so it silently inherited the 16px body
+     default until this was added — a reminder that the real sidebar
+     component needs one type scale shared across all of its regions, not
+     one set per section that happens to match by eye. */
+  .acc-body { padding: 2px 6px 4px; font-size: 13px; }
   .viewall { font-size: 12px; color: var(--accent); padding: 6px 8px 6px 22px; cursor: pointer; }
   .viewall:hover { text-decoration: underline; }
   /* ---------- spaces switcher flyout ---------- */
@@ -518,8 +523,9 @@ const sidebarB_workspace = (activeNav) => wsswitch +
      <div class="nrow"><span class="icn" style="color:inherit">${ICON.share}</span>Shared with me</div>
      <div class="nrow${activeNav==='spaces'?' active':''}" data-role="spaces-trigger"><span class="icn" style="color:inherit">${ICON.layout}</span>Spaces<span class="acc-chev">${ICON.folderC}</span></div>
    </div>
+   <div class="navdiv"></div>
    <div class="acc-body">
-     <div class="row space sel indent"><span class="tw">${ICON.folderO}</span> Engineering</div>
+     <div class="row space indent"><span class="tw">${ICON.folderO}</span> Engineering</div>
      <div class="row indent2"><span class="tw">${ICON.folderC}</span><span class="ico">${ICON.folder}</span> RFCs</div>
      <div class="row indent2"><span class="tw">${ICON.folderO}</span><span class="ico">${ICON.folder}</span> Runbooks</div>
      <div class="row indent3 sel"><span class="ico">${ICON.page}</span> Incident response</div>
@@ -684,7 +690,7 @@ const DOS = {
   B: { name:'B · Unified Sidebar ★ chosen', thesis:"<b>The direction (maintainer's call, refined).</b> One sidebar, no rail: workspace switcher on top, a global-nav strip (Home · Search · Inbox · Shared), then <b>Spaces</b> — the active space (Engineering) sits expanded inline into its folder/page tree; clicking the Spaces row opens a <b>switcher flyout</b> (filter box, Current + Starred spaces, View all / Create / Import) for jumping elsewhere, Confluence-style. Account pinned bottom. Comments <b>dock as a full side column</b> and reflow the editor — both stay usable, no overlay. Opening <b>Settings replaces the tree</b> in-place with the settings menu behind a <b>Back to workspace</b> row (main pane goes full-width).",
     kv:[['Columns','sidebar · main · panel'],['Global nav','strip atop sidebar'],['Spaces','inline tree + switcher flyout'],['Panel','docked / reflow (both usable)'],['Settings','swaps tree + back button']],
     up:"One nav surface to learn; matches the closest reference (La Suite = same BlockNote engine). Docked panel never covers text (fixes audit #9). Settings reuses the same chrome — no orphan admin screen; back button keeps you oriented. Spaces flyout separates 'browse the current space' from 'switch spaces' instead of overloading one accordion.",
-    dn:"Sidebar carries a lot; with panel open on a small viewport it's three columns — the tree may need to collapse. Flyout overlays the sidebar+main edge — needs a real 'recent spaces' data source, not just starred." },
+    dn:"Sidebar carries a lot; with panel open on a small viewport it's three columns — the tree may need to collapse. Flyout overlays the sidebar+main edge — needs a real 'recent spaces' data source, not just starred. Type scale across the sidebar (nav strip / space tree / flyout) must come from one shared component style, not per-section CSS that happens to match — a prototype-only mismatch here caught this." },
   C: { name:'C · Focus / Top-bar', thesis:"Document-forward. A <b>full-width top bar</b> carries brand, workspace switcher, global nav (Home · Workspace · Inbox) and the command/search box — so the vertical space goes to a <b>collapsible</b> tree + a wide editor. Home and Admin drop the tree entirely and go full-bleed. Context panels <b>slide over</b> from the edge.",
     kv:[['Layout','top bar + [tree · main]'],['Global nav','top bar'],['Workspace nav','collapsible tree'],['Panel','slide-over'],['Home vs ws','top-bar switch; tree hides']],
     up:"Most screen for the document; calmest reading surface. Global actions always one place (top). Collapse gives a true focus mode. Scales cleanly to home/admin (no tree).",
