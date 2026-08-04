@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { PanelLeftOpen } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar, type RailPanel } from "@/components/app-sidebar";
 import { WorkspaceTreeProvider } from "@/components/workspace-tree-context";
@@ -74,7 +75,20 @@ export function WorkspaceShell({ tree, user, memberCount, showOrgSettings, works
             onInboxUnreadChange={setInboxUnread}
           />
         )}
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Reopen affordance — the unified sidebar unmounts on ⌘/Ctrl+B, so
+              when it's collapsed this is the only on-screen way back (#319 review). */}
+          {!sidebarOpen && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open sidebar"
+              title="Open sidebar (⌘B)"
+              className="signal-raised signal-focus absolute left-2 top-2 z-20 flex h-[var(--ctl-md)] w-[var(--ctl-md)] items-center justify-center rounded-md border border-border bg-background text-muted-foreground hover:text-foreground"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </button>
+          )}
           <WorkspaceTreeProvider tree={tree}>{children}</WorkspaceTreeProvider>
         </main>
       </div>

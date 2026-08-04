@@ -56,13 +56,21 @@ export function ExportDialog({ workspaceId, workspaceName }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogTrigger render={<button type="button" className="contents" />}>
-        <span
-          className="hidden group-hover:flex items-center text-muted-foreground hover:text-foreground cursor-pointer"
-          title="Export workspace"
-        >
-          <Download className="h-3.5 w-3.5" />
-        </span>
+      {/* Self-contained, always-visible menu-item trigger. (It previously
+          relied on a parent `.group` hover to reveal a bare icon, which left
+          it invisible once moved into the switcher menu — see #319 review.) */}
+      <DialogTrigger
+        render={
+          <button
+            type="button"
+            role="menuitem"
+            title="Export workspace"
+            className="signal-flat signal-focus flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-base text-muted-foreground hover:bg-accent-soft hover:text-foreground"
+          />
+        }
+      >
+        <Download className="h-3.5 w-3.5 shrink-0" />
+        Export workspace
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-sm">
