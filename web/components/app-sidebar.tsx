@@ -599,9 +599,8 @@ function WorkspaceSwitcher({
               <div className="my-1 border-t border-border" />
             </>
           )}
-          <div className="flex items-center gap-1 px-2 py-0.5">
+          <div className="px-2">
             <ExportDialog workspaceId={tree.id} workspaceName={tree.name} />
-            <span className="text-sm text-muted-foreground">Export workspace</span>
           </div>
           {showOrgSettings && (
             <a
