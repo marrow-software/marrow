@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ArrowDownToLine,
   Check,
   ChevronDown,
   ChevronRight,
@@ -13,11 +14,14 @@ import {
   FolderPlus,
   Home,
   Inbox,
+  Layers,
+  LayoutGrid,
   LogOut,
   Plus,
   Search as SearchIcon,
   Settings,
   Share2,
+  X,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
@@ -37,11 +41,7 @@ import {
 import { generateKeyBetween } from "fractional-indexing";
 import { toast } from "sonner";
 import { ExportDialog } from "@/components/export-dialog";
-import {
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-} from "@/components/ui/sidebar";
+import { SidebarGroup, SidebarGroupContent } from "@/components/ui/sidebar";
 import { InlineCreateRow } from "@/components/sidebar/inline-create-row";
 import { createNode, createSpace, slugify, updateNode } from "@/lib/api";
 import { SearchPanel } from "@/components/rail-panels/search-panel";
@@ -74,19 +74,38 @@ function initials(name?: string | null) {
   return letters || name[0]?.toUpperCase() || "?";
 }
 
-// Menu open-state + click-outside-to-dismiss, shared by the workspace switcher
-// and account menu so the dismiss scaffold lives in one place.
-function useDismissableMenu() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+// Dismiss-on-outside-click + Escape, for any menu/flyout. The single dismissal
+// scaffold in this file — both the self-stated menus (via useDismissableMenu)
+// and the externally-controlled Spaces flyout (via SpacesNav) build on it.
+function useOutsideDismiss(
+  ref: React.RefObject<HTMLElement | null>,
+  open: boolean,
+  onClose: () => void,
+) {
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
     }
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [ref, open, onClose]);
+}
+
+// Menu open-state + dismissal, shared by the workspace switcher and account menu
+// so the dismiss scaffold lives in one place.
+function useDismissableMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useOutsideDismiss(ref, open, close);
   return { open, setOpen, ref };
 }
 
@@ -96,6 +115,12 @@ function useDismissableMenu() {
 
 function openStateKey(workspaceId: string, userId: string | null | undefined) {
   return `marrow.tree.open.${userId ?? "anon"}.${workspaceId}`;
+}
+
+// Last space picked in the Spaces flyout (#316) — remembered per workspace per
+// user so the sidebar reopens on the space you were browsing.
+function currentSpaceKey(workspaceId: string, userId: string | null | undefined) {
+  return `marrow.space.current.${userId ?? "anon"}.${workspaceId}`;
 }
 
 function loadOpenState(key: string): Record<string, boolean> {
@@ -258,7 +283,7 @@ function NodeRow({
               href={href}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
-              className={`flex-1 truncate text-sm ${
+              className={`flex-1 truncate text-base ${
                 isActive
                   ? "font-medium text-foreground"
                   : "text-foreground/90 hover:text-foreground"
@@ -274,7 +299,7 @@ function NodeRow({
                 toggleFolder();
               }}
               onPointerDown={(e) => e.stopPropagation()}
-              className="flex-1 truncate text-left text-sm text-foreground/90 hover:text-foreground"
+              className="flex-1 truncate text-left text-base text-foreground/90 hover:text-foreground"
             >
               {node.name}
             </button>
@@ -428,16 +453,23 @@ function SpaceSection({
 
   return (
     <SidebarGroup>
-      <div className="group flex items-center justify-between">
-        <SidebarGroupLabel
-          className="flex flex-1 cursor-pointer items-center gap-2"
+      {/* The active space renders as a plain label (#316) — no accent/selected
+          treatment, so it never implies a picked item. It is a disclosure for
+          the tree below it, not a switcher (that's the Spaces flyout). */}
+      <div className="group flex items-center justify-between px-1">
+        <button
+          type="button"
           onClick={() => ctx.setOpen(headerKey, !isOpen)}
+          aria-expanded={isOpen}
+          className="flex flex-1 items-center gap-1.5 rounded-md px-1 py-1 text-left text-base font-medium text-foreground"
         >
-          <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/10 text-2xs font-semibold text-primary">
-            {space.name[0]?.toUpperCase()}
-          </span>
-          {space.name}
-        </SidebarGroupLabel>
+          {isOpen ? (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className="truncate">{space.name}</span>
+        </button>
         <div className="mr-2 hidden gap-0.5 group-hover:flex">
           <button
             type="button"
@@ -624,6 +656,15 @@ function WorkspaceSwitcher({
 // icon rail; the panels surface here in place of a separate rail flyout.
 // ---------------------------------------------------------------------------
 
+// One class string for every row in the nav strip — the Spaces trigger reuses
+// it so the whole strip shares one type + spacing scale (#316 AC), not per-row CSS.
+function navRowClass(active?: boolean) {
+  return cn(
+    "signal-flat signal-focus flex h-[var(--ctl-md)] items-center gap-2.5 rounded-md px-2 text-base text-foreground hover:bg-accent-soft",
+    active && "signal-nav-active",
+  );
+}
+
 function NavRow({
   Icon,
   label,
@@ -641,10 +682,7 @@ function NavRow({
   href?: string;
   onClick?: () => void;
 }) {
-  const cls = cn(
-    "signal-flat signal-focus flex h-[var(--ctl-md)] items-center gap-2.5 rounded-md px-2 text-base text-foreground hover:bg-accent-soft",
-    active && "signal-nav-active",
-  );
+  const cls = navRowClass(active);
   const inner = (
     <>
       <Icon className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "text-muted-foreground")} />
@@ -677,10 +715,12 @@ function NavStrip({
   panel,
   onPanelChange,
   inboxUnread,
+  spacesSlot,
 }: {
   panel: RailPanel;
   onPanelChange: (panel: RailPanel) => void;
   inboxUnread: number;
+  spacesSlot: React.ReactNode;
 }) {
   return (
     <nav className="flex flex-col gap-px px-2 pb-1 pt-2">
@@ -705,6 +745,9 @@ function NavStrip({
         active={panel === "shared"}
         onClick={() => onPanelChange(panel === "shared" ? "pages" : "shared")}
       />
+      {/* Spaces splits switching from browsing (#316): the row opens a floating
+          switcher flyout; the current space's tree lives below the divider. */}
+      {spacesSlot}
     </nav>
   );
 }
@@ -719,6 +762,226 @@ function SharedPanel() {
       <p className="mt-1 text-sm text-muted-foreground">
         Pages other people share directly will appear here.
       </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Spaces switcher (#316) — the nav-strip trigger + its floating flyout. Splits
+// "switch spaces" (this flyout) from "browse the current space" (the inline
+// tree below the divider). The flyout floats as a lightweight card beside the
+// row — no scrim, no backdrop blur — so it reads as a menu, not an edge panel.
+// ---------------------------------------------------------------------------
+
+function FlyoutLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-2 pb-1 pt-2 font-mono text-2xs font-semibold uppercase tracking-widest text-faint">
+      {children}
+    </p>
+  );
+}
+
+// One class string for every interactive row in the flyout (space picks +
+// actions) — the flyout's counterpart to navRowClass, so the region shares one
+// style rather than repeating it per row (#316 AC).
+function flyoutRowClass() {
+  return "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-base text-foreground hover:bg-accent-soft";
+}
+
+function SpacePickRow({ space, onPick }: { space: SpaceTreeItem; onPick: (id: string) => void }) {
+  return (
+    <button type="button" role="menuitem" onClick={() => onPick(space.id)} className={flyoutRowClass()}>
+      <span className="flex size-6 shrink-0 items-center justify-center rounded bg-primary/10 text-2xs font-semibold text-primary">
+        {space.name[0]?.toUpperCase()}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{space.name}</span>
+    </button>
+  );
+}
+
+function SpacesFlyout({
+  spaces,
+  currentSpaceId,
+  workspaceId,
+  orgId,
+  onPick,
+  onClose,
+  refresh,
+}: {
+  spaces: SpaceTreeItem[];
+  currentSpaceId: string | null;
+  workspaceId: string;
+  orgId: string;
+  onPick: (spaceId: string) => void;
+  onClose: () => void;
+  refresh: () => void;
+}) {
+  const [filter, setFilter] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const current = spaces.find((s) => s.id === currentSpaceId) ?? null;
+  const q = filter.trim().toLowerCase();
+  const matches = (s: SpaceTreeItem) => s.name.toLowerCase().includes(q);
+  const others = spaces.filter((s) => s.id !== currentSpaceId && matches(s));
+  const currentShown = current && matches(current) ? current : null;
+
+  function pick(spaceId: string) {
+    onPick(spaceId);
+    onClose();
+  }
+
+  return (
+    // Anchored beside the Spaces row's arrow (left-full + ml-2), floating as a
+    // card — no scrim/blur. Enters with .signal-enter (--pop-from upward-translate
+    // + fade over --dur-enter). Inherits the sidebar column's --text-base so every
+    // row matches the tree + nav strip (#316 AC — one shared scale, not per-region).
+    <div
+      role="menu"
+      aria-label="Switch space"
+      className="signal-enter absolute left-full top-0 z-50 ml-2 flex max-h-[70vh] w-72 origin-top-left flex-col rounded-md border border-border-strong bg-popover shadow-[var(--shadow-signature)]"
+    >
+      <div className="flex items-center justify-between px-3 pb-2 pt-2.5">
+        <span className="text-base font-medium text-foreground">Spaces</span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="signal-focus rounded text-faint hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="px-3 pb-2">
+        <div className="flex h-[var(--ctl-md)] items-center gap-2 rounded-md border border-border-strong bg-background px-2">
+          <SearchIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <input
+            autoFocus
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter spaces"
+            aria-label="Filter spaces"
+            className="w-full bg-transparent text-base text-foreground outline-none placeholder:text-faint"
+          />
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        {currentShown && (
+          <>
+            <FlyoutLabel>Current</FlyoutLabel>
+            <SpacePickRow space={currentShown} onPick={pick} />
+            <div className="my-1.5 border-t border-border" />
+          </>
+        )}
+
+        {/* Phase 1 has no space-star backend, so this section lists every other
+            space rather than a "Starred" subset (the prototype dossier flagged
+            starred spaces as awaiting a real data source). */}
+        <FlyoutLabel>All spaces</FlyoutLabel>
+        {others.length > 0 ? (
+          others.map((s) => <SpacePickRow key={s.id} space={s} onPick={pick} />)
+        ) : (
+          <p className="px-2 py-1.5 text-base text-muted-foreground">
+            {q ? "No spaces match" : "No other spaces"}
+          </p>
+        )}
+
+        <div className="my-1.5 border-t border-border" />
+
+        <a href={`/orgs/${orgId}/admin?section=spaces`} role="menuitem" onClick={onClose} className={flyoutRowClass()}>
+          <LayoutGrid className="h-4 w-4 shrink-0 text-muted-foreground" />
+          View all spaces
+        </a>
+
+        {creating ? (
+          <InlineCreateRow
+            placeholder="Space name"
+            className="flex items-center gap-2 rounded-md px-2 py-1"
+            icon={<Plus className="h-4 w-4 shrink-0 text-muted-foreground" />}
+            onCommit={async (name) => {
+              const created = await createSpace(workspaceId, slugify(name), name);
+              setCreating(false);
+              refresh();
+              pick(created.id);
+            }}
+            onCancel={() => setCreating(false)}
+          />
+        ) : (
+          <button type="button" role="menuitem" onClick={() => setCreating(true)} className={flyoutRowClass()}>
+            <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
+            Create a space
+          </button>
+        )}
+
+        {/* Import is planned IA, not yet built — an honest disabled stub (cf. the
+            "Shared with me" empty state), never a dead click. */}
+        <div
+          className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-base text-faint"
+          aria-disabled="true"
+          title="Coming soon"
+        >
+          <ArrowDownToLine className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">Import from other tools</span>
+          <span className="shrink-0 font-mono text-2xs uppercase tracking-widest">Soon</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SpacesNav({
+  spaces,
+  currentSpaceId,
+  active,
+  open,
+  onToggle,
+  onClose,
+  onPick,
+  workspaceId,
+  orgId,
+  refresh,
+}: {
+  spaces: SpaceTreeItem[];
+  currentSpaceId: string | null;
+  active: boolean;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onPick: (spaceId: string) => void;
+  workspaceId: string;
+  orgId: string;
+  refresh: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useOutsideDismiss(ref, open, onClose);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className={navRowClass(active)}
+      >
+        <Layers className={cn("h-4 w-4 shrink-0", active ? "text-primary" : "text-muted-foreground")} />
+        <span className="min-w-0 flex-1 truncate text-left">Spaces</span>
+        <ChevronRight
+          className={cn("h-3.5 w-3.5 shrink-0 text-faint transition-transform", open && "rotate-90")}
+        />
+      </button>
+      {open && (
+        <SpacesFlyout
+          spaces={spaces}
+          currentSpaceId={currentSpaceId}
+          workspaceId={workspaceId}
+          orgId={orgId}
+          onPick={onPick}
+          onClose={onClose}
+          refresh={refresh}
+        />
+      )}
     </div>
   );
 }
@@ -833,17 +1096,20 @@ function isDescendant(spaces: SpaceTreeItem[], rootId: string, candidateId: stri
 
 function PagesPanel({
   tree,
+  currentSpaceId,
   activePath,
   refresh,
   user,
 }: {
   tree: WorkspaceTree;
+  currentSpaceId: string | null;
   activePath: string;
   refresh: () => void;
   user?: User | null;
 }) {
-  const [creatingSpace, setCreatingSpace] = useState(false);
   const [dragNodeName, setDragNodeName] = useState<string | null>(null);
+  // Browse the current space only (#316); switching happens in the Spaces flyout.
+  const currentSpace = tree.spaces.find((s) => s.id === currentSpaceId) ?? null;
 
   const storageKey = useMemo(() => openStateKey(tree.id, user?.id), [tree.id, user?.id]);
   const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
@@ -962,37 +1228,6 @@ function PagesPanel({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto py-1">
-      <div className="flex items-center justify-between px-3 py-1 group">
-        <span className="font-mono text-2xs uppercase tracking-[0.12em] text-muted-foreground">
-          Spaces
-        </span>
-        <button
-          type="button"
-          onClick={() => setCreatingSpace(true)}
-          className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"
-          title="New space"
-          aria-label="New space"
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      {creatingSpace && (
-        <InlineCreateRow
-          placeholder="Space name"
-          className="flex items-center gap-2 px-3 py-1"
-          icon={
-            <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/10 text-2xs font-semibold text-primary">
-              ·
-            </span>
-          }
-          onCommit={async (name) => {
-            await createSpace(tree.id, slugify(name), name);
-            setCreatingSpace(false);
-            refresh();
-          }}
-          onCancel={() => setCreatingSpace(false)}
-        />
-      )}
       <DndContext
         id={`marrow-sidebar-${tree.id}`}
         sensors={sensors}
@@ -1000,25 +1235,24 @@ function PagesPanel({
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
-        {tree.spaces.map((space) => (
-          <SpaceSection key={space.id} space={space} ctx={ctx} onCreated={refresh} />
-        ))}
+        {currentSpace ? (
+          <SpaceSection key={currentSpace.id} space={currentSpace} ctx={ctx} onCreated={refresh} />
+        ) : (
+          <div className="px-4 py-6 text-center">
+            <p className="text-sm font-medium text-foreground">No spaces yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Open <strong>Spaces</strong> above to create one.
+            </p>
+          </div>
+        )}
         <DragOverlay>
           {dragNodeName && (
-            <div className="rounded border border-border bg-popover px-2 py-1 text-sm shadow">
+            <div className="rounded border border-border bg-popover px-2 py-1 text-base shadow">
               {dragNodeName}
             </div>
           )}
         </DragOverlay>
       </DndContext>
-      {!creatingSpace && tree.spaces.length === 0 && (
-        <div className="px-4 py-6 text-center">
-          <p className="text-xs text-muted-foreground">No spaces yet</p>
-          <p className="mt-1 text-xs text-muted-foreground/70">
-            Hover <strong>Spaces</strong> above and click <strong>+</strong> to create one.
-          </p>
-        </div>
-      )}
     </div>
   );
 }
@@ -1043,6 +1277,53 @@ export function AppSidebar({
     router.refresh();
   }
 
+  // --- Current space (#316) -------------------------------------------------
+  // The tree browses one space. Which one is: the space of the page you're on
+  // (route wins), else the space you last picked in the flyout, else the first.
+  const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
+  const [spacesOpen, setSpacesOpen] = useState(false);
+  const spaceKey = useMemo(() => currentSpaceKey(tree.id, user?.id), [tree.id, user?.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      setSelectedSpaceId(window.localStorage.getItem(spaceKey));
+    } catch {
+      setSelectedSpaceId(null);
+    }
+  }, [spaceKey]);
+
+  // Navigating (route change) closes the flyout — picking a page is a commit.
+  useEffect(() => {
+    setSpacesOpen(false);
+  }, [pathname]);
+
+  const spaceFromRoute = useMemo(() => {
+    const m = pathname.match(/\/w\/[^/]+\/n\/([^/]+)/);
+    return m ? findNode(tree.spaces, m[1])?.spaceId ?? null : null;
+  }, [pathname, tree.spaces]);
+
+  const currentSpaceId = useMemo(() => {
+    if (spaceFromRoute) return spaceFromRoute;
+    if (selectedSpaceId && tree.spaces.some((s) => s.id === selectedSpaceId)) return selectedSpaceId;
+    return tree.spaces[0]?.id ?? null;
+  }, [spaceFromRoute, selectedSpaceId, tree.spaces]);
+
+  const selectSpace = useCallback(
+    (id: string) => {
+      setSelectedSpaceId(id);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(spaceKey, id);
+        } catch {
+          // localStorage may be full or disabled; ignore
+        }
+      }
+      onPanelChange("pages");
+    },
+    [spaceKey, onPanelChange],
+  );
+
   // One unified column (#313): switcher (top) → global-nav strip → the active
   // space's tree / a surfaced panel → account (bottom). Shares the editor's
   // background (bg-sidebar === bg-background) separated only by a 1px hairline;
@@ -1061,13 +1342,42 @@ export function AppSidebar({
         userRole={userRole}
       />
 
-      <NavStrip panel={panel} onPanelChange={onPanelChange} inboxUnread={inboxUnread} />
+      <NavStrip
+        panel={panel}
+        onPanelChange={onPanelChange}
+        inboxUnread={inboxUnread}
+        spacesSlot={
+          <SpacesNav
+            spaces={tree.spaces}
+            currentSpaceId={currentSpaceId}
+            active={panel === "pages"}
+            open={spacesOpen}
+            onToggle={() => {
+              onPanelChange("pages");
+              setSpacesOpen((v) => !v);
+            }}
+            onClose={() => setSpacesOpen(false)}
+            onPick={selectSpace}
+            workspaceId={tree.id}
+            orgId={tree.org_id}
+            refresh={refresh}
+          />
+        }
+      />
 
+      {/* Divider (#316 AC): separates the Spaces switcher trigger above from the
+          current-space label + tree below. */}
       <div className="mx-3 border-t border-sidebar-border" />
 
       <div className="flex min-h-0 flex-1 flex-col">
         {panel === "pages" && (
-          <PagesPanel tree={tree} activePath={pathname} refresh={refresh} user={user} />
+          <PagesPanel
+            tree={tree}
+            currentSpaceId={currentSpaceId}
+            activePath={pathname}
+            refresh={refresh}
+            user={user}
+          />
         )}
         {panel === "search" && <SearchPanel workspaceId={tree.id} inputRef={searchInputRef} />}
         {panel === "inbox" && <InboxPanel onUnreadChange={onInboxUnreadChange} />}
