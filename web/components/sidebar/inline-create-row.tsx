@@ -40,11 +40,16 @@ export function InlineCreateRow({
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    // While this input is focused it owns Enter/Escape — stop them bubbling to
+    // ancestor keydown listeners (e.g. a menu/flyout that closes on Escape), so
+    // Escape only cancels create mode rather than also dismissing the container.
     if (e.key === "Enter") {
       e.preventDefault();
+      e.stopPropagation();
       commit();
     } else if (e.key === "Escape") {
       e.preventDefault();
+      e.stopPropagation();
       onCancel();
     }
   }
