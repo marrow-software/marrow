@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BookOpen,
@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getBacklinks, getWatchStatus, unwatchNode, watchNode } from "@/lib/api";
+import { useOutsideDismiss } from "@/hooks/use-outside-dismiss";
 
 export type PageMenuDrawer = "backlinks" | "history";
 
@@ -155,16 +156,8 @@ export function PageMenu({
     }
   }
 
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (!wrapperRef.current?.contains(e.target as Node)) {
-        onOpenChange(false);
-      }
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open, onOpenChange]);
+  const closeMenu = useCallback(() => onOpenChange(false), [onOpenChange]);
+  useOutsideDismiss(wrapperRef, open, closeMenu);
 
   return (
     <div ref={wrapperRef} className="relative">

@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn, initials } from "@/lib/utils";
+import { useDismissableMenu, useOutsideDismiss } from "@/hooks/use-outside-dismiss";
+import { flyoutRowClass, navRowClass } from "@/components/sidebar/row-styles";
 import { logout } from "@/lib/api";
 import {
   DndContext,
@@ -67,41 +69,6 @@ interface Props {
   onInboxUnreadChange?: (count: number) => void;
 }
 
-// Dismiss-on-outside-click + Escape, for any menu/flyout. The single dismissal
-// scaffold in this file — both the self-stated menus (via useDismissableMenu)
-// and the externally-controlled Spaces flyout (via SpacesNav) build on it.
-function useOutsideDismiss(
-  ref: React.RefObject<HTMLElement | null>,
-  open: boolean,
-  onClose: () => void,
-) {
-  useEffect(() => {
-    if (!open) return;
-    function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [ref, open, onClose]);
-}
-
-// Menu open-state + dismissal, shared by the workspace switcher and account menu
-// so the dismiss scaffold lives in one place.
-function useDismissableMenu() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const close = useCallback(() => setOpen(false), []);
-  useOutsideDismiss(ref, open, close);
-  return { open, setOpen, ref };
-}
-
 // ---------------------------------------------------------------------------
 // Tree-state persistence (open/closed folders) — per workspace per user
 // ---------------------------------------------------------------------------
@@ -130,6 +97,26 @@ function saveOpenState(key: string, state: Record<string, boolean>) {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(key, JSON.stringify(state));
+  } catch {
+    // localStorage may be full or disabled; ignore
+  }
+}
+
+// Guarded scalar localStorage access (SSR-safe, swallows quota/disabled errors)
+// — used for the last-picked space so both read and write share one try/catch.
+function loadString(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function saveString(key: string, value: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, value);
   } catch {
     // localStorage may be full or disabled; ignore
   }
@@ -649,15 +636,6 @@ function WorkspaceSwitcher({
 // icon rail; the panels surface here in place of a separate rail flyout.
 // ---------------------------------------------------------------------------
 
-// One class string for every row in the nav strip — the Spaces trigger reuses
-// it so the whole strip shares one type + spacing scale (#316 AC), not per-row CSS.
-function navRowClass(active?: boolean) {
-  return cn(
-    "signal-flat signal-focus flex h-[var(--ctl-md)] items-center gap-2.5 rounded-md px-2 text-base text-foreground hover:bg-accent-soft",
-    active && "signal-nav-active",
-  );
-}
-
 function NavRow({
   Icon,
   label,
@@ -772,13 +750,6 @@ function FlyoutLabel({ children }: { children: React.ReactNode }) {
       {children}
     </p>
   );
-}
-
-// One class string for every interactive row in the flyout (space picks +
-// actions) — the flyout's counterpart to navRowClass, so the region shares one
-// style rather than repeating it per row (#316 AC).
-function flyoutRowClass() {
-  return "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-base text-foreground hover:bg-accent-soft";
 }
 
 function SpacePickRow({ space, onPick }: { space: SpaceTreeItem; onPick: (id: string) => void }) {
@@ -1278,12 +1249,7 @@ export function AppSidebar({
   const spaceKey = useMemo(() => currentSpaceKey(tree.id, user?.id), [tree.id, user?.id]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      setSelectedSpaceId(window.localStorage.getItem(spaceKey));
-    } catch {
-      setSelectedSpaceId(null);
-    }
+    setSelectedSpaceId(loadString(spaceKey));
   }, [spaceKey]);
 
   // Navigating (route change) closes the flyout — picking a page is a commit.
@@ -1305,13 +1271,7 @@ export function AppSidebar({
   const selectSpace = useCallback(
     (id: string) => {
       setSelectedSpaceId(id);
-      if (typeof window !== "undefined") {
-        try {
-          window.localStorage.setItem(spaceKey, id);
-        } catch {
-          // localStorage may be full or disabled; ignore
-        }
-      }
+      saveString(spaceKey, id);
       onPanelChange("pages");
     },
     [spaceKey, onPanelChange],
