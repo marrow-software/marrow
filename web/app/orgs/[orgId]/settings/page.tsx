@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,9 @@ const ROLES = ["owner", "editor", "viewer"] as const;
 
 export default function OrgSettingsPage() {
   const { orgId } = useParams<{ orgId: string }>();
+  // Origin workspace (#317) — forwarded to the admin dashboard so its
+  // "Back to [workspace]" row can return to the space tree.
+  const fromWorkspace = useSearchParams().get("ws");
   const [org, setOrg] = useState<Organization | null>(null);
   const [members, setMembers] = useState<OrgMembership[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -112,7 +115,7 @@ export default function OrgSettingsPage() {
             <p className="text-sm text-muted-foreground">Organization settings</p>
           </div>
           <Link
-            href={`/orgs/${orgId}/admin`}
+            href={fromWorkspace ? `/orgs/${orgId}/admin?ws=${fromWorkspace}` : `/orgs/${orgId}/admin`}
             className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
           >
             <LayoutDashboard className="h-3.5 w-3.5" />

@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
-import { ArrowLeft, ShieldAlert } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import { getOrg, listOrgMembers, getAuthStatus } from "@/lib/api";
-import type { AuthStatus, Organization, OrgMembership } from "@/lib/types";
+import { getOrg, listOrgMembers, getAuthStatus, listWorkspaces } from "@/lib/api";
+import type { AuthStatus, Organization, OrgMembership, Workspace } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type SectionDef = { id: string; label: string };
@@ -42,25 +42,43 @@ const NAV_GROUPS: GroupDef[] = [
   },
 ];
 
+function initials(name?: string | null) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  const letters = parts
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+  return letters || name[0]?.toUpperCase() || "?";
+}
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { orgId } = useParams<{ orgId: string }>();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeSection = searchParams.get("section") ?? "mission-control";
+  // The workspace the user opened settings from (#317). Entry points pass it so
+  // the "Back to [workspace]" row can return to the exact tree; deep links that
+  // omit it fall back to Home.
+  const fromWorkspace = searchParams.get("ws");
 
   const [org, setOrg] = useState<Organization | null>(null);
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [myMembership, setMyMembership] = useState<OrgMembership | null>(null);
+  const [backWorkspace, setBackWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [o, m, a] = await Promise.all([
+        const [o, m, a, ws] = await Promise.all([
           getOrg(orgId),
           listOrgMembers(orgId).catch(() => [] as OrgMembership[]),
           getAuthStatus().catch(() => null),
+          fromWorkspace
+            ? listWorkspaces().catch(() => [] as Workspace[])
+            : Promise.resolve([] as Workspace[]),
         ]);
         if (cancelled) return;
         setOrg(o);
@@ -69,6 +87,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           const mine = m.find((mm) => mm.user_id === a.user!.id) ?? null;
           setMyMembership(mine);
         }
+        setBackWorkspace(fromWorkspace ? ws.find((w) => w.id === fromWorkspace) ?? null : null);
       } catch (err) {
         if (!cancelled) toast.error(String(err));
       } finally {
@@ -78,7 +97,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [orgId, fromWorkspace]);
 
   if (loading) {
     return <div className="p-8 text-muted-foreground">Loading admin…</div>;
@@ -106,46 +125,53 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  return (
-    <div className="flex min-h-screen">
-      <aside className="w-64 border-r bg-muted/30 p-4 space-y-6">
-        <div className="space-y-2">
-          <Link
-            href="/workspaces"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            Workspaces
-          </Link>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Admin
-            </p>
-            <h2 className="font-semibold truncate">{org?.name ?? "Organization"}</h2>
-          </div>
-        </div>
+  // "Back to [workspace]" (#317). Prefer the origin workspace passed via ?ws=;
+  // otherwise fall back to Home so the row is never a dead end.
+  const backHref = backWorkspace ? `/w/${backWorkspace.id}` : "/home";
+  const backLabel = backWorkspace ? `Back to ${backWorkspace.name}` : "Back to Home";
 
-        <nav className="space-y-5">
+  // Settings replaces the tree in place (#317): one unified sidebar column that
+  // mirrors the workspace shell's chrome — a "Back to [workspace]" row above the
+  // settings menu, the menu at the shared --text-base scale, and a full-width
+  // main pane. No orphan two-column admin screen.
+  return (
+    <div className="flex h-svh w-full overflow-hidden bg-background text-foreground">
+      <aside
+        className="flex h-full w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-base text-sidebar-foreground"
+        aria-label="Settings navigation"
+      >
+        {/* Back row — returns to the space tree it came from (or Home). */}
+        <Link
+          href={backHref}
+          className="signal-flat signal-focus flex items-center gap-2 border-b border-sidebar-border px-3 py-3 text-base font-medium text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{backLabel}</span>
+        </Link>
+
+        <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="space-y-1">
-              <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <div key={group.label} className="mb-2">
+              <p className="px-2 pb-1 pt-2 font-mono text-2xs font-semibold uppercase tracking-widest text-faint">
                 {group.label}
               </p>
-              <ul className="space-y-0.5">
+              <ul className="flex flex-col gap-px">
                 {group.items.map((item) => {
                   const isActive = activeSection === item.id;
+                  const href = fromWorkspace
+                    ? `${pathname}?section=${item.id}&ws=${fromWorkspace}`
+                    : `${pathname}?section=${item.id}`;
                   return (
                     <li key={item.id}>
                       <Link
-                        href={`${pathname}?section=${item.id}`}
+                        href={href}
+                        aria-current={isActive ? "page" : undefined}
                         className={cn(
-                          "block rounded px-2 py-1.5 text-sm transition-colors",
-                          isActive
-                            ? "bg-accent text-accent-foreground font-medium"
-                            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                          "signal-flat signal-focus flex h-[var(--ctl-md)] items-center rounded-md px-2 text-base text-foreground hover:bg-accent-soft",
+                          isActive && "signal-nav-active",
                         )}
                       >
-                        {item.label}
+                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
                       </Link>
                     </li>
                   );
@@ -154,9 +180,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           ))}
         </nav>
+
+        {auth?.user && (
+          <div className="mt-auto flex items-center gap-2.5 border-t border-sidebar-border px-3 py-2.5">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted-foreground text-xs font-medium text-background">
+              {initials(auth.user.name)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-base font-medium text-foreground">
+                {auth.user.name}
+              </span>
+              <span className="block truncate text-xs text-faint">
+                {org?.name ?? auth.user.email}
+              </span>
+            </span>
+          </div>
+        )}
       </aside>
 
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="min-w-0 flex-1 overflow-auto">{children}</main>
     </div>
   );
 }
