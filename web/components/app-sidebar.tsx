@@ -636,7 +636,7 @@ function WorkspaceSwitcher({
           </div>
           {showOrgSettings && (
             <a
-              href={`/orgs/${tree.org_id}/settings`}
+              href={`/orgs/${tree.org_id}/settings?ws=${tree.id}`}
               role="menuitem"
               onClick={() => setOpen(false)}
               className="flex items-center gap-2 px-3 py-1.5 text-base text-muted-foreground hover:bg-accent-soft hover:text-foreground"
@@ -889,7 +889,7 @@ function SpacesFlyout({
 
         <div className="my-1.5 border-t border-border" />
 
-        <a href={`/orgs/${orgId}/admin?section=spaces`} role="menuitem" onClick={onClose} className={flyoutRowClass()}>
+        <a href={`/orgs/${orgId}/admin?section=spaces&ws=${workspaceId}`} role="menuitem" onClick={onClose} className={flyoutRowClass()}>
           <LayoutGrid className="h-4 w-4 shrink-0 text-muted-foreground" />
           View all spaces
         </a>
