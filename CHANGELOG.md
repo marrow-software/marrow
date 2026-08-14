@@ -9,6 +9,52 @@ steps) on its [GitHub release](https://github.com/marrow-software/marrow/release
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-14
+
+The **Signal** design-system rebuild (Phase 1 of the wayfinder map [#258](https://github.com/marrow-software/marrow/issues/258), spec [#311](https://github.com/marrow-software/marrow/issues/311)). The app's visual foundation and shell are rebuilt to one deliberate system — a restrained spruce accent used only for interaction, a biased neutral surface, a real type ramp, and crisp minimal motion — so the product reads as engineered rather than a stock template. This is a `web/`-only release: no API, schema, route, or export-bundle changes, so self-hosted upgrades need no migration.
+
+### Added
+- **Signal token layer** (#312) — `web/app/globals.css` is now the single seam
+  carrying identity, type, and motion as named CSS custom properties: the spruce
+  accent (`#0f766e` light / `#3aa88f` dark), a biased-neutral surface set, the
+  `--text-*`/`--h*` type ramp, the `--s*` spacing scale and `--ctl-*` control
+  heights, `--measure`, the `--dur-*`/`--ease-signature` motion tokens, the
+  layered `--shadow-signature`, and a light-only `--texture-grain`.
+- Token-contract regression guard (`web/scripts/check-tokens.mjs`,
+  `npm run test:tokens`, wired into web CI) — fails if a retired identity token
+  reappears or a Signal signature token goes missing. (#312)
+- Signature feedback set on shell/editor primitives (`ui/{button,input,badge}`,
+  shell + comments overlays): flat→signature hover shadow-step, 1px press,
+  instant 3px focus ring, `--pop-from` overlay entrance. Reduced motion honored
+  throughout. (#315)
+- **Spaces switcher flyout** (#316) — a floating switcher (filter box, current +
+  other spaces, view-all / create / import) splits *switching* spaces from
+  *browsing* the current one; the inline tree below browses the current space
+  only.
+
+### Changed
+- **Unified sidebar shell** (#313) — the separate icon rail and tree collapse
+  into one column: workspace switcher (top) → global-nav strip
+  (Home · Search · Inbox · Shared) → current-space tree → account (bottom).
+  Search/Inbox surface in place of the tree; ⌘/Ctrl+B toggles the sidebar.
+- **Comments dock** (#314) — the comments panel docks as a side column and
+  reflows the editor narrower rather than overlaying it; the reflow is the one
+  allowed layout animation.
+- **Settings in place** (#317) — the org admin surface is a single-column
+  settings sidebar with a "Back to [workspace]" row and a full-width main pane,
+  threading the origin workspace via `?ws=`, instead of the old orphaned
+  two-column screen.
+- Fonts rewired to Inter (sans) + JetBrains Mono (restrained mono voice); the
+  flat 6px radius replaces the old 10–26px ramp. (#312)
+
+### Removed
+- The retired identity: terracotta accent (`#9a3412`/`#e8805c`), the Fraunces
+  display serif (and its self-hosted asset + `--font-heading` stack), cream/bone
+  tokens, and the wide radius ramp — all gone from the token layer and pinned
+  out by the regression guard. (#312)
+- The standalone `app-rail.tsx` (absorbed into the unified sidebar) and the
+  separate `settings-dialog.tsx` (folded into the account menu). (#313)
+
 ## [0.5.0] — 2026-07-30
 
 This release clears the public MVP launch bar (wayfinder map [#258](https://github.com/marrow-software/marrow/issues/258)): every public-facing claim is now true today, explicitly labelled roadmap, or gone ([#288](https://github.com/marrow-software/marrow/issues/288)). It also lands the contributor-licensing (CLA) machinery and the folder/sidebar UX refactor.
@@ -239,6 +285,8 @@ restore guarantee.
 - PostgreSQL full-text search.
 - BlockNote rich-text editor.
 
+[0.6.0]: https://github.com/marrow-software/marrow/releases/tag/v0.6.0
+[0.5.0]: https://github.com/marrow-software/marrow/releases/tag/v0.5.0
 [0.4.0]: https://github.com/marrow-software/marrow/releases/tag/v0.4.0
 [0.3.3]: https://github.com/marrow-software/marrow/releases/tag/v0.3.3
 [0.3.2]: https://github.com/marrow-software/marrow/releases/tag/v0.3.2
