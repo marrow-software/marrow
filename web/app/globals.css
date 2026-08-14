@@ -138,7 +138,6 @@
 
   /* Motion — one house curve, one small duration scale (#310) */
   --ease-signature: cubic-bezier(0.2, 0, 0, 1);
-  --ease-emphasis: cubic-bezier(0.2, 0, 0, 1);
   --dur-hover: 90ms;
   --dur-state: 140ms;
   --dur-enter: 130ms;

@@ -7,7 +7,8 @@ import { ArrowLeft, ChevronLeft, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { getOrg, listOrgMembers, getAuthStatus, listWorkspaces } from "@/lib/api";
 import type { AuthStatus, Organization, OrgMembership, Workspace } from "@/lib/types";
-import { cn, initials } from "@/lib/utils";
+import { initials } from "@/lib/utils";
+import { navRowClass } from "@/components/sidebar/row-styles";
 
 type SectionDef = { id: string; label: string };
 type GroupDef = { label: string; items: SectionDef[] };
@@ -156,10 +157,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       <Link
                         href={href}
                         aria-current={isActive ? "page" : undefined}
-                        className={cn(
-                          "signal-flat signal-focus flex h-[var(--ctl-md)] items-center rounded-md px-2 text-base text-foreground hover:bg-accent-soft",
-                          isActive && "signal-nav-active",
-                        )}
+                        className={navRowClass(isActive)}
                       >
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
                       </Link>
