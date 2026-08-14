@@ -24,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 import { logout } from "@/lib/api";
 import {
   DndContext,
@@ -65,13 +65,6 @@ interface Props {
   inboxUnread?: number;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   onInboxUnreadChange?: (count: number) => void;
-}
-
-function initials(name?: string | null) {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  const letters = parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
-  return letters || name[0]?.toUpperCase() || "?";
 }
 
 // Dismiss-on-outside-click + Escape, for any menu/flyout. The single dismissal

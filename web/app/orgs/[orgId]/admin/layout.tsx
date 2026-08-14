@@ -7,7 +7,7 @@ import { ArrowLeft, ChevronLeft, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { getOrg, listOrgMembers, getAuthStatus, listWorkspaces } from "@/lib/api";
 import type { AuthStatus, Organization, OrgMembership, Workspace } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, initials } from "@/lib/utils";
 
 type SectionDef = { id: string; label: string };
 type GroupDef = { label: string; items: SectionDef[] };
@@ -41,16 +41,6 @@ const NAV_GROUPS: GroupDef[] = [
     ],
   },
 ];
-
-function initials(name?: string | null) {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  const letters = parts
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-  return letters || name[0]?.toUpperCase() || "?";
-}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { orgId } = useParams<{ orgId: string }>();

@@ -24,3 +24,14 @@ export function relativeTime(iso: string): string {
   }
   return "just now";
 }
+
+/** Up-to-two-letter avatar initials from a display name. */
+export function initials(name?: string | null): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  const letters = parts
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+  return letters || name[0]?.toUpperCase() || "?";
+}
